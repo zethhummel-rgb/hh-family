@@ -2,25 +2,32 @@
 
 A separate application derived from Hummel Home's code. The original GitHub repository, website, Supabase project, accounts, calendar connection and notification service are not modified. This copy contains no family accounts, events, lists, OAuth secrets, refresh tokens, or notification subscriptions.
 
-## Status
+## Current deployment
 
-Source is prepared and frontend/mocked integration checks run locally. A new Supabase project could not be created because the personal account has reached its two-active-free-project limit. The new GitHub repository is https://github.com/zethhummel-rgb/hh-family. This pilot is **not live** and real signup, email delivery, database policies, Google consent, and phone notifications have not yet been verified on a new backend.
+- Independent repository: https://github.com/zethhummel-rgb/hh-family
+- GitHub Pages address: https://zethhummel-rgb.github.io/hh-family/
+- Independent Supabase project: **HH Family**, Canada Central.
+- Fresh database installed as migration `20261019152655_hh_independent_family_pilot`.
+- Calendar and notification Edge Functions deployed, with HH's Pages address as their default app URL. The project has its own Vault scheduler credential. No personal Google OAuth or push credentials were copied.
+- The site owner’s chosen administrator email is authorized privately in the backend. Sign up and confirm that address on HH; no account or password has been created automatically.
+- `src/config.ts` includes only this new project's browser-safe publishable key, with optional build-time variable overrides. Database access is enforced by RLS. The original Hummel Home project is explicitly denied by the config guard.
+- The original Hummel Home and JGC projects, websites, accounts, and calendars are unchanged.
 
-The unconfigured app displays a setup screen and never accepts sign-ups. A configuration guard refuses to connect to the original Hummel Home project. Search indexing is disabled in initial HTML. Existing Hh monogram assets are reused with HH as the installed app name.
+## Remaining setup
 
-## Separate deployment
+1. In **this new project's** Authentication → URL Configuration, set Site URL and an allowed redirect URL to `https://zethhummel-rgb.github.io/hh-family/`. Keep email confirmation enabled. This setting cannot be edited through the available Supabase connector.
+2. Configure custom SMTP before inviting other households. Supabase's default mail service only delivers to organization team addresses, so it may be used to test the administrator's own confirmed account but is not sufficient for other families. Verify signup, confirmation links and password recovery with real inboxes.
+3. Create a separate Google Cloud application named HH, enable Calendar API, and request only `https://www.googleapis.com/auth/calendar.app.created`. Its Web OAuth client must use this exact callback: the new project’s `/functions/v1/google-calendar/callback` URL, as shown in Supabase.
+4. Store that new client's ID and secret in **HH Family's** Edge Function Secrets as `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET`. Never reuse the original family's Google client or paste the secret into chat or source code. `APP_URL` can optionally override the default HH Pages address.
+5. While the Google application is in Testing, add each household owner's Google email as a test user. Testing can require reconnecting after seven days. Finish Google's production/branding process before broad sharing. Each owner explicitly connects and creates their own app-owned secondary family calendar; other personal/work calendars remain separate.
+6. Once the administrator's account is confirmed, create the first HH household. Under household settings, generate up to three email-bound **new-household** invitation links. Share the links yourself. These do not add people to the administrator's family. Ordinary family invitations remain separate and household-scoped.
+7. Verify actual Google consent/return, account recovery, cross-device family use, and phone push receipt before relying on those external integrations. SMTP and Google configuration are not yet completed or end-to-end verified.
 
-1. Use the new repository https://github.com/zethhummel-rgb/hh-family. Do not use the existing `hummel-home` repository.
-2. Create a **new** Supabase project in the personal Hummel Home organization, in Canada Central. Free a project slot or explicitly approve any plan upgrade first. Do not pause, delete or repurpose Hummel Home or JGC.
-3. Enable Supabase Vault, pg_net and pg_cron for the new project. Run `node scripts/assemble-database.mjs`. Apply `supabase/bootstrap.sql` once to that fresh empty project. Never apply it to an existing family database. Record the real migration version returned by Supabase when it is applied.
-4. Privately authorize the pilot host by inserting their confirmed sign-up email into `private.pilot_hosts`. This table is server-only. Do not use editable user metadata to grant host access. Do not copy an existing auth user into the new database.
-5. Set the new repository's Actions variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the new project's URL and publishable key. These are browser-safe; never use a secret or service-role key here.
-6. Enable GitHub Pages using GitHub Actions. The included workflow tests, builds and publishes `dist/`. The final URL will be that new repository's Pages URL. Set Supabase Auth Site URL and allowed redirect URLs to that exact address. Keep email confirmations on and configure SMTP for invited recipients; test confirmation and password reset with real inboxes.
-7. Deploy the two Edge Functions from `supabase/functions`, keeping gateway `verify_jwt=false` because their bodies perform their own authentication and the Google callback/cron have separate authentication. Set `APP_URL` in **the new project's** secrets to the exact new Pages URL including the repository path and trailing slash. It controls CORS, OAuth return and push click targets.
-8. In the new project's Vault create `home_together_api_url` with its Supabase API URL (no trailing slash). The notification setup creates a separate scheduler secret and VAPID keys for this project; never copy Hummel Home's secrets.
-9. Create a separate Google Cloud application named HH, enable Calendar API, and request only `https://www.googleapis.com/auth/calendar.app.created`. Register the new callback `https://NEW_PROJECT.supabase.co/functions/v1/google-calendar/callback`. Store that client's ID and secret as `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` in the new Supabase project. Never reuse the personal family's Google OAuth client.
-10. While Google is in Testing, add each invited household owner's Google email to its test users. Testing can require reconnecting after seven days. Finish Google's production/branding process before broad sharing; the exact review depends on scopes. Each household owner explicitly connects, creating their own app-owned family calendar. Existing personal/work calendars are not imported.
-11. Sign up afresh as the authorized pilot host, confirm the email and create a home. Under household settings, generate up to three email-bound **new-household** invitation links. Share them yourself. These do not invite people into the host's own family. Ordinary family invitations remain separate and household-scoped.
+## Rebuilding or provisioning
+
+GitHub Actions tests and publishes on pushes to `main`. Optional repository variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` override the browser-safe defaults. Never place service-role, OAuth, or SMTP secrets in browser variables.
+
+To provision a *different empty project*, enable Vault, pg_net and pg_cron, then apply `supabase/bootstrap.sql` once. Do not rerun it on this project or any existing family/work project. Privately seed the intended host's confirmed email in `private.pilot_hosts`. Set `home_together_api_url` in Vault to the target project's API URL (no trailing slash), and deploy both Edge Functions. Their bodies validate sessions/membership or single-use OAuth state/cron credentials, so their gateway setting remains `verify_jwt=false`.
 
 ## Families
 
@@ -39,4 +46,4 @@ npm run test:database
 npm run build
 ```
 
-The suite covers calendar timing and DST, Google auth retries, recurrence/search contracts, reminder deduplication, profile routing and account linking, invite-link precedence and confirmation redirects, and refusal to use the personal production database. Before inviting real families, run the rolled-back database isolation test against the new project, check advisors, and test email confirmation, first household creation, new-home invitation acceptance/replay/wrong-email rejection, family invites, account recovery, Google connect, native/Google event changes and push receipt using actual pilot accounts. The isolated PostgreSQL suite additionally verifies host-only controls, invitation limits, revocation, wrong-email/unconfirmed/replay denial, household item/event/profile row policies, owner-only edits, cross-household profile linking rejection, and anonymous denial. It contacts no external database. Passing local checks does not verify those external services.
+The suite covers calendar timing and DST, Google auth retries, recurrence/search contracts, reminder deduplication, profile routing and account linking, invite-link precedence and confirmation redirects, and refusal to use the personal production database. The rolled-back database isolation test passed on the actual new project; security advisors returned only expected info notices for deliberately inaccessible private tables. Before inviting real families, test email confirmation, first household creation, new-home invitation acceptance/replay/wrong-email rejection, family invites, account recovery, Google connect, native/Google event changes and push receipt using actual pilot accounts. The isolated PostgreSQL suite additionally verifies host-only controls, invitation limits, revocation, wrong-email/unconfirmed/replay denial, household item/event/profile row policies, owner-only edits, cross-household profile linking rejection, and anonymous denial. It contacts no external database. Passing local checks does not verify those external services.

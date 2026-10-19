@@ -1,7 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
 import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,type ReminderEvent} from './logic.ts';
-const APP=Deno.env.get('APP_URL')||'https://setup.invalid/',ORIGIN=new URL(APP).origin;
+const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/',ORIGIN=new URL(APP).origin;
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const cors={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:cors});

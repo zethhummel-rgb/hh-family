@@ -3,7 +3,7 @@ import {encodePersonIds,decodePersonIds} from './tags.ts';
 import {searchParameters} from './search.ts';
 import {validateRecurrence} from './recurrence.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
-const APP=Deno.env.get('APP_URL')||'https://setup.invalid/';
+const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/';
 const ORIGIN=new URL(APP).origin;
 const PROJECT=Deno.env.get('SUPABASE_URL')!;
 const ID=Deno.env.get('GOOGLE_CALENDAR_CLIENT_ID')||'';
