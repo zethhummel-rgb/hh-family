@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#f4dce4">
+  <meta name="description" content="How HH Family accesses, uses, stores and shares account, household and Google Calendar data.">
+  <title>Privacy policy — HH Family</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./info.css">
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header class="site-header"><a class="brand" href="./about.html"><img src="./icons/hh-180.png" alt=""><span>HH Family</span></a><nav aria-label="Main"><a class="about-link" href="./about.html">About HH</a><a class="open-app" href="./">Open HH</a></nav></header>
+  <main id="content" class="page document">
+    <span class="eyebrow">Your home, your information</span><h1>Privacy policy</h1><p class="updated">Effective October 19, 2026 · HH Family invitation-only pilot</p>
+    <p>This policy describes the HH Family web app (HH), operated by the HH pilot administrator, reachable at <a href="mailto:hummelhomeapp@gmail.com">hummelhomeapp@gmail.com</a>. HH helps invited households share calendar events, groceries, to-dos and reminders.</p>
+    <h2>Information HH handles</h2>
+    <ul><li><strong>Accounts:</strong> your email address, display name, login/session information and selected calendar colour. Supabase Auth handles password authentication; HH does not display your password to other household members.</li><li><strong>Household information:</strong> household name, membership and roles, invitation email addresses and invitation status, and family profiles you choose to add, including names and colours. Profiles may represent family members without their own accounts.</li><li><strong>Shared content:</strong> grocery items, to-dos, due dates, recurrence and completion information, and calendar event details such as title, times, location, description, tagged people and reminder preferences.</li><li><strong>Optional notifications:</strong> device push subscription endpoints and encryption keys, permission/subscription preferences, and notification delivery records needed to send reminders and avoid duplicate deliveries.</li><li><strong>Technical records:</strong> hosting and authentication providers may process IP addresses, request times, browser/device information, errors and security logs to run and protect the service.</li></ul>
+    <h2 id="google-calendar">Google Calendar access and use</h2>
+    <p>Google Calendar is optional. Only a household owner can start or reconnect the household's Google connection. HH requests the <code>https://www.googleapis.com/auth/calendar.app.created</code> permission. It creates a dedicated secondary calendar in the connected Google account and uses the calendar created for that household. It does not request permission to read all of your pre-existing personal or work calendars.</p>
+    <p>When you connect, HH copies existing native HH events to the dedicated Google calendar. HH then accesses that calendar's identity and event data, including titles, dates, times, descriptions, locations, recurrence and HH family tags/reminder settings. It reads, creates, changes and deletes those events when household members use calendar features. The reminder service can read upcoming events to send reminders to opted-in household devices.</p>
+    <p>HH stores the calendar identifier, the connecting account's HH user identifier and connection status. An ongoing Google authorization token is stored encrypted on the server so the calendar can work while the owner is away. Event data passes through HH's server functions and browser interface as needed to display and synchronize plans; the Google calendar stores the connected calendar events. Original native HH events may remain in the household database after being copied. Reminder delivery records may also contain event identifiers and notification information.</p>
+    <p>Google user data is used only to provide these household calendar and reminder features. It is not sold, used for advertising or used to train general-purpose AI models. HH's use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</p>
+    <h2>Who can see information</h2>
+    <p>Household members can view and manage shared household content, including the connected calendar, through HH. A household's records are restricted to its members; an invitation to create a different household does not grant access to yours. The household owner manages invitations and family profiles.</p>
+    <p>Google Calendar permissions may independently make the dedicated calendar or its events visible to people you share it with in Google. An enabled device notification may display an event or task title on a lock screen, depending on device settings.</p>
+    <p>The pilot administrator has administrative access needed to operate the service. Human access to Google data is limited to your affirmative permission for specific support, security or bug investigations, or legal requirements, consistent with Google's Limited Use requirements.</p>
+    <h2>Service providers</h2>
+    <ul><li><strong>Supabase</strong> provides account authentication, the household database, server functions and server-side secret storage.</li><li><strong>Google</strong> provides a household's connected calendar and Gmail delivery of account confirmation and password-reset emails. Account emails contain the recipient address and relevant account links.</li><li><strong>GitHub Pages</strong> serves HH's public app files and information pages.</li><li><strong>Your browser or operating system's push provider</strong> delivers notifications when you enable them.</li></ul>
+    <p>These providers process information needed to supply their services under their own terms and privacy policies. Provider processing may occur in different countries. HH does not add advertising trackers or sell household information.</p>
+    <h2>Browser storage and protection</h2>
+    <p>HH uses browser storage for your signed-in session, invitation flow and appearance preferences. Installing the app can cache app files on the device. Household access is enforced on the server. Google credentials and ongoing authorization tokens are kept server-side; the browser receives only the app configuration and session/data needed for its account.</p>
+    <p>No service can guarantee absolute security. Keep your account and device secure, share invitation links only with intended recipients, and avoid entering information your household does not need to share.</p>
+    <h2>Your choices, retention and deletion</h2>
+    <p>You can edit or delete shared items and events in the app, change your colour/preferences and turn off device notifications. Deleting a connected event in HH also requests deletion of that event from Google Calendar.</p>
+    <p>You can revoke HH's Google access in your <a href="https://myaccount.google.com/permissions">Google Account's third-party connections</a>. Revoking access stops further authorized calendar access; it does not itself delete the calendar, existing events or HH household records. You can manage or delete the dedicated calendar in Google Calendar.</p>
+    <p>To request account deletion, removal of the stored Google connection, a copy of your information, or deletion of a household you own, email <a href="mailto:hummelhomeapp@gmail.com">hummelhomeapp@gmail.com</a> from your account address. We may verify your identity and household authority before acting. Leaving or deleting one member's account does not by itself erase shared content belonging to the remaining household.</p>
+    <p>Account and household records are retained while used to provide the pilot, until removed through the app or an authorized deletion request, or as necessary for security and legal obligations. Operational logs and provider backups follow the applicable providers' retention and deletion processes; deletion from the active app does not necessarily immediately remove every backup copy.</p>
+    <h2>Family profiles and changes</h2>
+    <p>The pilot is intended to be set up and managed by adult household owners. Adults adding information about children or other family members should have authority to do so and limit it to what is needed for household organization.</p>
+    <p>We will update this policy when practices change. A material change to how Google data is used will be disclosed before using it in the new way, with new consent where required. Contact <a href="mailto:hummelhomeapp@gmail.com">hummelhomeapp@gmail.com</a> with privacy questions.</p>
+  </main>
+  <footer class="site-footer"><span>HH Family · Made for your everyday.</span><nav aria-label="Information"><a href="./about.html">About HH</a><a href="./privacy.html" aria-current="page">Privacy policy</a><a href="./terms.html">Terms of service</a><a href="mailto:hummelhomeapp@gmail.com">Contact</a></nav></footer>
+</body>
+</html>
