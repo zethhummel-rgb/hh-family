@@ -1,0 +1,3 @@
+import {Filter,ChevronDown} from 'lucide-react';
+import type {PersonProfile} from './people';
+export default function PersonFilter({profiles,value,onChange,label='Show events for'}:{profiles:PersonProfile[];value:string;onChange:(id:string)=>void;label?:string}){return <div className="person-filter"><span className="person-filter-icon" aria-hidden="true">{value==='all'?<Filter size={11}/>:<i style={{backgroundColor:profiles.find(p=>p.id===value)?.color}}/>}</span><select aria-label={label} title={label} value={value} onChange={e=>onChange(e.target.value)}><option value="all">Everyone</option>{profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><ChevronDown className="person-filter-chevron" size={11} aria-hidden="true"/></div>}

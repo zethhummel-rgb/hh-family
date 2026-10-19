@@ -1,0 +1,3 @@
+const validId=(id:unknown):id is string=>typeof id==='string'&&(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)||id==='child:holt');
+export function encodePersonIds(value:unknown){if(!Array.isArray(value)||value.length>20||value.some(id=>!validId(id)))throw Error('Choose up to 20 people from your household.');return JSON.stringify(Array.from(new Set(value)))}
+export function decodePersonIds(value:unknown):string[]|undefined{if(typeof value!=='string'||value.length>1024)return undefined;try{const ids=JSON.parse(value);return JSON.parse(encodePersonIds(ids))}catch{return undefined}}

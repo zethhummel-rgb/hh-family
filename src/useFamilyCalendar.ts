@@ -1,0 +1,14 @@
+import {searchCalendar,type SearchPeriod} from './calendarSearchData';
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {type FamilyEvent,type EventDraft,type CalendarConnection,calendarStatus,getEvents,saveEvent,deleteEvent,getEventSeries,dayKey,shiftDay,zonedISO,googleRequest} from './calendarData';
+const message=(e:unknown)=>e instanceof Error?e.message:(e as {message?:string}).message||'Could not load the family calendar.';
+export function useFamilyCalendar(hid:string){
+ const [events,setEvents]=useState<FamilyEvent[]>([]),[connection,setConnection]=useState<CalendarConnection>({configured:false,connected:false}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[ready,setReady]=useState(false),[range,setRange]=useState(()=>({from:zonedISO(shiftDay(dayKey(new Date()),-7)),to:zonedISO(shiftDay(dayKey(new Date()),60))}));const generation=useRef(0);
+ const refresh=useCallback(async()=>{const id=++generation.current;setLoading(true);try{const status=await calendarStatus(hid);if(id!==generation.current)return;setConnection(status);setReady(!status.importIncomplete);if(status.importIncomplete)throw Error("Google connected, but the event import did not finish. The household owner can reconnect Google to retry. Existing events are preserved.");const events=await getEvents(hid,range.from,range.to,status.connected);if(id!==generation.current)return;setEvents(events);setError('')}catch(e){if(id===generation.current)setError(message(e))}finally{if(id===generation.current)setLoading(false)}},[hid,range]);
+ useEffect(()=>{refresh();const focus=()=>refresh();window.addEventListener('focus',focus);const timer=setInterval(()=>{if(!document.hidden)refresh()},60000);return()=>{generation.current++;window.removeEventListener('focus',focus);clearInterval(timer)}},[refresh]);
+ const onRange=useCallback((from:string,to:string)=>setRange(old=>old.from===from&&old.to===to?old:{from,to}),[]);
+ async function save(draft:EventDraft,current:FamilyEvent|null,requestId:string){if(!ready)throw Error('Wait for the calendar to finish loading.');await saveEvent(hid,draft,current,connection.connected,requestId);await refresh()}
+ async function remove(event:FamilyEvent){if(!ready)throw Error('Wait for the calendar to finish loading.');await deleteEvent(hid,event,connection.connected);await refresh()}
+ async function connect(){const d=await googleRequest('start',{householdId:hid});if(typeof d.url!=='string'||new URL(d.url).origin!=='https://accounts.google.com')throw Error('Could not open the Google connection.');location.assign(d.url)}
+ return {events,connection,loading,error,ready,refresh,onRange,save,remove,connect,search:(query:string,period:SearchPeriod,pageToken?:string,asOf?:string)=>{if(!ready)throw Error('Wait for the calendar to finish loading.');return searchCalendar(hid,connection.connected,query,period,pageToken,asOf)},loadSeries:(event:FamilyEvent)=>getEventSeries(hid,event)};
+}

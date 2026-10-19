@@ -1,0 +1,5 @@
+[functions.google-calendar]
+verify_jwt = false
+
+[functions.event-reminders]
+verify_jwt = false

@@ -1,0 +1,3 @@
+import {eventPeople,isEveryone,type PersonProfile} from './people';
+import type {FamilyEvent} from './calendarData';
+export default function PeopleDots({event,profiles}:{event:Pick<FamilyEvent,'person'|'person_ids'>;profiles:PersonProfile[]}){const people=eventPeople(event,profiles);const label=isEveryone(event)?'Everyone':people.map(p=>p.name).join(', ');return <span className="event-people"><span className="people-dots" role="img" aria-label={'Tagged: '+people.map(p=>p.name).join(', ')}>{people.map(p=><i key={p.id} style={{backgroundColor:p.color}} title={p.name}/>)}</span><span>{label}</span></span>}
