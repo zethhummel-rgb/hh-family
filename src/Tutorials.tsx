@@ -1,21 +1,24 @@
-import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check} from 'lucide-react';
+import {useState} from 'react';
+import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy} from 'lucide-react';
 import './tutorials.css';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
 export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;onSettings:()=>void;onCalendar:()=>void}){
+ const [copyNotice,setCopyNotice]=useState('');
+ const appAddress='https://zethhummel-rgb.github.io/hh-family/';
  return <section className="tutorials" aria-label="HH tutorials">
-  <div className="tutorial-welcome"><BookOpen size={22}/><p>Three quick guides to get your household settled in. Open a guide and follow along at your own pace.</p></div>
+  <div className="tutorial-welcome"><BookOpen size={22}/><p>Made for your phone. Tap a guide, follow the steps, and come back here whenever you need a hand.</p></div>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner sends the invitation</span>
     <Steps>
-     <li><h3>Open Household settings</h3><p>Tap your initials at the top right. On a computer, you can also use Household settings in the sidebar.</p></li>
-     <li><h3>Enter their email address</h3><p>Find <strong>Invite a family member</strong>, enter the address they want to use, then choose <strong>Send invitation</strong>.</p></li>
-     <li><h3>They open the invitation email</h3><p>They choose <strong>Join your household</strong>, then create an HH account or sign in with that exact email address. If asked, they confirm their email and return to the invitation.</p></li>
-     <li><h3>They join your household</h3><p>They enter their name and choose <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. They can pick their calendar colour in Household settings.</p></li>
+     <li><h3>Open Household settings</h3><p>In HH on your phone, tap your initials in the circle at the top right. This opens Household settings.</p></li>
+     <li><h3>Enter their email address</h3><p>Swipe up inside settings to find <strong>Invite a family member</strong>. Tap the email box, type their address, then tap <strong>Send invitation</strong>.</p></li>
+     <li><h3>They open the invitation email</h3><p>On their phone, they open the email and tap <strong>Join your household</strong>. They tap <strong>Create account</strong>, or sign in if they already have one, using the exact invited email address. If asked to confirm their email, they open the confirmation email, then tap the original invitation link again.</p></li>
+     <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. They can pick their calendar colour in Household settings.</p></li>
     </Steps>
     <div className="tutorial-tip"><Check size={16}/><p><strong>One family, separate logins.</strong> Use Invite a family member for someone joining your home. “Invite another household” is for a different family creating its own separate home.</p></div>
-    <details className="tutorial-extra"><summary>No invitation email?</summary><p>Check Spam and confirm the address is correct. The sender can use <strong>Copy invitation</strong> to share the link directly, or <strong>Retry email</strong> if delivery failed. Family invitations work once and expire after seven days. If a link expires or is lost, the owner can create a new invitation.</p></details>
+    <details className="tutorial-extra"><summary>No invitation email?</summary><p>Check Spam and confirm the address is correct. The sender can tap <strong>Copy invitation</strong> and paste it into a text message, or tap <strong>Retry email</strong> if delivery failed. Family invitations work once and expire after seven days. If a link expires or is lost, the owner can create a new invitation.</p></details>
     {owner?<button type="button" className="text-button tutorial-action" onClick={onSettings}>Open Household settings <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to send the invitation.</p>}
    </div>
   </details>
@@ -23,12 +26,12 @@ export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;o
    <summary><span className="tutorial-icon tutorial-gold"><Users size={22}/></span><span><small>02 · LITTLE FAMILY MEMBERS</small><h2>Add a child without an email</h2><p>A family profile, with no account to set up.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner adds family profiles</span>
     <Steps>
-     <li><h3>Open Household settings</h3><p>Tap your initials, then scroll to <strong>Family profiles</strong>.</p></li>
-     <li><h3>Choose Add family profile</h3><p>Enter their name and choose their <strong>Calendar colour</strong>. No email address or password is needed.</p></li>
-     <li><h3>Save their profile</h3><p>Choose <strong>Save profile</strong>. Their name and colour now appear with your household’s people.</p></li>
-     <li><h3>Include them in family plans</h3><p>When adding or editing an event, select their name. Their coloured dot appears on the event, and the person filter helps you find their plans. Choose Everyone for a plan involving the whole family.</p></li>
+     <li><h3>Open Household settings</h3><p>Tap your initials at the top right of HH. Swipe up inside settings until you reach <strong>Family profiles</strong>.</p></li>
+     <li><h3>Tap Add family profile</h3><p>Tap the Name box and type their name. Tap <strong>Calendar colour</strong> to pick their colour. No email address or password is needed.</p></li>
+     <li><h3>Save their profile</h3><p>Tap <strong>Save profile</strong>. Their name and colour now appear with your household’s people.</p></li>
+     <li><h3>Include them in family plans</h3><p>Tap <strong>Calendar</strong> along the bottom, then <strong>Add event</strong>. Enter the plan and tap their name in the people choices. Their coloured dot appears on the event, and the person filter helps you find their plans. Tap Everyone for a plan involving the whole family.</p></li>
     </Steps>
-    <div className="tutorial-tip"><Check size={16}/><p><strong>A profile doesn’t sign in.</strong> You manage their plans from your own account. If they get an account later, invite them by email first. Then edit their existing family profile and use <strong>Link to an account</strong> to keep their event tags.</p></div>
+    <div className="tutorial-tip"><Check size={16}/><p><strong>A profile doesn’t sign in.</strong> You manage their plans from your own account. If they get an account later, invite them by email first. Then, in Family profiles, tap <strong>Edit</strong> beside their existing profile and select their account under <strong>Link to an account</strong> to keep their event tags.</p></div>
     {owner?<button type="button" className="text-button tutorial-action" onClick={onSettings}>Add a family profile <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to add the profile.</p>}
    </div>
   </details>
@@ -36,22 +39,41 @@ export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;o
    <summary><span className="tutorial-icon"><CalendarDays size={22}/></span><span><small>03 · GOOGLE CALENDAR</small><h2>Connect Google &amp; bring your plans</h2><p>Use your existing Google account with HH.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">One Google connection per household · Owner connects</span>
     <Steps>
-     <li><h3>Open the Calendar tab</h3><p>Scroll below the month calendar and choose <strong>Connect Google</strong>. If you see Google connected, your household is already connected.</p></li>
-     <li><h3>Connect your existing Google account</h3><p>Choose <strong>Connect Google Calendar</strong>, select the Google account you want to use, and approve the calendar permission. Google returns you to HH.</p></li>
+     <li><h3>Open the Calendar tab</h3><p>Tap <strong>Calendar</strong> in HH’s bottom navigation. Swipe up until you see the controls below the calendar, then tap <strong>Connect Google</strong>. If you see Google connected, your household is already connected.</p></li>
+     <li><h3>Connect your existing Google account</h3><p>Tap <strong>Connect Google Calendar</strong>. On Google’s sign-in screen, tap the account you want to use and allow the calendar permission. Follow the prompts back to HH; if your phone leaves Google in another tab, return to HH and tap its refresh symbol.</p></li>
      <li><h3>Find your family calendar</h3><p>HH creates a calendar named after your household, ending in <strong>· Family</strong>. Existing events saved in HH are copied there. Everyone in your HH household can use it here without connecting Google separately.</p></li>
-     <li><h3>Keep using HH or Google Calendar</h3><p>Changes to events in that family calendar sync between HH and Google. In Google, save new family events to this calendar. In HH, use the refresh symbol to load the latest changes.</p></li>
+     <li><h3>Keep using HH or Google Calendar</h3><p>Use HH on your phone, or the Google Calendar app signed into the connected account. Save new family events to the calendar ending in · Family. Changes to that calendar sync with HH; tap HH’s refresh symbol to load the latest changes.</p></li>
     </Steps>
     <div className="tutorial-tip"><CalendarDays size={16}/><p><strong>Already have other Google calendars?</strong> HH syncs the family calendar it creates. Connecting your account does not automatically import, combine or subscribe to your other personal, work or shared calendars.</p></div>
-    <h3 className="tutorial-subheading">Bring an existing Google event into HH</h3>
+    <h3 className="tutorial-subheading">Move an existing Google event into HH</h3>
+    <p className="tutorial-copy-note">These steps work in the Google Calendar app on iPhone and Android. Use the same Google account that connected your HH family calendar.</p>
     <Steps>
-     <li><h3>Open Google Calendar on a computer</h3><p>Use the connected Google account and select an existing event.</p></li>
-     <li><h3>Copy it to your HH family calendar</h3><p>Open the event’s <strong>Options</strong> menu, choose the family calendar as the copy destination, then save. For an event you own, you can instead edit it, change its calendar to the HH family calendar, and save to move it.</p></li>
-     <li><h3>Refresh the calendar in HH</h3><p>Find the event on its date, then open it and choose <strong>Edit</strong> to set family tags or an HH reminder.</p></li>
+     <li><h3>Open the event on your phone</h3><p>In the Google Calendar app, tap an event you organise, then tap the pencil to edit it.</p></li>
+     <li><h3>Change its calendar</h3><p>Tap the calendar name below the event title. Select your HH calendar ending in <strong>· Family</strong>, then tap <strong>Save</strong> at the top right.</p></li>
+     <li><h3>Return to HH</h3><p>Tap <strong>Calendar</strong> along the bottom and tap the refresh symbol. Find the event on its date, tap it, then tap <strong>Edit</strong> to choose family tags or an HH reminder.</p></li>
     </Steps>
-    <p className="tutorial-copy-note">Copying makes a separate event: later edits to the original do not update the copy. Moving changes which calendar holds the event. Available options depend on your Google permissions. Automatic syncing of an entire existing calendar into HH isn’t available yet.</p>
-    <a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/78739?co=GENIE.Platform%3DDesktop&amp;hl=en" target="_blank" rel="noopener noreferrer">Google’s guide to moving and copying events <ArrowUpRight size={14}/></a>
-    <details className="tutorial-extra"><summary>Google needs reconnecting?</summary><p>The household owner opens Calendar, scrolls below the calendar, and chooses <strong>Reconnect Google</strong>. Use the same Google account that originally connected the family calendar.</p></details>
+    <p className="tutorial-copy-note">Moving takes the event out of its previous calendar. You must organise the event and be able to edit the destination calendar. Moving a repeating event also moves its future occurrences. If you want to keep the original where it is, add a separate matching event directly in HH instead; those two events will not stay linked.</p>
+    <p className="tutorial-copy-note">Automatic syncing of an entire existing calendar into HH isn’t available yet.</p>
+    <div className="tutorial-phone-links"><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/78739?co=GENIE.Platform%3DiOS&amp;hl=en" target="_blank" rel="noopener noreferrer">Google’s iPhone guide <ArrowUpRight size={14}/></a><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/78739?co=GENIE.Platform%3DAndroid&amp;hl=en" target="_blank" rel="noopener noreferrer">Google’s Android guide <ArrowUpRight size={14}/></a></div>
+    <details className="tutorial-extra"><summary>Google needs reconnecting?</summary><p>The household owner taps <strong>Calendar</strong> in the bottom navigation, swipes up to the controls below the calendar, and taps <strong>Reconnect Google</strong>. Use the same Google account that originally connected the family calendar.</p></details>
     <button type="button" className="text-button tutorial-action" onClick={onCalendar}>Open Calendar <ArrowUpRight size={16}/></button>
+   </div>
+  </details>
+  <details className="tutorial-guide">
+   <summary><span className="tutorial-icon tutorial-gold"><Smartphone size={22}/></span><span><small>04 · SAFARI &amp; HOME SCREEN</small><h2>Put HH on your iPhone</h2><p>Your family’s home, one tap away.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
+   <div className="tutorial-body"><span className="tutorial-role">iPhone · Safari · Add it on each person’s phone</span>
+    <p className="tutorial-copy-note">This adds HH as a web app (PWA), with its own Home Screen icon.</p>
+    <div className="tutorial-address"><span>HH website address</span><code>{appAddress}</code><button type="button" className="text-button" onClick={async()=>{try{await navigator.clipboard.writeText(appAddress);setCopyNotice('Website address copied. Paste it into Safari’s address bar.')}catch{setCopyNotice('Touch and hold the website address above to copy it.')}}}><Copy size={15}/>Copy website address</button>{copyNotice&&<p role="status">{copyNotice}</p>}</div>
+    <Steps>
+     <li><h3>Open HH in Safari</h3><p>Open Safari on your iPhone and paste the HH address above into its address bar. Use Safari itself if you arrived through an email or social app.</p></li>
+     <li><h3>Open Safari’s Share menu</h3><p>Tap the square with an upward arrow. Depending on your Safari layout, first tap the menu or More button, then <strong>Share</strong>.</p></li>
+     <li><h3>Tap Add to Home Screen</h3><p>Scroll down the Share menu and tap <strong>Add to Home Screen</strong>.</p></li>
+     <li><h3>Add the HH icon</h3><p>Keep the name HH. Leave <strong>Open as Web App</strong> on if it is shown, then tap <strong>Add</strong>.</p></li>
+     <li><h3>Open HH from your Home Screen</h3><p>Tap the new HH icon. Sign in with your existing account if asked.</p></li>
+    </Steps>
+    <details className="tutorial-extra"><summary>Can’t find Add to Home Screen?</summary><p>Scroll to the bottom of Safari’s Share menu, tap <strong>Edit Actions</strong>, and add <strong>Add to Home Screen</strong>. Then try again.</p></details>
+    <div className="tutorial-tip"><Check size={16}/><p><strong>Want reminder notifications?</strong> Open HH from its Home Screen icon, tap your initials, find <strong>Notifications</strong>, then tap <strong>Enable notifications</strong> and allow the request. Tap <strong>Send a test</strong> to check it. Each person enables their own phone.</p></div>
+    <a className="text-button tutorial-source" href="https://support.apple.com/en-ca/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Apple’s Safari installation guide <ArrowUpRight size={14}/></a>
    </div>
   </details>
  </section>
