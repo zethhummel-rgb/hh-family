@@ -7,7 +7,7 @@ create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 grant execute on function auth.uid() to authenticated;`);
-for(const file of ['schema.sql','calendar.sql','member-colours.sql','pilot.sql'])await db.exec(fs.readFileSync(new URL('../database/'+file,import.meta.url),'utf8'));
+for(const file of ['schema.sql','calendar.sql','member-colours.sql','pilot.sql','invitation-email.sql'])await db.exec(fs.readFileSync(new URL('../database/'+file,import.meta.url),'utf8'));
 const ids={host:'10000000-0000-4000-8000-000000000001',owner:'10000000-0000-4000-8000-000000000002',member:'10000000-0000-4000-8000-000000000003',outsider:'10000000-0000-4000-8000-000000000004',unconfirmed:'10000000-0000-4000-8000-000000000005'};
 for(const [key,id] of Object.entries(ids))await db.query('insert into auth.users values($1,$2,$3)',[id,key+'@hh-qa.invalid',key==='unconfirmed'?null:new Date().toISOString()]);
 await db.exec("insert into private.pilot_hosts values('host@hh-qa.invalid');");
@@ -53,5 +53,38 @@ await denied("update public.household_people set calendar_color='url(evil)' wher
 await db.query("update public.households set name='Renamed home' where id=$1",[homeB]);assert.equal(await value('select name from public.households'),'Renamed home');
 await db.exec('reset role;set role anon;');await denied('select * from public.household_people');await denied("select public.pilot_invitations('list')");await denied("select public.create_pilot_household('x','x','x')");
 await db.exec('reset role;');assert.equal(await value('select count(*)::int from private.pilot_invites where used_at is not null'),1);assert.equal(await value('select count(*)::int from public.households'),2);
+// The email service is service-role only. The server, never the browser, supplies the verified actor.
+for(const person of ['owner','member','outsider']){await as(person);await denied("select public.invitation_mail_service('claim',$1)",[JSON.stringify({actorId:ids.owner,kind:'family',token:familyToken})]);await denied('select * from private.invitation_mail_deliveries')}
+await db.exec('reset role;set role anon;');await denied("select public.invitation_mail_service('claim','{}')");
+await as('owner');const mailToken=await value("select public.create_household_invite('mail@example.invalid')");
+await as('host');const pilotMail=await value("select public.pilot_invitations('create','pilot-mail@example.invalid')");
+const service=async(action,payload)=>{await db.exec('reset role;set role service_role;');return value('select public.invitation_mail_service($1,$2)',[action,JSON.stringify(payload)])};
+const claim=(actorId=ids.owner,token=mailToken,kind='family')=>service('claim',{actorId,token,kind});
+for(const actorId of [ids.member,ids.host,ids.outsider,ids.unconfirmed])await assert.rejects(claim(actorId));
+await assert.rejects(service(null,{actorId:ids.owner,token:mailToken,kind:'family'}));
+await assert.rejects(claim(ids.owner,'bad'));await assert.rejects(claim(ids.owner,familyToken));
+let delivery=await claim();assert.equal(delivery.status,'claimed');assert.equal(delivery.email,'mail@example.invalid');assert.equal(delivery.householdName,'Renamed home');
+assert.equal((await claim()).status,'sending');
+assert.equal((await service('finish',{actorId:ids.outsider,claimId:delivery.claimId,status:'sent'})).updated,false);
+assert.equal((await service('finish',{actorId:ids.owner,claimId:delivery.claimId,status:'failed'})).updated,true);
+assert.equal((await claim()).status,'cooldown');
+await db.exec("reset role;update private.invitation_mail_deliveries set last_attempt_at=now()-interval '3 minutes';");
+const retry=await claim();assert.equal(retry.deliveryId,delivery.deliveryId);assert.notEqual(retry.claimId,delivery.claimId);
+assert.equal((await service('finish',{actorId:ids.owner,claimId:delivery.claimId,status:'sent'})).updated,false);
+await service('finish',{actorId:ids.owner,claimId:retry.claimId,status:'sent'});assert.equal((await claim()).status,'sent');
+const pilotDelivery=await claim(ids.host,pilotMail.token,'pilot');assert.equal(pilotDelivery.email,'pilot-mail@example.invalid');
+await assert.rejects(claim(ids.owner,pilotMail.token,'pilot'));
+await db.exec('reset role;');
+assert.equal(await value("select count(*)::int from private.invitation_mail_attempts"),3);
+assert.equal(JSON.stringify((await db.query('select * from private.invitation_mail_deliveries')).rows).includes(mailToken),false);
+await as('owner');const revoked=await value("select public.create_household_invite('revoked@example.invalid')");await db.query('delete from public.household_invites where email=$1',['revoked@example.invalid']);await assert.rejects(claim(ids.owner,revoked));
+await as('owner');const expired=await value("select public.create_household_invite('expired@example.invalid')");await db.exec("reset role;update public.household_invites set expires_at=now()-interval '1 second' where email='expired@example.invalid';");await assert.rejects(claim(ids.owner,expired));
+await as('owner');const limitToken=await value("select public.create_household_invite('limit@example.invalid')");
+let limited=await claim(ids.owner,limitToken);await service('finish',{actorId:ids.owner,claimId:limited.claimId,status:'failed'});
+for(let i=0;i<2;i++){await db.exec("reset role;update private.invitation_mail_deliveries set last_attempt_at=now()-interval '3 minutes';");limited=await claim(ids.owner,limitToken);await service('finish',{actorId:ids.owner,claimId:limited.claimId,status:'failed'})}
+await db.exec("reset role;update private.invitation_mail_deliveries set last_attempt_at=now()-interval '3 minutes';");await assert.rejects(claim(ids.owner,limitToken),/address has received several/);
+await as('owner');const actorLimitToken=await value("select public.create_household_invite('actor-limit@example.invalid')");
+await db.exec('reset role;');await db.query("insert into private.invitation_mail_attempts(id,delivery_id,actor_id,recipient,status) select gen_random_uuid(),$1,$2,'synthetic-'||n||'@example.invalid','failed' from generate_series(1,10) n",[delivery.deliveryId,ids.owner]);await assert.rejects(claim(ids.owner,actorLimitToken),/Invitation email limit/);
 await db.close();
 console.log('Isolated PostgreSQL checks passed: host-only controls, three-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
+console.log('Invitation email database checks passed: service-only grants, owner/host permissions, intended recipient, single-flight leases, same-invitation retries, stale-claim protection, sent deduplication, no raw-token storage, expired/revoked/used denial and recipient/actor rate limits.');

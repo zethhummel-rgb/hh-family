@@ -1,0 +1,8 @@
+import {useState} from 'react';
+import {Copy,Mail,RefreshCw,Check} from 'lucide-react';
+import type {EmailInvitation} from './invitationEmail';
+import './invitationEmail.css';
+export default function InvitationDelivery({invitation,busy,onRetry}:{invitation:EmailInvitation;busy:boolean;onRetry:()=>void}){
+ const [notice,setNotice]=useState('');
+ return <div className="invite-result email-invitation"><div className="invitation-status" role="status">{invitation.sent?<Check size={17}/>:<Mail size={17}/>}<strong>{invitation.sent?'Invitation emailed':'Invitation link ready'}</strong></div><p>{invitation.sent?`Sent to ${invitation.email}. They can check their inbox and Spam folder.`:`The invitation was created for ${invitation.email}.`}</p>{invitation.error&&<p className="invitation-delivery-error" role="alert">{invitation.error}</p>}<label>Invitation link<input readOnly aria-label={invitation.kind==='family'?'Invitation link':'New-household invitation link'} value={invitation.url} onFocus={e=>e.target.select()}/></label><div className="invitation-actions"><button type="button" className="text-button" onClick={async()=>{try{await navigator.clipboard.writeText(invitation.url);setNotice('Invitation link copied.')}catch{setNotice('Select the link above and copy it.')}}}><Copy size={14}/>Copy invitation</button>{!invitation.sent&&<button type="button" className="text-button" disabled={busy} onClick={onRetry}><RefreshCw size={14}/>{busy?'Sending…':'Retry email'}</button>}</div><small>The invitation works once and can only be used with this confirmed email address. Copy the link now if you want to keep it.</small>{notice&&<p role="status">{notice}</p>}</div>
+}
