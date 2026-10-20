@@ -66,3 +66,7 @@ The HH reset screen verifies an emailed recovery OTP before updating a password 
 For the HH Family project only, set Authentication → Emails → Reset password to `supabase/templates/password-recovery.html`, with subject `Reset your HH password`. The email uses `{{ .Token }}` and a plain link to `https://zethhummel-rgb.github.io/hh-family/?reset=1`; do not use `ConfirmationURL` or `TokenHash` in that template. The static link performs no verification, so mail scanners cannot consume the code by opening it. Keep existing signup/invitation templates and SMTP settings unchanged.
 
 Cutover order: publish the reset screen, then update the recovery template. Verify the email body and complete a user-controlled reset; automated tests use mocked auth and do not send emails or change anyone’s password. `npm run test:recovery` covers denial, retries, session isolation and template safety.
+
+## New-home walkthrough
+
+After successful household creation, the creator gets a five-slide, phone-oriented welcome tour. Joining an existing household does not trigger it. Pending state survives a refresh in the current tab; completion/Skip is stored per user and household on that device. Existing homes are not interrupted. Everyone can reopen it through Tutorials → Take the quick tour. The tour itself performs no backend writes, permission requests, or invitations.

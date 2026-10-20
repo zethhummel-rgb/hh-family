@@ -3,11 +3,12 @@ import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy} fro
 import './tutorials.css';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
-export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;onSettings:()=>void;onCalendar:()=>void}){
+export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner:boolean;onWelcome:()=>void;onSettings:()=>void;onCalendar:()=>void}){
  const [copyNotice,setCopyNotice]=useState('');
  const appAddress='https://zethhummel-rgb.github.io/hh-family/';
  return <section className="tutorials" aria-label="HH tutorials">
   <div className="tutorial-welcome"><BookOpen size={22}/><p>Made for your phone. Tap a guide, follow the steps, and come back here whenever you need a hand.</p></div>
+  <button type="button" className="button soft tutorial-replay" onClick={onWelcome}><BookOpen size={17}/>Take the quick tour</button>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner sends the invitation</span>
