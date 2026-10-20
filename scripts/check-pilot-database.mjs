@@ -25,9 +25,13 @@ assert.equal(first.token.length,64);
 const second=await value("select public.pilot_invitations('create','unconfirmed@hh-qa.invalid')");
 const third=await value("select public.pilot_invitations('create','third@hh-qa.invalid')");
 await denied("select public.pilot_invitations('create','fourth@hh-qa.invalid')");
-const hostList=await value("select public.pilot_invitations('list')");assert.equal(hostList.length,3);assert.equal(JSON.stringify(hostList).includes(first.token),false);
+// Upgrade an existing three-place pilot without losing its invitations.
+await db.exec('reset role;');await db.exec(fs.readFileSync(new URL('../database/pilot-seven-spots.sql',import.meta.url),'utf8'));await as('host');
+for(let n=4;n<=7;n++)await value("select public.pilot_invitations('create',$1)",['extra-'+n+'@hh-qa.invalid']);
+await assert.rejects(db.query("select public.pilot_invitations('create','eighth@hh-qa.invalid')"),/seven invited households/);
+const hostList=await value("select public.pilot_invitations('list')");assert.equal(hostList.length,7);assert.equal(JSON.stringify(hostList).includes(first.token),false);
 await value("select public.pilot_invitations('revoke',null,$1)",[hostList.find(i=>i.email==='third@hh-qa.invalid').id]);
-assert.equal((await value("select public.pilot_invitations('list')")).length,2);
+assert.equal((await value("select public.pilot_invitations('list')")).length,6);
 await as('unconfirmed');await denied("select public.create_pilot_household($1,'Second home','Unconfirmed')",[second.token]);
 await as('outsider');await denied("select public.create_pilot_household($1,'Second home','Wrong email')",[first.token]);
 await denied("select public.create_pilot_household($1,'Second home','Outsider')",[third.token]);
@@ -86,5 +90,5 @@ await db.exec("reset role;update private.invitation_mail_deliveries set last_att
 await as('owner');const actorLimitToken=await value("select public.create_household_invite('actor-limit@example.invalid')");
 await db.exec('reset role;');await db.query("insert into private.invitation_mail_attempts(id,delivery_id,actor_id,recipient,status) select gen_random_uuid(),$1,$2,'synthetic-'||n||'@example.invalid','failed' from generate_series(1,10) n",[delivery.deliveryId,ids.owner]);await assert.rejects(claim(ids.owner,actorLimitToken),/Invitation email limit/);
 await db.close();
-console.log('Isolated PostgreSQL checks passed: host-only controls, three-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
+console.log('Isolated PostgreSQL checks passed: host-only controls, three-to-seven-place migration, seven-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
 console.log('Invitation email database checks passed: service-only grants, owner/host permissions, intended recipient, single-flight leases, same-invitation retries, stale-claim protection, sent deduplication, no raw-token storage, expired/revoked/used denial and recipient/actor rate limits.');
