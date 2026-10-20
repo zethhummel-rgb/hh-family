@@ -55,6 +55,19 @@ export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;o
     <p className="tutorial-copy-note">Moving takes the event out of its previous calendar. You must organise the event and be able to edit the destination calendar. Moving a repeating event also moves its future occurrences. If you want to keep the original where it is, add a separate matching event directly in HH instead; those two events will not stay linked.</p>
     <p className="tutorial-copy-note">Automatic syncing of an entire existing calendar into HH isn’t available yet.</p>
     <div className="tutorial-phone-links"><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/78739?co=GENIE.Platform%3DiOS&amp;hl=en" target="_blank" rel="noopener noreferrer">Google’s iPhone guide <ArrowUpRight size={14}/></a><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/78739?co=GENIE.Platform%3DAndroid&amp;hl=en" target="_blank" rel="noopener noreferrer">Google’s Android guide <ArrowUpRight size={14}/></a></div>
+    <details className="tutorial-extra"><summary>Copy a whole Google calendar at once</summary>
+     <span className="tutorial-role">Computer needed for this one-time import · Use your phone again afterward</span>
+     <p className="tutorial-copy-note">Connect HH to Google first using the steps above. You can then copy existing events in bulk into the family calendar.</p>
+     <Steps>
+      <li><h3>Export your existing calendar</h3><p>On a computer, open Google Calendar using the account with your existing events. Click the gear icon, choose <strong>Settings</strong>, then open <strong>Import &amp; export</strong> and choose <strong>Export</strong>.</p></li>
+      <li><h3>Find the calendar file</h3><p>If the download is a ZIP, unzip it. Each calendar has its own <strong>.ics</strong> file. Choose the calendar you want to bring over.</p></li>
+      <li><h3>Import into your HH family calendar</h3><p>Switch to the Google account connected to HH if needed. Open <strong>Settings → Import &amp; export</strong>. Select the .ics file and change the destination to your calendar ending in <strong>· Family</strong>, then choose <strong>Import</strong>. Repeat for other calendar files you want to add.</p></li>
+      <li><h3>Go back to HH on your phone</h3><p>Tap <strong>Calendar</strong> along the bottom and tap the refresh symbol. Look on the imported events’ dates to see them.</p></li>
+     </Steps>
+     <div className="tutorial-tip"><CalendarDays size={16}/><p><strong>This is a one-time copy.</strong> The original calendar stays separate. Later changes there will not update these copies. Use the HH family calendar for plans going forward; changes to that calendar sync with HH.</p></div>
+     <p className="tutorial-copy-note">Google does not import guest lists or video-meeting details.</p>
+     <div className="tutorial-phone-links"><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/37111?hl=en" target="_blank" rel="noopener noreferrer">Google’s export guide <ArrowUpRight size={14}/></a><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/37118?hl=en" target="_blank" rel="noopener noreferrer">Google’s import guide <ArrowUpRight size={14}/></a></div>
+    </details>
     <details className="tutorial-extra"><summary>Google needs reconnecting?</summary><p>The household owner taps <strong>Calendar</strong> in the bottom navigation, swipes up to the controls below the calendar, and taps <strong>Reconnect Google</strong>. Use the same Google account that originally connected the family calendar.</p></details>
     <button type="button" className="text-button tutorial-action" onClick={onCalendar}>Open Calendar <ArrowUpRight size={16}/></button>
    </div>
