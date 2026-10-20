@@ -13,11 +13,11 @@ export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;o
    <div className="tutorial-body"><span className="tutorial-role">The household owner sends the invitation</span>
     <Steps>
      <li><h3>Tap your initials in the top right corner</h3><p>Your initials are inside the coloured circle at the top of HH. Tapping them opens your settings.</p></li>
-     <li><h3>Enter their email address</h3><p>Swipe up inside settings to find <strong>Invite a family member</strong>. Tap the email box, type their address, then tap <strong>Send invitation</strong>.</p></li>
+     <li><h3>Enter their email address</h3><p>Swipe up inside settings to find <strong>Family profiles → Members with an email address</strong>. Tap the email box, type their address, then tap <strong>Invite by email</strong>.</p></li>
      <li><h3>They open the invitation email</h3><p>On their phone, they open the email and tap <strong>Join your household</strong>. They tap <strong>Create account</strong>, or sign in if they already have one, using the exact invited email address. If asked to confirm their email, they open the confirmation email, then tap the original invitation link again.</p></li>
      <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. To pick their calendar colour, they tap their initials in the top right corner.</p></li>
     </Steps>
-    <div className="tutorial-tip"><Check size={16}/><p><strong>One family, separate logins.</strong> Use Invite a family member for someone joining your home. “Invite another household” is for a different family creating its own separate home.</p></div>
+    <div className="tutorial-tip"><Check size={16}/><p><strong>One family, separate logins.</strong> Use Invite by email for someone joining your home. “Invite another household” is for a different family creating its own separate home.</p></div>
     <details className="tutorial-extra"><summary>No invitation email?</summary><p>Check Spam and confirm the address is correct. The sender can tap <strong>Copy invitation</strong> and paste it into a text message, or tap <strong>Retry email</strong> if delivery failed. Family invitations work once and expire after seven days. If a link expires or is lost, the owner can create a new invitation.</p></details>
     {owner?<button type="button" className="text-button tutorial-action" onClick={onSettings}>Take me to my settings <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to send the invitation.</p>}
    </div>
@@ -26,7 +26,7 @@ export default function Tutorials({owner,onSettings,onCalendar}:{owner:boolean;o
    <summary><span className="tutorial-icon tutorial-gold"><Users size={22}/></span><span><small>02 · LITTLE FAMILY MEMBERS</small><h2>Add a child without an email</h2><p>A family profile, with no account to set up.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner adds family profiles</span>
     <Steps>
-     <li><h3>Tap your initials in the top right corner</h3><p>This opens your settings. Swipe up inside the settings window until you reach <strong>Family profiles</strong>.</p></li>
+     <li><h3>Tap your initials in the top right corner</h3><p>This opens your settings. Swipe up inside the settings window until you reach <strong>Family profiles → Children &amp; members without email</strong>.</p></li>
      <li><h3>Tap Add family profile</h3><p>Tap the Name box and type their name. Tap <strong>Calendar colour</strong> to pick their colour. No email address or password is needed.</p></li>
      <li><h3>Save their profile</h3><p>Tap <strong>Save profile</strong>. Their name and colour now appear with your household’s people.</p></li>
      <li><h3>Include them in family plans</h3><p>Tap <strong>Calendar</strong> along the bottom, then <strong>Add event</strong>. Enter the plan and tap their name in the people choices. Their coloured dot appears on the event, and the person filter helps you find their plans. Tap Everyone for a plan involving the whole family.</p></li>
