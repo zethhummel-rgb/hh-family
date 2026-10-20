@@ -69,4 +69,4 @@ Cutover order: publish the reset screen, then update the recovery template. Veri
 
 ## New-home walkthrough
 
-After successful household creation, the creator gets a five-slide, phone-oriented welcome tour. Joining an existing household does not trigger it. Pending state survives a refresh in the current tab; completion/Skip is stored per user and household on that device. Existing homes are not interrupted. Everyone can reopen it through Tutorials → Take the quick tour. The tour itself performs no backend writes, permission requests, or invitations.
+After successful household creation, the creator gets a five-slide, phone-oriented welcome tour. Joining an existing household does not trigger it. Pending state survives a refresh in the current tab; completion/Skip is stored per user and household on that device. Existing homes are not interrupted. Everyone can reopen it through Settings → Tutorials (at the bottom) → Take the quick tour. The tour itself performs no backend writes, permission requests, or invitations.
