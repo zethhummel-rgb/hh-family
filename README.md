@@ -58,3 +58,11 @@ npm run build
 ```
 
 The suite covers calendar timing and DST, Google auth retries, recurrence/search contracts, reminder deduplication, profile routing and account linking, invite-link precedence and confirmation redirects, and refusal to use the personal production database. The rolled-back database isolation test passed on the actual new project; security advisors returned only expected info notices for deliberately inaccessible private tables. Before inviting real families, test email confirmation, first household creation, new-home invitation acceptance/replay/wrong-email rejection, family invites, account recovery, Google connect, native/Google event changes and push receipt using actual pilot accounts. The isolated PostgreSQL suite additionally verifies host-only controls, invitation limits, revocation, wrong-email/unconfirmed/replay denial, household item/event/profile row policies, owner-only edits, cross-household profile linking rejection, and anonymous denial. It contacts no external database. Passing local checks does not verify those external services.
+
+## Password reset codes
+
+The HH reset screen verifies an emailed recovery OTP before updating a password (12–128 characters). Its separate, memory-only Supabase client never replaces the household login. No code or new password is stored in browser storage or URLs. Previously issued recovery links remain supported during rollout.
+
+For the HH Family project only, set Authentication → Emails → Reset password to `supabase/templates/password-recovery.html`, with subject `Reset your HH password`. The email uses `{{ .Token }}` and a plain link to `https://zethhummel-rgb.github.io/hh-family/?reset=1`; do not use `ConfirmationURL` or `TokenHash` in that template. The static link performs no verification, so mail scanners cannot consume the code by opening it. Keep existing signup/invitation templates and SMTP settings unchanged.
+
+Cutover order: publish the reset screen, then update the recovery template. Verify the email body and complete a user-controlled reset; automated tests use mocked auth and do not send emails or change anyone’s password. `npm run test:recovery` covers denial, retries, session isolation and template safety.
