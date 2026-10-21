@@ -19,6 +19,7 @@ export async function searchCalendar(householdId:string,connected:boolean,query:
   const unchanged={...master,exceptions:Object.fromEntries(Object.keys(master.exceptions||{}).map(date=>[date,null]))};
   const candidate=expandNativeEvent(unchanged,from,to,2000,true)[0] as FamilyEvent|undefined;
   if(candidate&&matches(candidate))events.push(candidate);
+  if(!master.recurrence?.length)continue;
   for(const date of Object.keys(master.exceptions||{})){
    if(!master.exceptions?.[date])continue;
    const original=occurrenceForDate(master,date),change=master.exceptions[date];

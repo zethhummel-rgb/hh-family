@@ -53,6 +53,7 @@ const searchExports={};vm.runInNewContext(ts.transpileModule(read('src/calendarS
 let page=await searchExports.searchCalendar(hid,false,'family','upcoming');assert.equal(page.events.length,1);assert.equal(page.events[0].original_date,'2026-11-18');
 page=await searchExports.searchCalendar(hid,false,'moved','upcoming');assert.equal(page.events.length,1);assert.equal(page.events[0].title,'Moved dinner');
 page=await searchExports.searchCalendar(hid,false,'moved','past');assert.equal(page.events.length,0);
+const savedRule=moved.recurrence;moved.recurrence=[];page=await searchExports.searchCalendar(hid,false,'moved','upcoming');assert.equal(page.events.length,0);moved.recurrence=savedRule;
 // Optional Google connect preserves edited and cancelled native occurrences.
 const {importNativeExceptions}=await import(uri(read('supabase/functions/google-calendar/nativeImport.ts').replace("'./native.ts'",JSON.stringify(nativeUri))));
 const requests=[],states=new Map();
