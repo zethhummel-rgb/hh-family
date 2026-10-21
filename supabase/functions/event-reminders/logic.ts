@@ -1,9 +1,10 @@
-export type ReminderEvent={id:string;task_id?:string;title:string;location?:string;person?:string;person_ids?:string[]|null;reminder_minutes?:number|null;starts_at:string;all_day:boolean;start_date?:string|null};
+export type ReminderEvent={id:string;task_id?:string;title:string;location?:string;person?:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;starts_at:string;all_day:boolean;start_date?:string|null};
 export type ReminderMember={user_id:string;display_name:string};
 export function calendarReminders(events:ReminderEvent[]):ReminderEvent[]{
  return events.flatMap(event=>{
   const extra=event.reminder_minutes;
-  const minutes=extra!=null&&Number.isInteger(extra)&&extra>=0&&extra<=10080&&extra!==30?[30,extra]:[30];
+  const minutes=event.reminder_30_enabled===false?[]:[30];
+  if(extra!=null&&Number.isInteger(extra)&&extra>=0&&extra<=10080&&extra!==30)minutes.push(extra);
   return minutes.map(reminder_minutes=>({...event,reminder_minutes}));
  });
 }

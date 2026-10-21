@@ -14,6 +14,8 @@ assert.equal(reminderDue(event),Date.parse('2026-10-21T23:05:00Z'));
 assert.deepEqual(calendarReminders([event]).map(e=>e.reminder_minutes),[30,15]);
 for(const reminder_minutes of[null,undefined,30])assert.deepEqual(calendarReminders([{...event,reminder_minutes}]).map(e=>e.reminder_minutes),[30]);
 assert.deepEqual(calendarReminders([{...event,reminder_minutes:1020}]).map(e=>e.reminder_minutes),[30,1020]);
+for(const reminder_minutes of[null,undefined,30])assert.deepEqual(calendarReminders([{...event,reminder_minutes,reminder_30_enabled:false}]),[]);
+assert.deepEqual(calendarReminders([{...event,reminder_minutes:1020,reminder_30_enabled:false}]).map(e=>e.reminder_minutes),[1020]);
 const [automatic,existing]=calendarReminders([event]);
 assert.equal(isDue(automatic,Date.parse(event.starts_at)-30*60000),true);
 assert.equal(isDue(existing,Date.parse(event.starts_at)-15*60000),true);
@@ -27,9 +29,9 @@ const subscription={endpoint:'https://web.push.apple.com/test',keys:{p256dh:'A'.
 for(const endpoint of['http://fcm.googleapis.com/x','https://127.0.0.1/x','https://fcm.googleapis.com.evil.test/x','https://user:password@fcm.googleapis.com/x','https://web.push.apple.com:444/x','https://metadata.google.internal/x'])assert.throws(()=>validSubscription({...subscription,endpoint}));
 const raw=fs.readFileSync(new URL('../supabase/functions/event-reminders/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 const hid='11111111-1111-4111-8111-111111111111';
-function fixture({minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only'}={}){
+function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only'}={}){
  let handler,pushes=0,claimed=false,retired=false;const calls=[];
- const now=Date.now();const dueEvent={...event,starts_at:new Date(now+minutesBefore*60000).toISOString()};
+ const now=Date.now();const dueEvent={...event,reminder_30_enabled:reminder30,starts_at:new Date(now+minutesBefore*60000).toISOString()};
  const device={id:'device',household_id:hid,user_id:'zeth',subscription};
  const rows=table=>({data:table==='household_items'?(task&&!completedTask?[{id:'11111111-1111-4111-8111-111111111111',title:'Hockey',person:'Everyone',remind_at:new Date(now+(futureTask?86400000:-60000)).toISOString()}]:[]):task||cancelled?[]:[{...dueEvent,ends_at:new Date(now+74*60000).toISOString(),...(stale?{reminder_minutes:null}:{})}],error:null});
  const query=table=>{const q={select:()=>q,eq:()=>q,not:()=>q,gte:()=>q,lte:()=>q,order:()=>q,range:async()=>rows(table),limit:async()=>rows(table),maybeSingle:async()=>({data:member?{user_id:'zeth'}:null,error:null}),single:async()=>({data:{owner_id:'zeth'},error:null}),then:resolve=>resolve({data:table==='household_people'?[]:members,error:null})};return q};
@@ -42,7 +44,7 @@ function fixture({minutesBefore=14,member=true,validToken=true,connected=false,r
  }};
  const fetch=async(url,init)=>{
   if(url==='https://oauth2.googleapis.com/token')return googleFailure?Response.json({error:'revoked'},{status:401}):Response.json({access_token:'google-only'});
-  if(url.startsWith('https://www.googleapis.com/calendar/'))return Response.json({items:cancelled?[{id:'cancelled',status:'cancelled'}]:[{id:'hockey',summary:'Hockey',start:{dateTime:dueEvent.starts_at},extendedProperties:{shared:{hummel_people:'[]',hummel_reminder:stale?'':'15'}}}]});
+  if(url.startsWith('https://www.googleapis.com/calendar/'))return Response.json({items:cancelled?[{id:'cancelled',status:'cancelled'}]:[{id:'hockey',summary:'Hockey',start:{dateTime:dueEvent.starts_at},extendedProperties:{shared:{hummel_people:'[]',hummel_reminder:stale?'':'15',hummel_reminder_30:reminder30?'on':'off'}}}]});
   assert.equal(url,subscription.endpoint);assert.equal(init.redirect,'error');pushes++;return new Response(null,{status:expired?410:201});
  };
  const webpush={generateVAPIDKeys:()=>({publicKey:'public',privateKey:'server-only'}),generateRequestDetails:(s,p,o)=>{assert.equal(o.TTL,300);assert.equal(o.vapidDetails.privateKey,'server-only');assert.equal(o.contentEncoding,'aes128gcm');assert.equal(JSON.parse(p).title,'Hockey');return {endpoint:s.endpoint,headers:{Authorization:'VAPID encrypted'},body:'encrypted bytes'}}};
@@ -57,6 +59,7 @@ f=fixture();r=await f.request({action:'dispatch'},{'x-hummel-cron':'wrong'});ass
 for(const connected of[false,true]){f=fixture({connected});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1);assert.equal(f.calls.includes('unlock'),true)}
 for(const connected of[false,true])for(const stale of[false,true]){f=fixture({connected,stale,minutesBefore:29});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1,'Existing native/Google events get the automatic reminder even without a saved reminder');await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1)}
 for(const config of[{removed:true},{stale:true},{cancelled:true},{connected:true,stale:true},{connected:true,cancelled:true}]){f=fixture(config);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0)}
+for(const connected of[false,true]){f=fixture({connected,reminder30:false,minutesBefore:29});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0,'Turning off the switch suppresses the automatic alert');f=fixture({connected,reminder30:false});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1,'An additional reminder still sends with the switch off')}
 f=fixture({expired:true});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.retired,true);
 // Service worker does not cache pages. It always displays push and constrains click navigation.
 const sw=fs.readFileSync(new URL('../public/sw.js',import.meta.url),'utf8'),handlers={};let shown,opened;

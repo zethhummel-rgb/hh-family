@@ -4,7 +4,7 @@ import {readRecurrence} from './recurrence.ts';
 const zone='America/Toronto';
 const dateFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'});
 const partsFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
-export type NativeEvent={id:string;title:string;description:string;location:string;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
+export type NativeEvent={id:string;title:string;description:string;location:string;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
 export const localDate=(iso:string)=>dateFormat.format(new Date(iso));
 function shift(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 function localParts(iso:string){return Object.fromEntries(partsFormat.formatToParts(new Date(iso)).map(p=>[p.type,p.value]))}

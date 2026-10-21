@@ -10,6 +10,7 @@ grant execute on function auth.uid() to authenticated;`);
 for(const file of ['schema.sql','calendar.sql','member-colours.sql','pilot.sql','invitation-email.sql'])await db.exec(fs.readFileSync(new URL('../database/'+file,import.meta.url),'utf8'));
 await db.exec('alter table public.household_events add column reminder_minutes integer;');
 await db.exec(fs.readFileSync(new URL('../database/native-calendar-repeats.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../database/event-notification-toggle.sql',import.meta.url),'utf8'));
 const ids={host:'10000000-0000-4000-8000-000000000001',owner:'10000000-0000-4000-8000-000000000002',member:'10000000-0000-4000-8000-000000000003',outsider:'10000000-0000-4000-8000-000000000004',unconfirmed:'10000000-0000-4000-8000-000000000005'};
 for(const [key,id] of Object.entries(ids))await db.query('insert into auth.users values($1,$2,$3)',[id,key+'@hh-qa.invalid',key==='unconfirmed'?null:new Date().toISOString()]);
 await db.exec("insert into private.pilot_hosts values('host@hh-qa.invalid');");
@@ -94,7 +95,10 @@ await db.exec('reset role;');await db.query("insert into private.invitation_mail
 // Native repeats keep the same RLS boundary and reject malformed overrides.
 await as('owner');
 const repeatId=await value("insert into public.household_events(household_id,title,starts_at,ends_at,recurrence) values($1,'Native weekly','2026-10-21T23:20Z','2026-10-22T00:20Z',array['RRULE:FREQ=WEEKLY;INTERVAL=2']) returning id",[homeB]);
-const changed={title:'One date',description:'',location:'',person:'Everyone',starts_at:'2026-11-05T01:00Z',ends_at:'2026-11-05T02:00Z',all_day:false,start_date:null,end_date:null,reminder_minutes:15};
+assert.equal(await value('select reminder_30_enabled from public.household_events where id=$1',[repeatId]),true);
+await db.query('update public.household_events set reminder_30_enabled=false where id=$1',[repeatId]);
+assert.equal(await value('select reminder_30_enabled from public.household_events where id=$1',[repeatId]),false);
+const changed={title:'One date',description:'',location:'',person:'Everyone',starts_at:'2026-11-05T01:00Z',ends_at:'2026-11-05T02:00Z',all_day:false,start_date:null,end_date:null,reminder_minutes:15,reminder_30_enabled:false};
 await db.query('update public.household_events set exceptions=$1,version=version+1 where id=$2',[JSON.stringify({'2026-11-04':changed,'2026-11-18':null}),repeatId]);
 assert.equal(await value('select version from public.household_events where id=$1',[repeatId]),2);
 for(const bad of [{'2026-11-04':{...changed,household_id:homeA}},{'invalid':null},{'2026-11-04':{...changed,ends_at:changed.starts_at}},{'2026-11-04':{...changed,reminder_minutes:10081}}])await denied('update public.household_events set exceptions=$1 where id=$2',[JSON.stringify(bad),repeatId]);

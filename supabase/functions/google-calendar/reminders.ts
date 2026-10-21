@@ -1,4 +1,4 @@
-// Shared reminder contract. Existing events without a choice stay silent.
+// Additional reminder contract. The separate 30-minute switch controls the default alert.
 export function reminderMinutes(value:unknown):number|null{
  if(value===null||value===undefined||value==='')return null;
  if(typeof value!=='number'||!Number.isInteger(value)||value<0||value>10080)throw Error('Choose a reminder from 0 to 10,080 minutes.');

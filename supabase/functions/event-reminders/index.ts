@@ -26,7 +26,7 @@ async function googleEvents(connection:any,now:number):Promise<ReminderEvent[]>{
   const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(connection.calendarId)+'/events?'+params,{headers:{Authorization:'Bearer '+data.access_token},signal:AbortSignal.timeout(8000)});const body=await r.json();if(!r.ok)throw Error('Calendar read failed');
   for(const e of body.items||[]){if(e.status==='cancelled')continue;const shared=e.extendedProperties?.shared||{};let person_ids;try{person_ids=JSON.parse(shared.hummel_people);if(!Array.isArray(person_ids)||person_ids.some((id:unknown)=>typeof id!=='string'))person_ids=undefined}catch{}
    const raw=shared.hummel_reminder;const reminder_minutes=typeof raw==='string'&&/^\d{1,5}$/.test(raw)?Number(raw):null;
-   events.push({id:e.id,title:e.summary||'Family event',location:e.location,person:shared.hummel_person||'Everyone',person_ids,reminder_minutes,starts_at:e.start?.dateTime||'',all_day:!!e.start?.date,start_date:e.start?.date||null});
+   events.push({id:e.id,title:e.summary||'Family event',location:e.location,person:shared.hummel_person||'Everyone',person_ids,reminder_minutes,reminder_30_enabled:shared.hummel_reminder_30!=='off',starts_at:e.start?.dateTime||'',all_day:!!e.start?.date,start_date:e.start?.date||null});
   }
   pageToken=body.nextPageToken||'';if(events.length>2000)throw Error('Reminder calendar too large');
  }while(pageToken);
