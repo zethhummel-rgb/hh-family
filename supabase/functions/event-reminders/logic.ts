@@ -1,5 +1,12 @@
 export type ReminderEvent={id:string;task_id?:string;title:string;location?:string;person?:string;person_ids?:string[]|null;reminder_minutes?:number|null;starts_at:string;all_day:boolean;start_date?:string|null};
 export type ReminderMember={user_id:string;display_name:string};
+export function calendarReminders(events:ReminderEvent[]):ReminderEvent[]{
+ return events.flatMap(event=>{
+  const extra=event.reminder_minutes;
+  const minutes=extra!=null&&Number.isInteger(extra)&&extra>=0&&extra<=10080&&extra!==30?[30,extra]:[30];
+  return minutes.map(reminder_minutes=>({...event,reminder_minutes}));
+ });
+}
 export function validSubscription(value:any){
  if(!value||typeof value.endpoint!=='string'||value.endpoint.length>4096)throw Error('Invalid notification subscription.');
  const url=new URL(value.endpoint),host=url.hostname;

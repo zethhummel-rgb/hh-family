@@ -32,7 +32,7 @@ export default function EventDetails({event,onClose,onEdit,profiles}:{profiles:P
     <div><CalendarDays aria-hidden="true"/><div><dt>Date</dt><dd>{eventDateLabel(event)}</dd></div></div>
     <div><Clock aria-hidden="true"/><div><dt>Time</dt><dd>{event.all_day?'All day':eventTime(event)+' – '+endTime}</dd>{!event.all_day&&<small>Eastern time</small>}</div></div>
     <div><Users aria-hidden="true"/><div><dt>For</dt><dd><PeopleDots event={event} profiles={profiles}/></dd></div></div>
-    <div><Bell aria-hidden="true"/><div><dt>Reminder</dt><dd>{reminderLabel(event.reminder_minutes)}</dd>{event.all_day&&event.reminder_minutes!=null&&<small>Counted from 9 AM Eastern</small>}</div></div>
+    <div><Bell aria-hidden="true"/><div><dt>Reminders</dt><dd>30 minutes before{event.reminder_minutes!=null&&event.reminder_minutes!==30?` · ${reminderLabel(event.reminder_minutes)}`:''}</dd>{event.all_day&&<small>Counted from 9 AM Eastern</small>}</div></div>
     {event.location&&<div><MapPin aria-hidden="true"/><div><dt>Location</dt><dd>{event.location}</dd></div></div>}
    </dl>
    {event.description&&<div className="event-details-notes"><h3>Notes</h3><p>{event.description}</p></div>}

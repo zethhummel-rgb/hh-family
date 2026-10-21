@@ -1,6 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
-import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,type ReminderEvent} from './logic.ts';
+import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,calendarReminders,type ReminderEvent} from './logic.ts';
 import {expandNativeEvents,type NativeEvent} from '../google-calendar/native.ts';
 const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/',ORIGIN=new URL(APP).origin;
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -71,7 +71,7 @@ async function dispatch(keys:any){
      events=expandNativeEvents(masters,new Date(now-86400000).toISOString(),new Date(now+8*86400000).toISOString());
     }
     report.households++;
-    await deliver(events);
+    await deliver(calendarReminders(events));
    }catch{report.failed++}
   }
   return report;
