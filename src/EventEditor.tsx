@@ -8,7 +8,7 @@ type Props={event:FamilyEvent|null;date:string;profiles:PersonProfile[];connecte
 const defaults:RepeatOptions={frequency:'WEEKLY',interval:1,ending:'never',until:'',count:10};
 const errorText=(e:unknown)=>e instanceof Error?e.message:(e as {message?:string})?.message||'Could not save the event.';
 export default function EventEditor({event,date,profiles,connected,onClose,onSave,onDelete,onLoadSeries}:Props){
- const [reminder,setReminder]=useState<number|null>(event?event.reminder_minutes??null:15);
+ const [reminder,setReminder]=useState<number|null>(event?event.reminder_minutes??null:30);
  const [current,setCurrent]=useState(event),[scope,setScope]=useState<'occurrence'|'series'>('occurrence');
  const [title,setTitle]=useState(event?.title||''),[description,setDescription]=useState(event?.description||''),[location,setLocation]=useState(event?.location||''),[taggedIds,setTaggedIds]=useState<string[]>(()=>selectedPeople(event,profiles)),[tagsChanged,setTagsChanged]=useState(false),[start,setStart]=useState(event?eventDate(event):date),[end,setEnd]=useState(event?eventEndDate(event):date),[startTime,setStartTime]=useState(event&&!event.all_day?timePart(event.starts_at):'09:00'),[endTime,setEndTime]=useState(event&&!event.all_day?timePart(event.ends_at):'09:30'),[allDay,setAllDay]=useState(event?.all_day||false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[confirmDelete,setConfirmDelete]=useState(false);
  const initialRepeat=readRecurrence(event?.recurrence,event?.all_day||false);
