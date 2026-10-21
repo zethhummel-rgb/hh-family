@@ -2,9 +2,11 @@ import {useEffect,useState,useRef} from 'react';
 import {Plus,Pencil,Check} from 'lucide-react';
 import {supabase} from './supabase';
 import type {HouseholdPerson,Member} from './data';
-export default function HouseholdProfiles({people,members,householdId,onSaved,addRequest}:{addRequest?:number;people:HouseholdPerson[];members:Member[];householdId:string;onSaved:()=>unknown}){
+export default function HouseholdProfiles({people,members,householdId,onSaved,addRequest,onBusyChange,onDraftChange}:{onDraftChange?:(draft:boolean)=>void;onBusyChange?:(busy:boolean)=>void;addRequest?:number;people:HouseholdPerson[];members:Member[];householdId:string;onSaved:()=>unknown}){
  const [editing,setEditing]=useState<HouseholdPerson|null>(null),[adding,setAdding]=useState(false),[name,setName]=useState(''),[color,setColor]=useState('#E78725'),[linked,setLinked]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const nameInput=useRef<HTMLInputElement>(null);
+ useEffect(()=>{onBusyChange?.(busy)},[busy,onBusyChange]);
+ useEffect(()=>{onDraftChange?.((adding||!!editing)&&!!name.trim())},[adding,editing,name,onDraftChange]);
  // Each tile press starts a new profile, or focuses the draft already being edited.
  useEffect(()=>{if(!addRequest)return;if(!adding&&!editing){setAdding(true);setName('');setColor('#E78725');setLinked('');setError('');setNotice('')}else nameInput.current?.focus()},[addRequest]);
  useEffect(()=>{if(adding||editing)nameInput.current?.focus()},[adding,editing]);
