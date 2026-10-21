@@ -1,46 +1,46 @@
 import {useState} from 'react';
-import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy} from 'lucide-react';
+import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy,Palette} from 'lucide-react';
 import './tutorials.css';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
-export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner:boolean;onWelcome:()=>void;onSettings:()=>void;onCalendar:()=>void}){
+export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner:boolean;onWelcome:()=>void;onSettings:(page:'household'|'profile'|'notifications'|'appearance'|'calendar')=>void;onCalendar:()=>void}){
  const [copyNotice,setCopyNotice]=useState('');
  const appAddress='https://zethhummel-rgb.github.io/hh-family/';
  return <section className="tutorials" aria-label="HH tutorials">
-  <div className="tutorial-welcome"><BookOpen size={22}/><p>Help is always here at the bottom of your settings. Tap a guide, follow the steps, and come back here whenever you need a hand.</p></div>
+  <div className="tutorial-welcome"><BookOpen size={22}/><p>Find these guides anytime: tap your initials in the top right, then Help & tutorials. Each settings screen has a Back button; tap Done to return to HH.</p></div>
   <button type="button" className="button soft tutorial-replay" onClick={onWelcome}><BookOpen size={17}/>Take the quick tour</button>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner sends the invitation</span>
     <Steps>
      <li><h3>Tap your initials in the top right corner</h3><p>Your initials are inside the coloured circle at the top of HH. Tapping them opens your settings.</p></li>
-     <li><h3>Enter their email address</h3><p>Swipe up inside settings to find <strong>Family profiles</strong>. Tap <strong>Invite by email</strong>, type their address in the email box, then tap <strong>Send invitation</strong>.</p></li>
+     <li><h3>Enter their email address</h3><p>In Settings, tap <strong>Your household</strong>. Under <strong>Family profiles</strong>, tap <strong>Invite by email</strong>, type their address in the email box, then tap <strong>Send invitation</strong>.</p></li>
      <li><h3>They open the invitation email</h3><p>On their phone, they open the email and tap <strong>Join your household</strong>. They tap <strong>Create account</strong>, or sign in if they already have one, using the exact invited email address. If asked to confirm their email, they open the confirmation email, then tap the original invitation link again.</p></li>
-     <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. To pick their calendar colour, they tap their initials in the top right corner.</p></li>
+     <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. To pick their calendar colour, they tap their initials in the top right corner, open <strong>Your profile</strong>, choose a colour and tap <strong>Save my colour</strong>.</p></li>
     </Steps>
     <div className="tutorial-tip"><Check size={16}/><p><strong>One family, separate logins.</strong> Use Invite by email for someone joining your home. “Invite another household” is for a different family creating its own separate home.</p></div>
     <details className="tutorial-extra"><summary>No invitation email?</summary><p>Check Spam and confirm the address is correct. The sender can tap <strong>Copy invitation</strong> and paste it into a text message, or tap <strong>Retry email</strong> if delivery failed. Family invitations work once and expire after seven days. If a link expires or is lost, the owner can create a new invitation.</p></details>
-    {owner?<button type="button" className="text-button tutorial-action" onClick={onSettings}>Take me to my settings <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to send the invitation.</p>}
+    {owner?<button type="button" className="text-button tutorial-action" onClick={()=>onSettings('household')}>Open Your household <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to send the invitation.</p>}
    </div>
   </details>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon tutorial-gold"><Users size={22}/></span><span><small>02 · LITTLE FAMILY MEMBERS</small><h2>Add a child without an email</h2><p>A family profile, with no account to set up.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner adds family profiles</span>
     <Steps>
-     <li><h3>Tap your initials in the top right corner</h3><p>This opens your settings. Swipe up inside the settings window until you reach <strong>Family profiles</strong>.</p></li>
+     <li><h3>Tap your initials in the top right corner</h3><p>This opens Settings. Tap <strong>Your household</strong> and find <strong>Family profiles</strong>.</p></li>
      <li><h3>Tap Add without email</h3><p>Tap the Name box and type their name. Tap <strong>Calendar colour</strong> to pick their colour. No email address or password is needed.</p></li>
      <li><h3>Save their profile</h3><p>Tap <strong>Save profile</strong>. Their name and colour now appear with your household’s people.</p></li>
      <li><h3>Include them in family plans</h3><p>Tap <strong>Calendar</strong> along the bottom, then <strong>Add event</strong>. Enter the plan and tap their name in the people choices. Their coloured dot appears on the event, and the person filter helps you find their plans. Tap Everyone for a plan involving the whole family.</p></li>
     </Steps>
-    <div className="tutorial-tip"><Check size={16}/><p><strong>A profile doesn’t sign in.</strong> You manage their plans from your own account. If they get an account later, invite them by email first. Then, in Family profiles, tap <strong>Edit</strong> beside their existing profile and select their account under <strong>Link to an account</strong> to keep their event tags.</p></div>
-    {owner?<button type="button" className="text-button tutorial-action" onClick={onSettings}>Take me to my settings <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to add the profile.</p>}
+    <div className="tutorial-tip"><Check size={16}/><p><strong>A profile doesn’t sign in.</strong> You manage their plans from your own account. If they get an account later, invite them by email first. Then open <strong>Settings → Your household → Family profiles</strong> and tap <strong>Edit</strong> beside their existing profile and select their account under <strong>Link to an account</strong> to keep their event tags.</p></div>
+    {owner?<button type="button" className="text-button tutorial-action" onClick={()=>onSettings('household')}>Open Your household <ArrowUpRight size={16}/></button>:<p className="tutorial-owner-help">Ask your household owner to add the profile.</p>}
    </div>
   </details>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><CalendarDays size={22}/></span><span><small>03 · GOOGLE CALENDAR</small><h2>Connect Google &amp; bring your plans</h2><p>Use your existing Google account with HH.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">One Google connection per household · Owner connects</span>
     <Steps>
-     <li><h3>Open the Calendar tab</h3><p>Tap <strong>Calendar</strong> in HH’s bottom navigation. Swipe up until you see the controls below the calendar, then tap <strong>Connect Google</strong>. If you see Google connected, your household is already connected.</p></li>
+     <li><h3>Open Calendar in Settings</h3><p>Tap your initials in the top right corner, then tap <strong>Calendar</strong> in Settings. Tap <strong>Connect Google</strong>. If you see Connected to Google, your household is already connected.</p></li>
      <li><h3>Connect your existing Google account</h3><p>Tap <strong>Connect Google Calendar</strong>. On Google’s sign-in screen, tap the account you want to use and allow the calendar permission. Follow the prompts back to HH; if your phone leaves Google in another tab, return to HH and tap its refresh symbol.</p></li>
      <li><h3>Find your family calendar</h3><p>HH creates a calendar named after your household, ending in <strong>· Family</strong>. Existing events saved in HH are copied there. Everyone in your HH household can use it here without connecting Google separately.</p></li>
      <li><h3>Keep using HH or Google Calendar</h3><p>Use HH on your phone, or the Google Calendar app signed into the connected account. Save new family events to the calendar ending in · Family. Changes to that calendar sync with HH; tap HH’s refresh symbol to load the latest changes.</p></li>
@@ -69,8 +69,9 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
      <p className="tutorial-copy-note">Google does not import guest lists or video-meeting details.</p>
      <div className="tutorial-phone-links"><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/37111?hl=en" target="_blank" rel="noopener noreferrer">Google’s export guide <ArrowUpRight size={14}/></a><a className="text-button tutorial-source" href="https://support.google.com/calendar/answer/37118?hl=en" target="_blank" rel="noopener noreferrer">Google’s import guide <ArrowUpRight size={14}/></a></div>
     </details>
-    <details className="tutorial-extra"><summary>Google needs reconnecting?</summary><p>The household owner taps <strong>Calendar</strong> in the bottom navigation, swipes up to the controls below the calendar, and taps <strong>Reconnect Google</strong>. Use the same Google account that originally connected the family calendar.</p></details>
-    <button type="button" className="text-button tutorial-action" onClick={onCalendar}>Open Calendar <ArrowUpRight size={16}/></button>
+    <details className="tutorial-extra"><summary>Google needs reconnecting?</summary><p>The household owner taps their initials in the top right corner, opens <strong>Calendar</strong> in Settings, and taps <strong>Reconnect Google</strong>. Use the same Google account that originally connected the family calendar.</p></details>
+    <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('calendar')}>Open calendar settings <ArrowUpRight size={16}/></button>
+    <button type="button" className="text-button tutorial-action" onClick={onCalendar}>Open family calendar <ArrowUpRight size={16}/></button>
    </div>
   </details>
   <details className="tutorial-guide">
@@ -86,8 +87,22 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
      <li><h3>Open HH from your Home Screen</h3><p>Tap the new HH icon. Sign in with your existing account if asked.</p></li>
     </Steps>
     <details className="tutorial-extra"><summary>Can’t find Add to Home Screen?</summary><p>Scroll to the bottom of Safari’s Share menu, tap <strong>Edit Actions</strong>, and add <strong>Add to Home Screen</strong>. Then try again.</p></details>
-    <div className="tutorial-tip"><Check size={16}/><p><strong>Want reminder notifications?</strong> Open HH from its Home Screen icon, tap your initials in the top right corner, find <strong>Notifications</strong>, then tap <strong>Enable notifications</strong> and allow the request. Tap <strong>Send a test</strong> to check it. Each person enables their own phone.</p></div>
+    <div className="tutorial-tip"><Check size={16}/><p><strong>Want reminder notifications?</strong> Open HH from its Home Screen icon, tap your initials in the top right corner, tap <strong>Notifications</strong>, then tap <strong>Enable notifications</strong> and allow the request. Tap <strong>Send a test</strong> to check it. Each person enables their own phone.</p></div>
     <a className="text-button tutorial-source" href="https://support.apple.com/en-ca/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Apple’s Safari installation guide <ArrowUpRight size={14}/></a>
+    <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('notifications')}>Open Notifications <ArrowUpRight size={16}/></button>
+   </div>
+  </details>
+  <details className="tutorial-guide">
+   <summary><span className="tutorial-icon"><Palette size={22}/></span><span><small>05 · YOUR LOOK &amp; COLOUR</small><h2>Make HH feel like you</h2><p>Your app’s palette and your family calendar dot.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
+   <div className="tutorial-body">
+    <Steps>
+     <li><h3>Open Appearance</h3><p>Tap your initials in the top right corner, then tap <strong>Appearance</strong>. Tap a colour palette to preview it. It saves automatically on this device.</p></li>
+     <li><h3>Choose your calendar colour</h3><p>Tap <strong>Back</strong>, then tap your profile card at the top of Settings. Under <strong>Your calendar colour</strong>, choose a dot or custom colour and tap <strong>Save my colour</strong>. Your family sees that dot beside events you’re tagged in.</p></li>
+     <li><h3>Return to your home</h3><p>Tap <strong>Done</strong> in the top right corner. To find any of these guides again, open Settings and tap <strong>Help &amp; tutorials</strong>.</p></li>
+    </Steps>
+    <div className="tutorial-tip"><Check size={16}/><p>Your <strong>palette</strong> changes how HH looks on this device. Your <strong>calendar colour</strong> identifies you in family plans and is shared with your household.</p></div>
+    <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('appearance')}>Open Appearance <ArrowUpRight size={16}/></button>
+    <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('profile')}>Open Your profile <ArrowUpRight size={16}/></button>
    </div>
   </details>
  </section>
