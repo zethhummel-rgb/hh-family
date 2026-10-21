@@ -2,6 +2,7 @@ import {reminderMinutes,readReminder} from './reminders.ts';
 import {encodePersonIds,decodePersonIds} from './tags.ts';
 import {searchParameters} from './search.ts';
 import {validateRecurrence} from './recurrence.ts';
+import {importNativeExceptions} from './nativeImport.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/';
 const ORIGIN=new URL(APP).origin;
@@ -58,6 +59,7 @@ Deno.serve(async(req:Request)=>{
    const native=await admin.from('household_events').select('*').eq('household_id',record.household_id).limit(1001);if(native.error||native.data.length>1000)return redirect(false,'Google connected. Existing event import needs attention; your HH events are preserved.');
    for(const e of native.data){const eventId='home'+e.id.replaceAll('-','');let exists=false;try{const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendar.id)+'/events/'+eventId,{headers:{Authorization:'Bearer '+tokens.access_token}});exists=r.ok;if(!r.ok&&r.status!==404)throw Error('Import check failed')}catch{return redirect(false,'Google connected, but the existing event import could not finish. Reconnect to retry safely.');}
     if(!exists)await google(tokens.access_token,'calendars/'+encodeURIComponent(calendar.id)+'/events','POST',{...toGoogle(e),id:eventId});
+    if(e.recurrence?.length)await importNativeExceptions(e,'calendars/'+encodeURIComponent(calendar.id)+'/events/'+eventId,(path,method,body)=>google(tokens.access_token,path,method,body),toGoogle);
    }
    await service('migration_done',{householdId:record.household_id});return redirect(true);
   }catch{return redirect(false,'Google Calendar could not finish connecting. Your existing household events are preserved.');}

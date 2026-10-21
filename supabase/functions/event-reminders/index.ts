@@ -1,6 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
 import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,type ReminderEvent} from './logic.ts';
+import {expandNativeEvents,type NativeEvent} from '../google-calendar/native.ts';
 const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/',ORIGIN=new URL(APP).origin;
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const cors={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
@@ -64,7 +65,10 @@ async function dispatch(keys:any){
      const owner=await admin.from('households').select('owner_id').eq('id',householdId).single();if(owner.error||owner.data.owner_id!==connection.userId)continue;
      events=await googleEvents(connection,now);
     }else{
-     const r=await admin.from('household_events').select('*').eq('household_id',householdId).not('reminder_minutes','is',null).gte('starts_at',new Date(now-86400000).toISOString()).lte('starts_at',new Date(now+8*86400000).toISOString()).limit(2001);if(r.error||r.data.length>2000)throw Error('Calendar read failed');events=r.data;
+     const masters:NativeEvent[]=[];let complete=false;
+     for(let offset=0;offset<10000;offset+=500){const r=await admin.from('household_events').select('*').eq('household_id',householdId).order('id').range(offset,offset+499);if(r.error)throw Error('Calendar read failed');masters.push(...r.data);if(r.data.length<500){complete=true;break}}
+     if(!complete)throw Error('Reminder calendar too large');
+     events=expandNativeEvents(masters,new Date(now-86400000).toISOString(),new Date(now+8*86400000).toISOString());
     }
     report.households++;
     await deliver(events);

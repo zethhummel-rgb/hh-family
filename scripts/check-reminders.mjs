@@ -2,6 +2,9 @@ import fs from 'node:fs';import ts from 'typescript';import vm from 'node:vm';im
 const compile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const load=async p=>import('data:text/javascript;base64,'+Buffer.from(compile(fs.readFileSync(new URL(p,import.meta.url),'utf8'))).toString('base64'));
 const logic=await load('../supabase/functions/event-reminders/logic.ts');
+const recurrenceUrl='data:text/javascript;base64,'+Buffer.from(compile(fs.readFileSync(new URL('../supabase/functions/google-calendar/recurrence.ts',import.meta.url),'utf8'))).toString('base64');
+const nativeUrl='data:text/javascript;base64,'+Buffer.from(compile(fs.readFileSync(new URL('../supabase/functions/google-calendar/native.ts',import.meta.url),'utf8').replace("'./recurrence.ts'",JSON.stringify(recurrenceUrl)))).toString('base64');
+const {expandNativeEvents}=await import(nativeUrl);
 const {validSubscription,reminderDue,isDue,recipients,deliveryKey}=logic;
 const {reminderMinutes,readReminder}=await load('../supabase/functions/google-calendar/reminders.ts');
 for(const v of[-1,10081,2.5,'15',NaN])assert.throws(()=>reminderMinutes(v));assert.equal(reminderMinutes(null),null);assert.equal(reminderMinutes(0),0);assert.equal(readReminder(''),null);assert.equal(readReminder('15'),15);
@@ -21,7 +24,8 @@ function fixture({member=true,validToken=true,connected=false,removed=false,stal
  let handler,pushes=0,claimed=false,retired=false;const calls=[];
  const now=Date.now();const dueEvent={...event,starts_at:new Date(now+14*60000).toISOString()};
  const device={id:'device',household_id:hid,user_id:'zeth',subscription};
- const query=table=>{const q={select:()=>q,eq:()=>q,not:()=>q,gte:()=>q,lte:()=>q,limit:async()=>({data:table==='household_items'?(task&&!completedTask?[{id:'11111111-1111-4111-8111-111111111111',title:'Hockey',person:'Everyone',remind_at:new Date(now+(futureTask?86400000:-60000)).toISOString()}]:[]):task||cancelled?[]:[{...dueEvent,...(stale?{reminder_minutes:null}:{})}],error:null}),maybeSingle:async()=>({data:member?{user_id:'zeth'}:null,error:null}),single:async()=>({data:{owner_id:'zeth'},error:null}),then:resolve=>resolve({data:table==='household_people'?[]:members,error:null})};return q};
+ const rows=table=>({data:table==='household_items'?(task&&!completedTask?[{id:'11111111-1111-4111-8111-111111111111',title:'Hockey',person:'Everyone',remind_at:new Date(now+(futureTask?86400000:-60000)).toISOString()}]:[]):task||cancelled?[]:[{...dueEvent,ends_at:new Date(now+74*60000).toISOString(),...(stale?{reminder_minutes:null}:{})}],error:null});
+ const query=table=>{const q={select:()=>q,eq:()=>q,not:()=>q,gte:()=>q,lte:()=>q,order:()=>q,range:async()=>rows(table),limit:async()=>rows(table),maybeSingle:async()=>({data:member?{user_id:'zeth'}:null,error:null}),single:async()=>({data:{owner_id:'zeth'},error:null}),then:resolve=>resolve({data:table==='household_people'?[]:members,error:null})};return q};
  const admin={auth:{getUser:async()=>({data:{user:validToken?{id:'zeth'}:null},error:!validToken})},from:query,rpc:async(name,{action,payload})=>{
   calls.push(action);
   if(name==='calendar_service')return {data:connected?{migrationComplete:true,calendarId:'family',userId:'zeth',refreshToken:'never-to-client'}:null};
@@ -35,7 +39,7 @@ function fixture({member=true,validToken=true,connected=false,removed=false,stal
   assert.equal(url,subscription.endpoint);assert.equal(init.redirect,'error');pushes++;return new Response(null,{status:expired?410:201});
  };
  const webpush={generateVAPIDKeys:()=>({publicKey:'public',privateKey:'server-only'}),generateRequestDetails:(s,p,o)=>{assert.equal(o.TTL,300);assert.equal(o.vapidDetails.privateKey,'server-only');assert.equal(o.contentEncoding,'aes128gcm');assert.equal(JSON.parse(p).title,'Hockey');return {endpoint:s.endpoint,headers:{Authorization:'VAPID encrypted'},body:'encrypted bytes'}}};
- vm.runInNewContext(compile(raw),{...logic,createClient:()=>admin,webpush,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'never-to-client',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'never-to-client'})[k]},serve:fn=>handler=fn},fetch,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,AbortSignal});
+ vm.runInNewContext(compile(raw),{...logic,expandNativeEvents,createClient:()=>admin,webpush,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'never-to-client',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'never-to-client'})[k]},serve:fn=>handler=fn},fetch,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,AbortSignal});
  return{calls,get pushes(){return pushes},get retired(){return retired},request:async(body,headers={})=>{const r=await handler(new Request('https://test.supabase.co/functions/v1/event-reminders',{method:'POST',headers:{origin:'https://hh-pilot.example.test',authorization:'Bearer session',...headers},body:JSON.stringify({householdId:hid,...body})}));return {status:r.status,data:await r.json()}}};
 }
 let f=fixture(),r=await f.request({action:'status'});assert.equal(r.status,200);assert.equal(r.data.publicKey,'public-vapid-key');assert.equal(JSON.stringify(r.data).includes('server-only'),false);assert.equal(f.calls.includes('secrets'),false);

@@ -21,7 +21,7 @@ export default function CalendarSearch({onSearch,onEdit,profiles}:{profiles:Pers
    <div className="search-period" role="group" aria-label="Search dates">{([['all','All dates'],['upcoming','Upcoming'],['past','Past']] as const).map(([value,label])=><button key={value} type="button" aria-pressed={period===value} className={period===value?'selected':''} onClick={()=>{reset();setPeriod(value)}}>{label}</button>)}</div>
    <button className="button primary" disabled={loading||!query.trim()}><Search size={16}/>{loading?'Searching…':'Search calendar'}</button>
   </form>
-  <p className="field-help">Search names, notes, and locations across your family calendar. Results are in date order, oldest first.</p>
+  <p className="field-help">Search names, notes, and locations across your family calendar. Results are in date order, oldest first. HH repeating series appear once, with separately changed dates also searchable.</p>
   {error&&<div className="error" role="alert">{error}<button onClick={()=>search()}>Try again</button></div>}
   <div aria-live="polite" className="calendar-search-status">{loading?'Searching your calendar…':searched?events.length?`${events.length}${page?.nextPageToken?'+':''} matching event${events.length===1?'':'s'}`:'No matching events. Try another word or date option.':'Choose a word and search past, future, or all dates.'}</div>
   <div className="calendar-search-results">{events.map(event=><EventCard key={event.id} event={event} profiles={profiles} onEdit={setDetails} showDate/>)}</div>

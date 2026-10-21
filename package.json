@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:calendar": "node scripts/check-calendar.mjs && node scripts/check-calendar-auth.mjs && node scripts/check-calendar-recurrence.mjs && node scripts/check-people.mjs && node scripts/check-reminders.mjs && node scripts/check-pilot.mjs",
+    "test:calendar": "node scripts/check-calendar.mjs && node scripts/check-calendar-auth.mjs && node scripts/check-calendar-recurrence.mjs && node scripts/check-native-calendar.mjs && node scripts/check-people.mjs && node scripts/check-reminders.mjs && node scripts/check-pilot.mjs",
     "test:database": "node scripts/check-pilot-database.mjs",
     "test:invitations": "node scripts/check-invitation-email.mjs",
     "test:recovery": "node scripts/check-password-recovery.mjs",
