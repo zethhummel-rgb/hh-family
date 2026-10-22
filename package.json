@@ -11,7 +11,7 @@
     "test:database": "node scripts/check-pilot-database.mjs && node scripts/check-admin-households.mjs && node scripts/check-self-service-deletion.mjs",
     "test:invitations": "node scripts/check-invitation-email.mjs",
     "test:recovery": "node scripts/check-password-recovery.mjs",
-    "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs"
+    "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs && node scripts/check-notification-prompt.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

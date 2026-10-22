@@ -7,7 +7,7 @@ const steps=[
  {title:'Bring the family in.',icon:Users,copy:'Open Settings → Your household → Family profiles for two clear ways to add people.'},
  {title:'A calendar for everyone.',icon:CalendarDays,copy:'Tap Calendar along the bottom, then Add event. Choose the people involved and set a reminder if you need one.'},
  {title:'Less to keep in your head.',icon:ListChecks,copy:'Use Groceries for the shared shopping list. To Do is for tasks and reminders, including things that repeat.'},
- {title:'Keep HH close.',icon:Smartphone,copy:'On iPhone, open HH in Safari. Tap Share, then Add to Home Screen. Open the new icon to use HH like an app.'}
+ {title:'Keep HH close.',icon:Smartphone,copy:'On iPhone, open HH in Safari. Tap Share, then Add to Home Screen. Open the new icon to use HH like an app. After the tour, Home can help you enable notifications.'}
 ];
 export default function WelcomeTour({initials,owner,onFinish}:{initials:string;owner:boolean;onFinish:()=>void}){
  const [index,setIndex]=useState(0),dialog=useRef<HTMLElement>(null),next=useRef<HTMLButtonElement>(null);

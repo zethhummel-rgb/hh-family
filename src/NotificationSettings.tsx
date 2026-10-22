@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {Bell,BellOff,Check} from 'lucide-react';
-import {applicationKey,needsHomeScreen,preparePush,pushRequest,pushSupported} from './push';
-export default function NotificationSettings({householdId}:{householdId:string}){
+import {enableDevicePush,needsHomeScreen,preparePush,pushRequest,pushSupported} from './push';
+export default function NotificationSettings({householdId,userId}:{householdId:string;userId:string}){
  const [registration,setRegistration]=useState<ServiceWorkerRegistration|null>(null),[publicKey,setPublicKey]=useState(''),[enabled,setEnabled]=useState(false),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const homeScreen=needsHomeScreen(),supported=pushSupported();
  const denied=typeof Notification!=='undefined'&&Notification.permission==='denied';
@@ -14,8 +14,7 @@ export default function NotificationSettings({householdId}:{householdId:string})
   if(!registration||!publicKey)return;setBusy(true);setError('');setNotice('');
   try{
    // Called directly from the tap, with the registration and key prepared in advance.
-   const s=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:applicationKey(publicKey)});
-   await pushRequest('subscribe',householdId,{subscription:s.toJSON()});setEnabled(true);setNotice('Reminders are enabled on this device.');
+   await enableDevicePush(registration,publicKey,householdId,userId);setEnabled(true);setNotice('Reminders are enabled on this device.');
   }catch(e){setError(Notification.permission==='denied'?'Notifications are blocked. Allow HH in your device’s notification settings, then reopen the app.':e instanceof Error?e.message:'Could not enable notifications.')}finally{setBusy(false)}
  }
  async function disable(){setBusy(true);setError('');setNotice('');try{const s=await registration?.pushManager.getSubscription();if(s){await s.unsubscribe();await pushRequest('unsubscribe',householdId,{endpoint:s.endpoint})}setEnabled(false);setNotice('Reminders are off on this device.')}catch(e){setError(e instanceof Error?e.message:'Could not turn off reminders.')}finally{setBusy(false)}}
