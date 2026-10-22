@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy,Palette} from 'lucide-react';
 import './tutorials.css';
+import HomeScreenPictures from './HomeScreenPictures';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
 export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner:boolean;onWelcome:()=>void;onSettings:(page:'household'|'profile'|'notifications'|'appearance'|'calendar')=>void;onCalendar:()=>void}){
@@ -80,6 +81,7 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
    <div className="tutorial-body"><span className="tutorial-role">iPhone · Safari · Add it on each person’s phone</span>
     <p className="tutorial-copy-note">This adds HH as a web app (PWA), with its own Home Screen icon.</p>
     <div className="tutorial-address"><span>HH website address</span><code>{appAddress}</code><button type="button" className="text-button" onClick={async()=>{try{await navigator.clipboard.writeText(appAddress);setCopyNotice('Website address copied. Paste it into Safari’s address bar.')}catch{setCopyNotice('Touch and hold the website address above to copy it.')}}}><Copy size={15}/>Copy website address</button>{copyNotice&&<p role="status">{copyNotice}</p>}</div>
+    <HomeScreenPictures/>
     <Steps>
      <li><h3>Open HH in Safari</h3><p>Open Safari on your iPhone and paste the HH address above into its address bar. Use Safari itself if you arrived through an email or social app.</p></li>
      <li><h3>Open Safari’s Share menu</h3><p>Tap the square with an upward arrow. Depending on your Safari layout, first tap the menu or More button, then <strong>Share</strong>.</p></li>
