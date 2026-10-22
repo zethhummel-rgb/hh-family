@@ -32,9 +32,13 @@ await denied("select public.pilot_invitations('create','fourth@hh-qa.invalid')")
 await db.exec('reset role;');await db.exec(fs.readFileSync(new URL('../database/pilot-seven-spots.sql',import.meta.url),'utf8'));await as('host');
 for(let n=4;n<=7;n++)await value("select public.pilot_invitations('create',$1)",['extra-'+n+'@hh-qa.invalid']);
 await assert.rejects(db.query("select public.pilot_invitations('create','eighth@hh-qa.invalid')"),/seven invited households/);
-const hostList=await value("select public.pilot_invitations('list')");assert.equal(hostList.length,7);assert.equal(JSON.stringify(hostList).includes(first.token),false);
+// Add seven more places to an existing full seven-place pilot.
+await db.exec('reset role;');await db.exec(fs.readFileSync(new URL('../database/pilot-fourteen-spots.sql',import.meta.url),'utf8'));await as('host');
+for(let n=8;n<=14;n++)await value("select public.pilot_invitations('create',$1)",['extra-'+n+'@hh-qa.invalid']);
+await assert.rejects(db.query("select public.pilot_invitations('create','fifteenth@hh-qa.invalid')"),/fourteen invited households/);
+const hostList=await value("select public.pilot_invitations('list')");assert.equal(hostList.length,14);assert.equal(JSON.stringify(hostList).includes(first.token),false);
 await value("select public.pilot_invitations('revoke',null,$1)",[hostList.find(i=>i.email==='third@hh-qa.invalid').id]);
-assert.equal((await value("select public.pilot_invitations('list')")).length,6);
+assert.equal((await value("select public.pilot_invitations('list')")).length,13);
 await as('unconfirmed');await denied("select public.create_pilot_household($1,'Second home','Unconfirmed')",[second.token]);
 await as('outsider');await denied("select public.create_pilot_household($1,'Second home','Wrong email')",[first.token]);
 await denied("select public.create_pilot_household($1,'Second home','Outsider')",[third.token]);
@@ -106,5 +110,5 @@ for(const rule of ['RRULE:FREQ=HOURLY;INTERVAL=1','RRULE:FREQ=DAILY;INTERVAL=0',
 await as('host');assert.equal(await value('select count(*)::int from public.household_events where id=$1',[repeatId]),0);assert.equal((await db.query("update public.household_events set exceptions='{}' where id=$1 returning id",[repeatId])).rows.length,0);
 console.log('Native repeat database checks passed: household isolation, occurrence validation, grants and optimistic versions.');
 await db.close();
-console.log('Isolated PostgreSQL checks passed: host-only controls, three-to-seven-place migration, seven-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
+console.log('Isolated PostgreSQL checks passed: host-only controls, three-to-seven-to-fourteen-place migrations, fourteen-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
 console.log('Invitation email database checks passed: service-only grants, owner/host permissions, intended recipient, single-flight leases, same-invitation retries, stale-claim protection, sent deduplication, no raw-token storage, expired/revoked/used denial and recipient/actor rate limits.');
