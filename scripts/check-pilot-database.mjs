@@ -109,6 +109,50 @@ for(const bad of [{'2026-11-04':{...changed,household_id:homeA}},{'invalid':null
 for(const rule of ['RRULE:FREQ=HOURLY;INTERVAL=1','RRULE:FREQ=DAILY;INTERVAL=0','RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260230T235959Z'])await denied('update public.household_events set recurrence=array[$1] where id=$2',[rule,repeatId]);
 await as('host');assert.equal(await value('select count(*)::int from public.household_events where id=$1',[repeatId]),0);assert.equal((await db.query("update public.household_events set exceptions='{}' where id=$1 returning id",[repeatId])).rows.length,0);
 console.log('Native repeat database checks passed: household isolation, occurrence validation, grants and optimistic versions.');
+
+// Admin deletion: use only isolated synthetic homes and accounts.
+await db.exec(`reset role;
+create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id) on delete cascade);
+create schema vault;create table vault.secrets(id uuid primary key);
+create table private.google_calendar_connections(household_id uuid references public.households(id) on delete cascade,secret_id uuid);
+update auth.users set email='hummelhomeapp@gmail.com' where email='host@hh-qa.invalid';
+update private.pilot_hosts set email='hummelhomeapp@gmail.com' where email='host@hh-qa.invalid';
+grant usage on schema private to service_role;`);
+await db.exec(fs.readFileSync(new URL('../database/admin-households.sql',import.meta.url),'utf8'));
+for(const role of ['anon','authenticated']){await db.exec('set role '+role);await denied("select public.admin_households('list','{}')");await db.exec('reset role');}
+const adminCall=async(action,payload)=>value('select public.admin_households($1,$2)',[action,JSON.stringify(payload)]);
+await db.exec('set role service_role');
+await assert.rejects(adminCall('list',{actorId:ids.outsider}),/Admin access required/);
+await assert.rejects(adminCall('delete',{actorId:ids.host,householdId:homeA,confirmation:'First home'}),/admin household cannot be deleted/);
+await db.exec('reset role');
+const ownerDelete='20000000-0000-4000-8000-000000000001',memberDelete='20000000-0000-4000-8000-000000000002';
+for(const id of [ownerDelete,memberDelete])await db.query("insert into auth.users values($1,$2,now())",[id,id+'@hh-qa.invalid']);
+const deletingHome=await value("insert into public.households(name,owner_id) values('Synthetic deletion home',$1) returning id",[ownerDelete]);
+for(const id of [ownerDelete,memberDelete]){await db.query("insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,'Synthetic',$3)",[deletingHome,id,id===ownerDelete?'owner':'member']);await db.query('insert into auth.sessions values(gen_random_uuid(),$1)',[id]);}
+await db.query("insert into public.household_people(household_id,display_name,calendar_color,linked_user_id) values($1,'Linked child','#E78725',$2)",[deletingHome,memberDelete]);
+const secret=await value('insert into vault.secrets values(gen_random_uuid()) returning id');
+await db.query('insert into private.google_calendar_connections values($1,$2)',[deletingHome,secret]);
+await db.query("insert into private.pilot_invites(host_user_id,email,token_hash,used_at,household_id) values($1,'synthetic@hh-qa.invalid','synthetic-delete',now(),$2)",[ids.host,deletingHome]);
+await db.exec('set role service_role');
+assert.equal((await adminCall('list',{actorId:ids.host})).find(h=>h.id===deletingHome).memberCount,2);
+await assert.rejects(adminCall('delete',{actorId:ids.host,householdId:deletingHome,confirmation:'wrong name'}),/exact household name/);
+await db.exec('reset role;create table public.synthetic_blocker(user_id uuid references auth.users(id));');
+await db.query('insert into public.synthetic_blocker values($1)',[memberDelete]);
+await db.exec('set role service_role');
+await denied('select public.admin_households($1,$2)',['delete',JSON.stringify({actorId:ids.host,householdId:deletingHome,confirmation:'Synthetic deletion home'})]);
+await db.exec('reset role');
+assert.equal(await value('select count(*)::int from public.households where id=$1',[deletingHome]),1);
+assert.equal(await value('select count(*)::int from vault.secrets where id=$1',[secret]),1);
+assert.equal(await value('select count(*)::int from auth.sessions where user_id=$1',[ownerDelete]),1);
+await db.exec('drop table public.synthetic_blocker;set role service_role;');
+assert.equal((await adminCall('delete',{actorId:ids.host,householdId:deletingHome,confirmation:'Synthetic deletion home'})).deleted,true);
+await db.exec('reset role');
+for(const table of ['public.households','vault.secrets'])assert.equal(await value('select count(*)::int from '+table+' where id=$1',[table==='public.households'?deletingHome:secret]),0);
+assert.equal(await value('select count(*)::int from auth.users where id=any($1)',[[ownerDelete,memberDelete]]),0);
+assert.equal(await value('select count(*)::int from auth.sessions where user_id=any($1)',[[ownerDelete,memberDelete]]),0);
+assert.equal(await value('select count(*)::int from public.households where id=$1',[homeA]),1);
+console.log('Admin household deletion passed: service-only, exact admin, protected home, typed confirmation, complete account/session deletion, linked profiles, Vault cleanup and atomic rollback.');
+
 await db.close();
 console.log('Isolated PostgreSQL checks passed: host-only controls, three-to-seven-to-fourteen-place migrations, fourteen-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
 console.log('Invitation email database checks passed: service-only grants, owner/host permissions, intended recipient, single-flight leases, same-invitation retries, stale-claim protection, sent deduplication, no raw-token storage, expired/revoked/used denial and recipient/actor rate limits.');

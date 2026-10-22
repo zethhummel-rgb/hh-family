@@ -72,3 +72,9 @@ Cutover order: publish the reset screen, then update the recovery template. Veri
 ## New-home walkthrough
 
 After successful household creation, the creator gets a five-slide, phone-oriented welcome tour. Joining an existing household does not trigger it. Pending state survives a refresh in the current tab; completion/Skip is stored per user and household on that device. Existing homes are not interrupted. Everyone can reopen it through Settings → Tutorials (at the bottom) → Take the quick tour. The tour itself performs no backend writes, permission requests, or invitations.
+
+## Pilot admin household deletion
+
+Only the confirmed, server-authorized `hummelhomeapp@gmail.com` pilot admin sees Settings → Admin → Manage households. After typing the exact household name, deletion removes that household’s HH data and its members’ Auth accounts/sessions in one database transaction. The admin household and any household containing another pilot host are protected. Google calendars remain in Google; HH removes the connection and Vault credential. No notification email is sent. Deletion is permanent and frees the household’s used pilot place.
+
+Deploy the additive `admin-households.sql` migration and `admin-households` Edge Function separately from the frontend. The Edge Function validates the bearer session, confirmed admin email and origin; its service-only RPC independently checks the admin against `auth.users` and `private.pilot_hosts`. Never expose the service-role key in frontend code. Isolated synthetic deletion tests cover complete cleanup and atomic rollback; no production household is deleted as a deployment check.

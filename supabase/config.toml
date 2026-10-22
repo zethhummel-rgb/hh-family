@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.invitation-email]
 verify_jwt = false
+
+[functions.admin-households]
+verify_jwt = false
