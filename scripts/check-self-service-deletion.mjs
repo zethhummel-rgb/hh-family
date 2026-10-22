@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const source=fs.readFileSync(new URL('../supabase/functions/self-service-deletion/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,'');
+let handler,calls=[];
+const client={auth:{async getUser(token){return token==='member'?{data:{user:{id:'verified-member',email:'member@example.invalid',email_confirmed_at:'2026-01-01'}}}:{error:{message:'Invalid'},data:{user:null}}}},async rpc(name,args){calls.push({name,args});return {data:{deleted:true}}}};
+vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText,{createClient:()=>client,Deno:{env:{get:()=>''},serve(fn){handler=fn}},Response});
+async function invoke(token,body={},origin='https://zethhummel-rgb.github.io'){return handler(new Request('https://example.invalid',{method:'POST',headers:{origin,...(token?{authorization:'Bearer '+token}:{})},body:JSON.stringify(body)}))}
+assert.equal((await invoke(null)).status,401);
+assert.equal((await invoke('expired')).status,401);
+assert.equal((await invoke('member',{action:'account',confirmation:'member@example.invalid'},'https://evil.invalid')).status,403);
+assert.equal((await invoke('member',{action:'list'})).status,400);
+assert.equal((await invoke('member',{action:'household',householdId:'bad',confirmation:'Home'})).status,400);
+assert.equal((await invoke('member',{action:'account'})).status,400);
+assert.equal(calls.length,0);
+assert.equal((await invoke('member',{action:'account',confirmation:'member@example.invalid',actorId:'another-user'})).status,200);
+assert.equal(calls[0].args.payload.actorId,'verified-member');
+assert.equal((await invoke('member',{action:'household',householdId:'10000000-0000-4000-8000-000000000001',confirmation:'Synthetic',actorId:'another-user'})).status,200);
+assert.equal(calls[1].args.payload.actorId,'verified-member');
+console.log('Self-service Edge checks passed: missing/expired sessions, wrong origin, malformed requests and spoofed actor denied. Mocked calls only; ownership covered by isolated database tests.');

@@ -104,6 +104,7 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
      <li><h3>Return to your home</h3><p>Tap <strong>Done</strong> in the top right corner. To find any of these guides again, open Settings and tap <strong>Help &amp; tutorials</strong>.</p></li>
     </Steps>
     <div className="tutorial-tip"><Check size={16}/><p>Your <strong>palette</strong> changes how HH looks on this device. Your <strong>calendar colour</strong> identifies you in family plans and is shared with your household.</p></div>
+    <details className="tutorial-extra"><summary>Delete your account or household</summary><p>Members open <strong>Settings → Your profile → Delete my account</strong> and type their email to confirm. Shared family plans remain. Owners open <strong>Settings → Your household → Delete home and all accounts</strong> and type the household name. This permanently removes the entire home and every member’s account. Existing Google calendars remain in Google; logs and backups follow provider retention. Pilot administrator accounts are protected.</p></details>
     <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('appearance')}>Open Appearance <ArrowUpRight size={16}/></button>
     <button type="button" className="text-button tutorial-action" onClick={()=>onSettings('profile')}>Open Your profile <ArrowUpRight size={16}/></button>
    </div>

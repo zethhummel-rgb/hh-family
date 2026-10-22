@@ -153,6 +153,55 @@ assert.equal(await value('select count(*)::int from auth.sessions where user_id=
 assert.equal(await value('select count(*)::int from public.households where id=$1',[homeA]),1);
 console.log('Admin household deletion passed: service-only, exact admin, protected home, typed confirmation, complete account/session deletion, linked profiles, Vault cleanup and atomic rollback.');
 
+
+await db.exec(fs.readFileSync(new URL('../database/self-service-deletion.sql',import.meta.url),'utf8'));
+for(const role of ['anon','authenticated']){await db.exec('set role '+role);await denied("select public.self_service_deletion('account','{}')");await db.exec('reset role');}
+const selfOwner='30000000-0000-4000-8000-000000000001',selfMember='30000000-0000-4000-8000-000000000002',remainingMember='30000000-0000-4000-8000-000000000003';
+for(const id of [selfOwner,selfMember,remainingMember])await db.query('insert into auth.users values($1,$2,now())',[id,id+'@hh-qa.invalid']);
+const selfHome=await value("insert into public.households(name,owner_id) values('Self deletion home',$1) returning id",[selfOwner]);
+for(const id of [selfOwner,selfMember,remainingMember]){await db.query("insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,'Synthetic',$3)",[selfHome,id,id===selfOwner?'owner':'member']);await db.query('insert into auth.sessions values(gen_random_uuid(),$1)',[id]);}
+const linkedProfile=await value("insert into public.household_people(household_id,display_name,calendar_color,linked_user_id) values($1,'Keep profile','#E78725',$2) returning id",[selfHome,selfMember]);
+await db.query("insert into public.household_items(household_id,kind,title) values($1,'grocery','Shared milk')",[selfHome]);
+const selfCall=async(action,actor,confirmation,householdId=selfHome)=>value('select public.self_service_deletion($1,$2)',[action,JSON.stringify({actorId:actor,confirmation,householdId})]);
+await db.exec('set role service_role');
+await assert.rejects(selfCall('account',ids.host,'hummelhomeapp@gmail.com'),/administrator accounts are protected/);
+await assert.rejects(selfCall('household',selfMember,'Self deletion home'),/Only the household owner/);
+await assert.rejects(selfCall('household',selfOwner,'First home',homeA),/Only the household owner/);
+await assert.rejects(selfCall('household',selfOwner,'wrong'),/exact household name/);
+await assert.rejects(selfCall('account',selfOwner,selfOwner+'@hh-qa.invalid'),/owners must use/);
+await assert.rejects(selfCall('account',selfMember,'wrong@example.invalid'),/email address/);
+// A failed member deletion must not unlink a profile or revoke only part of the account.
+await db.exec('reset role;create table public.synthetic_blocker(user_id uuid references auth.users(id));');
+await db.query('insert into public.synthetic_blocker values($1)',[selfMember]);
+await db.exec('set role service_role');
+await assert.rejects(selfCall('account',selfMember,selfMember+'@hh-qa.invalid'));
+await db.exec('reset role');
+assert.equal(await value('select linked_user_id from public.household_people where id=$1',[linkedProfile]),selfMember);
+assert.equal(await value('select count(*)::int from auth.sessions where user_id=$1',[selfMember]),1);
+await db.exec('drop table public.synthetic_blocker;set role service_role;');
+assert.equal((await selfCall('account',selfMember,selfMember+'@hh-qa.invalid')).deleted,true);
+await db.exec('reset role');
+assert.equal(await value('select count(*)::int from auth.users where id=$1',[selfMember]),0);
+assert.equal(await value('select linked_user_id from public.household_people where id=$1',[linkedProfile]),null);
+assert.equal(await value('select count(*)::int from public.household_items where household_id=$1',[selfHome]),1);
+const selfSecret=await value('insert into vault.secrets values(gen_random_uuid()) returning id');
+await db.query('insert into private.google_calendar_connections values($1,$2)',[selfHome,selfSecret]);
+await db.query("insert into private.pilot_invites(host_user_id,email,token_hash,used_at,household_id) values($1,'synthetic-self@hh-qa.invalid','synthetic-self',now(),$2)",[ids.host,selfHome]);
+await db.exec('create table public.synthetic_blocker(user_id uuid references auth.users(id));');await db.query('insert into public.synthetic_blocker values($1)',[remainingMember]);
+await db.exec('set role service_role');await assert.rejects(selfCall('household',selfOwner,'Self deletion home'));await db.exec('reset role');
+assert.equal(await value('select count(*)::int from public.households where id=$1',[selfHome]),1);
+assert.equal(await value('select count(*)::int from vault.secrets where id=$1',[selfSecret]),1);
+await db.exec('drop table public.synthetic_blocker;set role service_role');
+assert.equal((await selfCall('household',selfOwner,'Self deletion home')).deleted,true);
+await db.exec('reset role');
+assert.equal(await value('select count(*)::int from public.households where id=$1',[selfHome]),0);
+assert.equal(await value('select count(*)::int from auth.users where id=any($1)',[[selfOwner,remainingMember]]),0);
+assert.equal(await value('select count(*)::int from auth.sessions where user_id=any($1)',[[selfOwner,remainingMember]]),0);
+assert.equal(await value('select count(*)::int from vault.secrets where id=$1',[selfSecret]),0);
+assert.equal(await value('select count(*)::int from private.pilot_invites where household_id=$1',[selfHome]),0);
+assert.equal(await value('select count(*)::int from public.households where id=$1',[homeA]),1);
+console.log('Self-service deletion passed: member/owner permissions, cross-household denial, protected admin, typed confirmations, member profile/data preservation, owner full cleanup, sessions and atomic rollback.');
+
 await db.close();
 console.log('Isolated PostgreSQL checks passed: host-only controls, three-to-seven-to-fourteen-place migrations, fourteen-home cap, revoke/wrong-email/unconfirmed/replay denial, separate households, family invitations, item/event/profile RLS, owner edits, cross-home profile-link rejection, and anonymous denial. No external database was contacted.');
 console.log('Invitation email database checks passed: service-only grants, owner/host permissions, intended recipient, single-flight leases, same-invitation retries, stale-claim protection, sent deduplication, no raw-token storage, expired/revoked/used denial and recipient/actor rate limits.');
