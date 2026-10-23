@@ -1,5 +1,10 @@
 import fs from 'node:fs';import ts from 'typescript';import assert from 'node:assert/strict';
-const source=fs.readFileSync(new URL('../src/pilot.ts',import.meta.url),'utf8');const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;const {invitationFrom,invitationRedirect}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const source=fs.readFileSync(new URL('../src/pilot.ts',import.meta.url),'utf8');const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;const {initialAuthMode,invitationFrom,invitationRedirect}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+for(const invitation of [{pilot:'pilot',family:''},{pilot:'',family:'family'}]){
+ assert.equal(initialAuthMode(new URLSearchParams(),invitation),'signup','Both invitation kinds start at account creation');
+ assert.equal(initialAuthMode(new URLSearchParams('reset=1'),invitation),'reset','Recovery takes precedence over stored invitations');
+}
+assert.equal(initialAuthMode(new URLSearchParams(),{pilot:'',family:''}),'login','Ordinary returning visits still sign in');
 assert.deepEqual(invitationFrom(new URLSearchParams('pilot=new'),'old-pilot','old-family'),{pilot:'new',family:''});
 assert.deepEqual(invitationFrom(new URLSearchParams('invite=new'),'old-pilot','old-family'),{pilot:'',family:'new'});
 assert.deepEqual(invitationFrom(new URLSearchParams(),'kept-pilot',''),{pilot:'kept-pilot',family:''});

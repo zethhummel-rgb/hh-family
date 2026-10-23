@@ -16,6 +16,7 @@ import './settings.css';
 type Page='main'|'profile'|'appearance'|'notifications'|'household'|'calendar'|'help'|'pilot'|'admin';
 const titles:Record<Page,string>={main:'Settings',profile:'Your profile',appearance:'Appearance',notifications:'Notifications',household:'Your household',calendar:'Calendar',help:'Help & tutorials',pilot:'Pilot invitations',admin:'Manage households'};
 type Props={
+ initialPage?:'main'|'help'|'notifications';initialGuide?:'install';onGettingStarted:()=>void;
  name:string;email:string;userId:string;householdId:string;householdName:string;owner:boolean;members:Member[];people:HouseholdPerson[];
  paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onColorSaved:(color:string)=>void;onHouseholdSaved:()=>unknown;
  calendarConnected:boolean;calendarConfigured:boolean;onOpenCalendar:()=>void;onConnectGoogle:()=>void;onWelcome:()=>void;onClose:()=>void;onSignOut:()=>unknown;
@@ -24,8 +25,8 @@ function Row({icon,title,detail,onClick}:{icon:ReactNode;title:string;detail?:st
  return <button type="button" className="settings-row" onClick={onClick}><span className="settings-row-icon" aria-hidden="true">{icon}</span><span className="settings-row-copy"><b>{title}</b>{detail&&<small>{detail}</small>}</span><ChevronRight size={17} aria-hidden="true"/></button>;
 }
 export default function SettingsDialog(props:Props){
- const {name,email,userId,householdId,householdName,owner,members,people,paletteId,paletteMessage,onPaletteChange,onColorSaved,onHouseholdSaved,calendarConnected,calendarConfigured,onOpenCalendar,onConnectGoogle,onWelcome,onClose,onSignOut}=props;
- const [history,setHistory]=useState<Page[]>(['main']),[visited,setVisited]=useState<Page[]>(['main']),[host,setHost]=useState(false),[leaving,setLeaving]=useState(false),[error,setError]=useState('');
+ const {initialPage='main',initialGuide,onGettingStarted,name,email,userId,householdId,householdName,owner,members,people,paletteId,paletteMessage,onPaletteChange,onColorSaved,onHouseholdSaved,calendarConnected,calendarConfigured,onOpenCalendar,onConnectGoogle,onWelcome,onClose,onSignOut}=props;
+ const [history,setHistory]=useState<Page[]>(()=>initialPage==='main'?['main']:['main',initialPage]),[visited,setVisited]=useState<Page[]>(()=>initialPage==='main'?['main']:['main',initialPage]),[host,setHost]=useState(false),[leaving,setLeaving]=useState(false),[error,setError]=useState('');
  const page=history.at(-1)!,dialog=useRef<HTMLElement>(null),heading=useRef<HTMLHeadingElement>(null),content=useRef<HTMLDivElement>(null);
  const pageRef=useRef(page),closeRef=useRef(onClose),leavingRef=useRef(leaving);pageRef.current=page;closeRef.current=onClose;leavingRef.current=leaving;
  const initials=name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase();
@@ -48,7 +49,7 @@ export default function SettingsDialog(props:Props){
   document.addEventListener('keydown',keys);
   return()=>{document.removeEventListener('keydown',keys);document.body.style.overflow=overflow;if(previous?.isConnected)previous.focus()};
  },[]);
- useEffect(()=>{content.current?.scrollTo({top:0});heading.current?.focus()},[page]);
+ useEffect(()=>{content.current?.scrollTo({top:0});heading.current?.focus();if(page==='help'&&initialGuide==='install'){const timer=setTimeout(()=>content.current?.querySelector('[data-install-guide]')?.scrollIntoView({block:'start'}),0);return()=>clearTimeout(timer)}},[page,initialGuide]);
  const screen=(id:Page,children:ReactNode)=>visited.includes(id)?<div key={id} className={'settings-page settings-page-'+id} hidden={page!==id} inert={page!==id}>{children}</div>:null;
  return <div className="settings-backdrop" onClick={e=>{if(e.target===e.currentTarget&&!leaving)onClose()}}><section className="settings-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <header className="settings-toolbar"><div>{page==='main'?<img src="./icon.svg" alt="HH"/>:<button type="button" className="settings-back" disabled={leaving} onClick={back} aria-label={`Back to ${titles[history.at(-2)||'main']}`}><ChevronLeft size={21}/>Back</button>}</div><h2 ref={heading} tabIndex={-1} id="settings-title">{titles[page]}</h2><button type="button" className="settings-toolbar-done" disabled={leaving} onClick={onClose}>Done</button></header>
@@ -68,7 +69,7 @@ export default function SettingsDialog(props:Props){
    {screen('notifications',<div className="settings-detail-card"><NotificationSettings householdId={householdId} userId={userId}/></div>)}
    {screen('household',<><div className="settings-page-intro"><House size={25}/><p>{owner?'Manage your home and the people who share it.':'The people sharing your home. Your household owner manages invitations and profiles.'}</p></div><div className="settings-detail-card"><FamilySettings householdName={householdName} people={people} onHouseholdSaved={onHouseholdSaved} owner={owner} members={members} householdId={householdId}/></div>{owner&&<DeletionSettings owner email={email} householdId={householdId} householdName={householdName} protectedAccount={host} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}}/>}</>)}
    {screen('calendar',<><div className="settings-page-intro"><CalendarDays size={25}/><p>One family calendar, shared across your household.</p></div><div className="settings-detail-card settings-calendar-card"><h3>Google Calendar</h3><span className="settings-connection"><i className={calendarConnected?'connected':''}/>{calendarConnected?'Connected to Google':'Not connected to Google'}</span><p>{calendarConnected?'Add and edit plans in HH or in your connected Google family calendar. Changes sync between them.':'Your shared calendar already works in HH. Connect Google to keep family plans in sync there too.'}</p>{owner?<button type="button" className="button soft wide" disabled={!calendarConfigured} onClick={onConnectGoogle}>{calendarConnected?'Reconnect Google':'Connect Google'}</button>:<p className="settings-caption">Your household owner manages the Google connection.</p>}{!calendarConfigured&&<p className="settings-caption">Google connection is being prepared. You can keep using your calendar in HH.</p>}</div><button type="button" className="settings-row settings-standalone-row" onClick={onOpenCalendar}><span className="settings-row-icon"><CalendarDays size={19}/></span><span className="settings-row-copy"><b>Open family calendar</b><small>See and manage your plans</small></span><ChevronRight size={17}/></button><button type="button" className="text-button settings-inline-help" onClick={()=>open('help')}><BookOpen size={16}/>Google setup &amp; import guides</button></>)}
-   {screen('help',<Tutorials owner={owner} onWelcome={onWelcome} onSettings={target=>open(target)} onCalendar={onOpenCalendar}/>)}
+   {screen('help',<Tutorials initialGuide={initialGuide} onGettingStarted={onGettingStarted} owner={owner} onWelcome={onWelcome} onSettings={target=>open(target)} onCalendar={onOpenCalendar}/>)}
    {host&&email.toLowerCase()==='hummelhomeapp@gmail.com'&&screen('admin',<AdminHouseholds/>)}
    {host&&screen('pilot',<div className="settings-detail-card"><PilotInvites/></div>)}
   </div>

@@ -4,11 +4,12 @@ import './tutorials.css';
 import HomeScreenPictures from './HomeScreenPictures';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
-export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner:boolean;onWelcome:()=>void;onSettings:(page:'household'|'profile'|'notifications'|'appearance'|'calendar')=>void;onCalendar:()=>void}){
+export default function Tutorials({owner,onSettings,onCalendar,onWelcome,onGettingStarted,initialGuide}:{initialGuide?:'install';onGettingStarted:()=>void;owner:boolean;onWelcome:()=>void;onSettings:(page:'household'|'profile'|'notifications'|'appearance'|'calendar')=>void;onCalendar:()=>void}){
  const [copyNotice,setCopyNotice]=useState('');
  const appAddress='https://zethhummel-rgb.github.io/hh-family/';
  return <section className="tutorials" aria-label="HH tutorials">
   <div className="tutorial-welcome"><BookOpen size={22}/><p>Find these guides anytime: tap your initials in the top right, then Help & tutorials. Each settings screen has a Back button; tap Done to return to HH.</p></div>
+  <button type="button" className="button soft tutorial-replay" onClick={onGettingStarted}><Check size={17}/>Show getting-started checklist</button>
   <button type="button" className="button soft tutorial-replay" onClick={onWelcome}><BookOpen size={17}/>Take the quick tour</button>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
@@ -16,8 +17,8 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
     <Steps>
      <li><h3>Tap your initials in the top right corner</h3><p>Your initials are inside the coloured circle at the top of HH. Tapping them opens your settings.</p></li>
      <li><h3>Enter their email address</h3><p>In Settings, tap <strong>Your household</strong>. Under <strong>Family profiles</strong>, tap <strong>Invite by email</strong>, type their address in the email box, then tap <strong>Send invitation</strong>.</p></li>
-     <li><h3>They open the invitation email</h3><p>On their phone, they open the email and tap <strong>Join your household</strong>. They tap <strong>Create account</strong>, or sign in if they already have one, using the exact invited email address. If asked to confirm their email, they open the confirmation email, then tap the original invitation link again.</p></li>
-     <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. Their own login opens the same family calendar, groceries and to-dos. To pick their calendar colour, they tap their initials in the top right corner, open <strong>Your profile</strong>, choose a colour and tap <strong>Save my colour</strong>.</p></li>
+     <li><h3>They open the invitation email</h3><p>On their phone, they open the email and tap <strong>Join your household</strong>. The invitation opens <strong>Create your account</strong>. They use the exact invited email address, or tap <strong>Sign in</strong> if they already have an account. After creating an account, a separate confirmation email arrives. Its link brings them back to join the household. If the invitation is missing, they can open their original invitation link again.</p></li>
+     <li><h3>They join your household</h3><p>They enter their name and tap <strong>Join household</strong>. A short welcome tour shows them the shared calendar, groceries, to-dos and phone setup, and lets them pick their own colour palette. They can skip it or replay it here anytime. To pick their calendar colour, they tap their initials in the top right corner, open <strong>Your profile</strong>, choose a colour and tap <strong>Save my colour</strong>.</p></li>
     </Steps>
     <div className="tutorial-tip"><Check size={16}/><p><strong>One family, separate logins.</strong> Use Invite by email for someone joining your home. “Invite another household” is for a different family creating its own separate home.</p></div>
     <details className="tutorial-extra"><summary>No invitation email?</summary><p>Check Spam and confirm the address is correct. The sender can tap <strong>Copy invitation</strong> and paste it into a text message, or tap <strong>Retry email</strong> if delivery failed. Family invitations work once and expire after seven days. If a link expires or is lost, the owner can create a new invitation.</p></details>
@@ -76,9 +77,9 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
     <button type="button" className="text-button tutorial-action" onClick={onCalendar}>Open family calendar <ArrowUpRight size={16}/></button>
    </div>
   </details>
-  <details className="tutorial-guide">
-   <summary><span className="tutorial-icon tutorial-gold"><Smartphone size={22}/></span><span><small>04 · SAFARI &amp; HOME SCREEN</small><h2>Put HH on your iPhone</h2><p>Your family’s home, one tap away.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
-   <div className="tutorial-body"><span className="tutorial-role">iPhone · Safari · Add it on each person’s phone</span>
+  <details className="tutorial-guide" data-install-guide open={initialGuide==='install'?true:undefined}>
+   <summary><span className="tutorial-icon tutorial-gold"><Smartphone size={22}/></span><span><small>04 · SAFARI &amp; HOME SCREEN</small><h2>Add HH to your Home Screen</h2><p>Your family’s home, one tap away.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
+   <div className="tutorial-body"><span className="tutorial-role">iPhone guide below · Android &amp; computer steps at the end</span>
     <p className="tutorial-copy-note">This adds HH as a web app (PWA), with its own Home Screen icon.</p>
     <div className="tutorial-address"><span>HH website address</span><code>{appAddress}</code><button type="button" className="text-button" onClick={async()=>{try{await navigator.clipboard.writeText(appAddress);setCopyNotice('Website address copied. Paste it into Safari’s address bar.')}catch{setCopyNotice('Touch and hold the website address above to copy it.')}}}><Copy size={15}/>Copy website address</button>{copyNotice&&<p role="status">{copyNotice}</p>}</div>
     <HomeScreenPictures/>
@@ -87,8 +88,9 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome}:{owner
      <li><h3>Open Safari’s Share menu</h3><p>Tap the square with an upward arrow. Depending on your Safari layout, first tap the menu or More button, then <strong>Share</strong>.</p></li>
      <li><h3>Tap Add to Home Screen</h3><p>Scroll down the Share menu and tap <strong>Add to Home Screen</strong>.</p></li>
      <li><h3>Add the HH icon</h3><p>Keep the name HH. Leave <strong>Open as Web App</strong> on if it is shown, then tap <strong>Add</strong>.</p></li>
-     <li><h3>Open HH from your Home Screen</h3><p>Tap the new HH icon. Sign in with your existing account if asked. After setup and the welcome tour, Home offers to enable notifications on supported devices. Tap <strong>Enable notifications</strong>, then <strong>Allow</strong> if asked, or choose <strong>Not now</strong>.</p></li>
+     <li><h3>Open HH from your Home Screen</h3><p>Tap the new HH icon. Sign in with your existing account if asked. After setup and the welcome tour, Home offers to enable notifications on supported devices. Its optional <strong>Getting started</strong> checklist also opens these instructions and your notification settings. Tap <strong>Enable notifications</strong>, then <strong>Allow</strong> if asked, or choose <strong>Not now</strong>.</p></li>
     </Steps>
+    <details className="tutorial-extra"><summary>On Android or a computer?</summary><p>On Android, open HH in Chrome, tap its three-dot menu, then <strong>Add to Home screen</strong> or <strong>Install app</strong>, and confirm. On a computer, open HH in Chrome or Edge and look for the install icon in the address bar, or <strong>Install HH</strong> in the browser menu. Options depend on your browser. Then open the new HH icon and sign in with your existing account if asked.</p></details>
     <details className="tutorial-extra"><summary>Can’t find Add to Home Screen?</summary><p>Scroll to the bottom of Safari’s Share menu, tap <strong>Edit Actions</strong>, and add <strong>Add to Home Screen</strong>. Then try again.</p></details>
     <div className="tutorial-tip"><Check size={16}/><p><strong>Want reminder notifications?</strong> Accept the prompt on Home, or open HH from its Home Screen icon, tap your initials in the top right corner, tap <strong>Notifications</strong>, then tap <strong>Enable notifications</strong> and allow the request. Tap <strong>Send a test</strong> to check it. Each person enables their own phone. Calendar events include a notification 30 minutes before by default. To turn it off, open the event, tap Edit, turn off 30-minute notification and save. Any additional reminder stays enabled. All-day reminders count back from 9 AM Eastern.</p></div>
     <a className="text-button tutorial-source" href="https://support.apple.com/en-ca/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Apple’s Safari installation guide <ArrowUpRight size={14}/></a>

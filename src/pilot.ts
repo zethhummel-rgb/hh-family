@@ -1,5 +1,9 @@
 export const PILOT_INVITE_KEY='hh:pilot-invite';
 export const FAMILY_INVITE_KEY='hh:family-invite';
+export function initialAuthMode(params:URLSearchParams,invitation:{pilot:string;family:string}){
+ if(params.has('reset'))return 'reset';
+ return invitation.pilot||invitation.family?'signup':'login';
+}
 export function invitationFrom(params:URLSearchParams,storedPilot='',storedFamily=''){
  // An explicit link always takes precedence over an older invitation on this device.
  if(params.has('invite'))return {pilot:'',family:params.get('invite')||''};

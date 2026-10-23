@@ -4,7 +4,7 @@ import {enableDevicePush,installedApp,preparePush,pushRequest,pushSupported} fro
 import {canOfferNotifications,finishNotificationPrompt,notificationPromptHandled} from './notificationPrompt';
 import './notification-prompt.css';
 
-export default function NotificationPrompt({userId,householdId,active}:{userId:string;householdId:string;active:boolean}){
+export default function NotificationPrompt({userId,householdId,active,onEnabled}:{userId:string;householdId:string;active:boolean;onEnabled?:()=>void}){
  const [ready,setReady]=useState<{registration:ServiceWorkerRegistration;publicKey:string}|null>(null),[busy,setBusy]=useState(false),[enabled,setEnabled]=useState(false),[error,setError]=useState('');
  const inFlight=useRef(false);
  useEffect(()=>{
@@ -33,7 +33,7 @@ export default function NotificationPrompt({userId,householdId,active}:{userId:s
  async function enable(){
   if(!ready||inFlight.current)return;
   inFlight.current=true;setBusy(true);setError('');
-  try{await enableDevicePush(ready.registration,ready.publicKey,householdId,userId);finishNotificationPrompt(userId,householdId);setEnabled(true)}
+  try{await enableDevicePush(ready.registration,ready.publicKey,householdId,userId);finishNotificationPrompt(userId,householdId);setEnabled(true);onEnabled?.()}
   catch(e){setError(Notification.permission==='denied'?'Notifications are blocked. You can allow HH in your device’s notification settings, then return to Settings → Notifications.':e instanceof Error?e.message:'Could not enable notifications. Try again, or use Settings → Notifications.')}
   finally{inFlight.current=false;setBusy(false)}
  }

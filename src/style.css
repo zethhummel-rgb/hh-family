@@ -305,3 +305,5 @@ input::placeholder,textarea::placeholder{color:var(--theme-subtle,#a48a96)}
 .signup-confirmation>p{font-size:14px;line-height:1.8;overflow-wrap:anywhere}.signup-confirmation ol{padding-left:22px;margin:24px 0;font-size:14px;line-height:1.8;color:var(--theme-ink,#7a5865)}.signup-confirmation li+li{margin-top:12px}.signup-confirmation .field-help{font-size:13px}.signup-confirmation h2:focus{outline:none}
 
 .home-encouragement{display:flex;align-items:center;gap:10px;margin:-6px 0 24px;padding:12px 15px;border-left:2px solid var(--theme-accent,#8b4f65);border-radius:0 10px 10px 0;background:var(--theme-tint,#f6e8ed);color:var(--theme-muted,#856171);font:italic 15px/1.6 Georgia,serif}.home-encouragement>svg{flex-shrink:0;color:var(--theme-accent,#8b4f65)}
+
+.auth-card>.auth-secondary-action{display:flex;min-height:44px;margin-top:8px;text-align:left}
