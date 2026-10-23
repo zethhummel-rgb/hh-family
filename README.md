@@ -86,3 +86,11 @@ Members can delete their own account in Settings → Your profile, with typed em
 ## Installed-app notification prompt
 
 After signing in to a household, an installed HH app offers notifications on Home once setup and the welcome tour are finished. Standalone display mode and iOS navigator.standalone are supported. Regular browser tabs, unsupported devices, denied permission, and devices already registered for the signed-in account do not get the prompt. The service worker and public push key are prepared without asking permission; only tapping Enable notifications starts subscription and the system permission request. Not now and successful enablement mark the prompt handled for that account/household on this device. If browser storage is unavailable, suppression lasts for the current app session. Settings → Notifications remains available, including after deliberately turning notifications off. No automatic test notification is sent.
+
+## Household reminder job isolation
+
+The existing minute cron job now queues one authenticated pg_net request per household with current opted-in members. Each request handles only that household, with an independent 90-second lease, a 20-second delivery deadline and bounded recurrence expansion. Native masters are processed in pages of 25. Current membership, per-device claims, retries and expired-subscription cleanup remain in force. A heavy or failed calendar cannot hold a global household-processing loop.
+
+Inspect `private.push_household_runs.last_run_at/last_result` for individual household jobs. `limited: true` means the recurrence or processing budget was exceeded and needs investigation. `private.push_settings.last_result` reflects the latest household result rather than a full multi-household sweep. Expired delivery records are still removed after 30 days. A terminated job’s lease expires so the next minute runs can recover within the existing bounded catch-up window.
+
+Deploy `database/household-reminder-jobs.sql` additively to HH only and deploy the updated event-reminders Edge Function as the same release. Keep the existing cron entry; do not add a second scheduler. Deploy google-calendar’s bundled shared native module and the frontend so views, search, import and reminders use the same recurrence semantics. No secrets or household data are copied between projects.

@@ -63,3 +63,26 @@ await importNativeExceptions(moved,'events/master',async(path,method='GET',body)
 assert.equal(requests.filter(r=>r.method==='DELETE').length,1);assert.equal(requests.find(r=>r.method==='PATCH').body.summary,'Moved dinner');assert.equal(requests.find(r=>r.method==='PATCH').body.recurrence,undefined);
 assert.ok(requests.filter(r=>r.method!=='GET').every(r=>r.path.startsWith('events/')&&!r.path.startsWith('events/master/')));
 console.log('Native repeat checks passed: intervals, count/end dates, skipped month/leap dates, DST, stable identities, moved/cancelled occurrences, reminders, series editing, stale writes and household scoping.');
+
+// Old large-count series: count history once without materializing every occurrence.
+const ancient={...master,id:'expired-audit',starts_at:'1900-01-01T14:00:00Z',ends_at:'1900-01-01T15:00:00Z',recurrence:['RRULE:FREQ=DAILY;INTERVAL=1;COUNT=9999'],exceptions:{}};
+let work=0;const began=performance.now();
+assert.deepEqual(expandNativeEvents(Array.from({length:10},(_,i)=>({...ancient,id:'expired-'+i})),'2026-10-22T00:00:00Z','2026-10-30T00:00:00Z',()=>{work++}),[]);
+assert.ok(work<11000,'Matching expired series must reuse their bounded historical count');
+console.log('Expired ten-series regression:',work,'work checks,',Math.round(performance.now()-began),'ms.');
+// A later-window cache cannot hide earlier occurrences, changed rules or moved exceptions.
+assert.equal(expandNativeEvent(ancient,'1900-01-01T00:00:00Z','1900-01-04T00:00:00Z').length,3);
+assert.equal(expandNativeEvent({...ancient,recurrence:['RRULE:FREQ=DAILY;INTERVAL=1;COUNT=2']},'1900-01-01T00:00:00Z','1900-01-04T00:00:00Z').length,2);
+assert.equal(expandNativeEvent({...ancient,exceptions:{'1900-01-01':{title:'Moved from expired series',starts_at:'2026-10-22T13:00:00Z',ends_at:'2026-10-22T14:00:00Z'}}},'2026-10-22T00:00:00Z','2026-10-23T00:00:00Z').length,1);
+// The selected count must still exclude nonexistent spring-forward wall times.
+assert.deepEqual(dates(expandNativeEvent(gap,'2027-03-15T00:00:00Z','2027-03-20T00:00:00Z')),['2027-03-15']);
+const ambiguous={...master,starts_at:'2026-11-02T06:30:00Z',ends_at:'2026-11-02T07:00:00Z',recurrence:['RRULE:FREQ=YEARLY;INTERVAL=1;COUNT=2']};
+assert.equal(nativeInstant('2026-11-01','01:30',5*3600000),'2026-11-01T05:30:00.000Z');
+let checks=0;assert.throws(()=>expandNativeEvents([{...ancient,starts_at:'1901-01-01T14:00:00Z',ends_at:'1901-01-01T15:00:00Z'}],'2026-10-22T00:00:00Z','2026-10-30T00:00:00Z',()=>{if(++checks>100)throw Error('test budget')}),/test budget/);assert.equal(checks,101);
+
+// Count ranking across short months, leap years and DST must agree with the full series.
+for(const [series,fullFrom,fullTo,windowFrom,windowTo] of [
+ [allDay,'2026-10-01T00:00:00Z','2027-06-01T00:00:00Z','2027-03-01T00:00:00Z','2027-04-01T00:00:00Z'],
+ [birthday,'2028-01-01T00:00:00Z','2037-01-01T00:00:00Z','2032-01-01T00:00:00Z','2037-01-01T00:00:00Z'],
+ [{...gap,recurrence:['RRULE:FREQ=DAILY;INTERVAL=1;COUNT=3']},'2027-03-01T00:00:00Z','2027-03-20T00:00:00Z','2027-03-16T00:00:00Z','2027-03-20T00:00:00Z']
+]){const full=expandNativeEvent(series,fullFrom,fullTo);const expected=full.filter(e=>Date.parse(e.starts_at)<Date.parse(windowTo)&&Date.parse(e.ends_at)>Date.parse(windowFrom));assert.deepEqual(expandNativeEvent(series,windowFrom,windowTo),expected)}

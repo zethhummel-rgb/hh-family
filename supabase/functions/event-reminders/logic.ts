@@ -1,5 +1,13 @@
 export type ReminderEvent={id:string;task_id?:string;title:string;location?:string;person?:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;starts_at:string;all_day:boolean;start_date?:string|null};
 export type ReminderMember={user_id:string;display_name:string};
+export function recurrenceWorkBudget(maxSteps=20000,maxMilliseconds=500,clock=()=>Date.now()){
+ let steps=0,spent=0,started:number|undefined;
+ const check=()=>{
+  const now=clock();started??=now;
+  if(++steps>maxSteps||spent+now-started>maxMilliseconds)throw Error('Reminder recurrence work budget exceeded');
+ };
+ return Object.assign(check,{resume(){started=clock()},pause(){if(started!==undefined)spent+=clock()-started;started=undefined}});
+}
 export function calendarReminders(events:ReminderEvent[]):ReminderEvent[]{
  return events.flatMap(event=>{
   const extra=event.reminder_minutes;

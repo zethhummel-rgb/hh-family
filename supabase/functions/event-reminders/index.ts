@@ -1,6 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
-import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,calendarReminders,type ReminderEvent} from './logic.ts';
+import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,calendarReminders,recurrenceWorkBudget,type ReminderEvent} from './logic.ts';
 import {expandNativeEvents,type NativeEvent} from '../google-calendar/native.ts';
 const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/',ORIGIN=new URL(APP).origin;
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
@@ -17,11 +17,12 @@ async function send(device:any,payload:any,keys:any){
  if(response.status===404||response.status===410){await service('retire',{deviceId:device.id});return 'expired'}
  if(!response.ok)throw Error('Push service unavailable');return 'sent';
 }
-async function googleEvents(connection:any,now:number):Promise<ReminderEvent[]>{
+async function googleEvents(connection:any,now:number,deadline:number):Promise<ReminderEvent[]>{
  const token=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:Deno.env.get('GOOGLE_CALENDAR_CLIENT_ID')||'',client_secret:Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET')||'',refresh_token:connection.refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(8000)});
  const data=await token.json();if(!token.ok||!data.access_token)throw Error('Calendar reconnect required');
- const events:ReminderEvent[]=[];let pageToken='';
+ const events:ReminderEvent[]=[];let pageToken='',pages=0;
  do{
+  if(++pages>9||Date.now()>deadline)throw Error('Reminder calendar work budget exceeded');
   const params=new URLSearchParams({timeMin:new Date(now-86400000).toISOString(),timeMax:new Date(now+8*86400000).toISOString(),singleEvents:'true',orderBy:'startTime',timeZone:'America/Toronto',maxResults:'250',...(pageToken?{pageToken}:{})});
   const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(connection.calendarId)+'/events?'+params,{headers:{Authorization:'Bearer '+data.access_token},signal:AbortSignal.timeout(8000)});const body=await r.json();if(!r.ok)throw Error('Calendar read failed');
   for(const e of body.items||[]){if(e.status==='cancelled')continue;const shared=e.extendedProperties?.shared||{};let person_ids;try{person_ids=JSON.parse(shared.hummel_people);if(!Array.isArray(person_ids)||person_ids.some((id:unknown)=>typeof id!=='string'))person_ids=undefined}catch{}
@@ -32,12 +33,10 @@ async function googleEvents(connection:any,now:number):Promise<ReminderEvent[]>{
  }while(pageToken);
  return events;
 }
-async function dispatch(keys:any){
- if(!await service('lock'))return {busy:true};
- const report={households:0,sent:0,failed:0},deadline=Date.now()+45000;
+async function dispatch(keys:any,householdId:string){
+ if(!await service('lock_household',{householdId}))return {busy:true};
+ const report={households:0,sent:0,failed:0,limited:false},deadline=Date.now()+20000;
  try{
-  for(const householdId of await service('households')){
-   if(Date.now()>deadline)break;
    try{
     const devices=await service('devices',{householdId});
     const membership=await admin.from('household_members').select('user_id,display_name').eq('household_id',householdId);if(membership.error)throw Error('Membership unavailable');
@@ -46,7 +45,7 @@ async function dispatch(keys:any){
     for(const event of events.filter(e=>isDue(e,Date.now()))){
      const users=recipients(event,membership.data,profiles.data),key=deliveryKey(event);
      for(const device of devices.filter((d:any)=>users.includes(d.user_id))){
-      if(Date.now()>deadline)break;
+      if(Date.now()>deadline)throw Error('Reminder calendar work budget exceeded');
       if(!await service('claim',{deviceId:device.id,userId:device.user_id,key}))continue;
       try{const state=await send(device,notificationPayload(event),keys);if(state==='sent')report.sent++;await service('finish',{deviceId:device.id,key,state})}catch{report.failed++}
      }
@@ -61,21 +60,30 @@ async function dispatch(keys:any){
     }catch{report.failed++}
     const connection=await calendar(householdId);let events:ReminderEvent[];
     if(connection){
-     if(!connection.migrationComplete)continue;
-     const owner=await admin.from('households').select('owner_id').eq('id',householdId).single();if(owner.error||owner.data.owner_id!==connection.userId)continue;
-     events=await googleEvents(connection,now);
+     if(!connection.migrationComplete)return report;
+     const owner=await admin.from('households').select('owner_id').eq('id',householdId).single();if(owner.error||owner.data.owner_id!==connection.userId)return report;
+     events=await googleEvents(connection,now,deadline);
     }else{
-     const masters:NativeEvent[]=[];let complete=false;
-     for(let offset=0;offset<10000;offset+=500){const r=await admin.from('household_events').select('*').eq('household_id',householdId).order('id').range(offset,offset+499);if(r.error)throw Error('Calendar read failed');masters.push(...r.data);if(r.data.length<500){complete=true;break}}
+     // Process small pages rather than holding every household master/exception in memory.
+     const work=recurrenceWorkBudget();let complete=false;
+     for(let offset=0;offset<10000;offset+=25){
+      if(Date.now()>deadline)throw Error('Reminder recurrence work budget exceeded');
+      const r=await admin.from('household_events').select('*').eq('household_id',householdId).order('id').range(offset,offset+24);
+      if(r.error)throw Error('Calendar read failed');
+      const page:NativeEvent[]=r.data;
+      let expanded:NativeEvent[];work.resume();
+      try{expanded=expandNativeEvents(page,new Date(now-86400000).toISOString(),new Date(now+8*86400000).toISOString(),work)}finally{work.pause()}
+      await deliver(calendarReminders(expanded));
+      if(page.length<25){complete=true;break}
+     }
      if(!complete)throw Error('Reminder calendar too large');
-     events=expandNativeEvents(masters,new Date(now-86400000).toISOString(),new Date(now+8*86400000).toISOString());
+     report.households++;return report;
     }
     report.households++;
     await deliver(calendarReminders(events));
-   }catch{report.failed++}
-  }
+   }catch(e){report.failed++;report.limited=/Reminder .*work budget exceeded/.test((e as Error)?.message||'')}
   return report;
- }finally{await service('unlock',report)}
+ }finally{await service('unlock_household',{householdId,...report})}
 }
 Deno.serve(async(req:Request)=>{
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});if(req.method!=='POST')return json({error:'Not found'},404);
@@ -88,7 +96,10 @@ Deno.serve(async(req:Request)=>{
    const [a,b]=await Promise.all([digest(cron),digest(secrets.cronSecret||'')]);let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
    if(!secrets.cronSecret||diff)return json({error:'Unauthorized'},401);
    if(!secrets.keys){await publicKey();secrets.keys=(await service('secrets')).keys}
-   return json(await dispatch(secrets.keys));
+   const raw=await req.text();if(raw.length>1024)return json({error:'Invalid dispatch request'},400);
+   const body=JSON.parse(raw);
+   if(body.action!=='dispatch'||typeof body.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(body.householdId))return json({error:'A household dispatch job is required'},400);
+   return json(await dispatch(secrets.keys,body.householdId));
   }
   if(req.headers.get('origin')!==ORIGIN)return json({error:'Invalid request origin'},403);
   const token=req.headers.get('authorization')?.replace(/^Bearer /i,'');if(!token)return json({error:'Sign in first'},401);

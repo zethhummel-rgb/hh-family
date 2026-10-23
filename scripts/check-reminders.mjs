@@ -29,7 +29,7 @@ const subscription={endpoint:'https://web.push.apple.com/test',keys:{p256dh:'A'.
 for(const endpoint of['http://fcm.googleapis.com/x','https://127.0.0.1/x','https://fcm.googleapis.com.evil.test/x','https://user:password@fcm.googleapis.com/x','https://web.push.apple.com:444/x','https://metadata.google.internal/x'])assert.throws(()=>validSubscription({...subscription,endpoint}));
 const raw=fs.readFileSync(new URL('../supabase/functions/event-reminders/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 const hid='11111111-1111-4111-8111-111111111111';
-function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only'}={}){
+function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only',exhaustWork=false}={}){
  let handler,pushes=0,claimed=false,retired=false;const calls=[];
  const now=Date.now();const dueEvent={...event,reminder_30_enabled:reminder30,starts_at:new Date(now+minutesBefore*60000).toISOString()};
  const device={id:'device',household_id:hid,user_id:'zeth',subscription};
@@ -38,7 +38,7 @@ function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,c
  const admin={auth:{getUser:async()=>({data:{user:validToken?{id:'zeth'}:null},error:!validToken})},from:query,rpc:async(name,{action,payload})=>{
   calls.push(action);
   if(name==='calendar_service')return {data:connected?{migrationComplete:true,calendarId:'family',userId:'zeth',refreshToken:'never-to-client'}:null};
-  const data={config:'public-vapid-key',secrets:{cronSecret,keys:{publicKey:'public',privateKey:'server-only'}},lock:true,unlock:{},households:[hid],devices:[device],status:{enabled:true},subscribe:{enabled:true},unsubscribe:{},test:device,retire:{},finish:{}};
+  const data={config:'public-vapid-key',secrets:{cronSecret,keys:{publicKey:'public',privateKey:'server-only'}},lock:true,unlock:{},lock_household:true,unlock_household:{},households:[hid],devices:[device],status:{enabled:true},subscribe:{enabled:true},unsubscribe:{},test:device,retire:{},finish:{}};
   if(action==='claim'){const ok=!claimed&&!removed;claimed=true;return {data:ok}}
   if(action==='retire')retired=true;return {data:data[action],error:null};
  }};
@@ -48,7 +48,7 @@ function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,c
   assert.equal(url,subscription.endpoint);assert.equal(init.redirect,'error');pushes++;return new Response(null,{status:expired?410:201});
  };
  const webpush={generateVAPIDKeys:()=>({publicKey:'public',privateKey:'server-only'}),generateRequestDetails:(s,p,o)=>{assert.equal(o.TTL,300);assert.equal(o.vapidDetails.privateKey,'server-only');assert.equal(o.contentEncoding,'aes128gcm');assert.equal(JSON.parse(p).title,'Hockey');return {endpoint:s.endpoint,headers:{Authorization:'VAPID encrypted'},body:'encrypted bytes'}}};
- vm.runInNewContext(compile(raw),{...logic,expandNativeEvents,createClient:()=>admin,webpush,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'never-to-client',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'never-to-client'})[k]},serve:fn=>handler=fn},fetch,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,AbortSignal});
+ vm.runInNewContext(compile(raw),{...logic,expandNativeEvents:(...args)=>{if(exhaustWork){for(let i=0;i<20001;i++)args[3]()}return expandNativeEvents(...args)},createClient:()=>admin,webpush,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'never-to-client',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'never-to-client'})[k]},serve:fn=>handler=fn},fetch,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,AbortSignal});
  return{calls,get pushes(){return pushes},get retired(){return retired},request:async(body,headers={})=>{const r=await handler(new Request('https://test.supabase.co/functions/v1/event-reminders',{method:'POST',headers:{origin:'https://hh-pilot.example.test',authorization:'Bearer session',...headers},body:JSON.stringify({householdId:hid,...body})}));return {status:r.status,data:await r.json()}}};
 }
 let f=fixture(),r=await f.request({action:'status'});assert.equal(r.status,200);assert.equal(r.data.publicKey,'public-vapid-key');assert.equal(JSON.stringify(r.data).includes('server-only'),false);assert.equal(f.calls.includes('secrets'),false);
@@ -56,7 +56,7 @@ for(const config of[{member:false},{validToken:false}]){f=fixture(config);r=awai
 f=fixture();r=await f.request({action:'subscribe',subscription:{...subscription,endpoint:'https://127.0.0.1/private'}});assert.equal(r.status,400);assert.equal(f.calls.includes('subscribe'),false);
 f=fixture();r=await f.request({action:'dispatch'});assert.equal(r.status,400);assert.equal(f.pushes,0);
 f=fixture();r=await f.request({action:'dispatch'},{'x-hummel-cron':'wrong'});assert.equal(r.status,401);assert.equal(f.pushes,0);
-for(const connected of[false,true]){f=fixture({connected});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1);assert.equal(f.calls.includes('unlock'),true)}
+for(const connected of[false,true]){f=fixture({connected});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1);assert.equal(f.calls.includes('unlock_household'),true)}
 for(const connected of[false,true])for(const stale of[false,true]){f=fixture({connected,stale,minutesBefore:29});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1,'Existing native/Google events get the automatic reminder even without a saved reminder');await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1)}
 for(const config of[{removed:true},{stale:true},{cancelled:true},{connected:true,stale:true},{connected:true,cancelled:true}]){f=fixture(config);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0)}
 for(const connected of[false,true]){f=fixture({connected,reminder30:false,minutesBefore:29});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0,'Turning off the switch suppresses the automatic alert');f=fixture({connected,reminder30:false});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1,'An additional reminder still sends with the switch off')}
@@ -102,3 +102,13 @@ console.log('To-do checks passed: completed repeats wait in Done, exact-date rea
 
 f=fixture({task:true,futureTask:true});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0);
 console.log('Waiting repeats do not notify before their next scheduled time.');
+
+// Per-household requests remain isolated when one calendar exhausts its work budget.
+f=fixture({exhaustWork:true});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(r.data.limited,true);assert.equal(f.pushes,0);assert.ok(f.calls.includes('unlock_household'));assert.ok(!f.calls.includes('households'));
+f=fixture();r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.data.sent,1);
+f=fixture();r=await f.request({action:'dispatch',householdId:null},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,400);assert.equal(f.calls.includes('lock_household'),false);
+let time=0;const budget=logic.recurrenceWorkBudget(3,100,()=>time);budget();budget();time=101;assert.throws(()=>budget(),/work budget/);
+console.log('Household reminder job checks passed: scoped cron request, independent leases, bounded recurrence work, recovery after another job fails, and unchanged delivery deduplication.');
+
+// Database and push network waits do not spend the recurrence CPU/wall-work allowance.
+time=0;const segmented=logic.recurrenceWorkBudget(10,100,()=>time);segmented.resume();segmented();time=40;segmented.pause();time=10000;segmented.resume();segmented();time=10061;assert.throws(()=>segmented(),/work budget/);
