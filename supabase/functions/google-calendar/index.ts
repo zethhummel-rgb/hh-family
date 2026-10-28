@@ -1,8 +1,8 @@
+import {runCalendarCopy} from './copy.ts';
 import {reminderMinutes,readReminder} from './reminders.ts';
 import {encodePersonIds,decodePersonIds} from './tags.ts';
 import {searchParameters} from './search.ts';
 import {validateRecurrence} from './recurrence.ts';
-import {importNativeExceptions} from './nativeImport.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/';
 const ORIGIN=new URL(APP).origin;
@@ -17,15 +17,16 @@ const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest
 const base64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const random=()=>base64(crypto.getRandomValues(new Uint8Array(32)));
 async function service(action:string,payload:Record<string,unknown>){const r=await admin.rpc('calendar_service',{action,payload});if(r.error)throw Error('Calendar connection storage is unavailable.');return r.data;}
+async function copyService(action:string,householdId:string,extra:Record<string,unknown>={}){const r=await admin.rpc('calendar_copy_service',{action,payload:{householdId,...extra}});if(r.error)throw Error('Calendar copy status is unavailable. Your HH plans are preserved.');return r.data;}
 async function google(access:string,path:string,method='GET',body?:unknown,etag?:string){
- const r=await fetch('https://www.googleapis.com/calendar/v3/'+path,{method,headers:{Authorization:'Bearer '+access,...(body?{'Content-Type':'application/json'}:{}),...(etag?{'If-Match':etag}:{})},body:body?JSON.stringify(body):undefined});
+ const r=await fetch('https://www.googleapis.com/calendar/v3/'+path,{method,headers:{Authorization:'Bearer '+access,...(body?{'Content-Type':'application/json'}:{}),...(etag?{'If-Match':etag}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(8000)});
  if(r.status===204)return null;
  const data=await r.json();
  if(!r.ok){if(r.status===412)throw Error('This event changed in Google Calendar. Refresh and try again.');if(r.status===409)throw Error('This event may already have been saved. Refresh the calendar before trying again.');if(r.status===401||r.status===403)throw Error('Google Calendar permission is unavailable. The household owner needs to reconnect Google.');throw Error('Google Calendar could not complete this request. Please refresh before retrying a change.');}
  return data;
 }
 async function accessToken(connection:any){
- const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:ID,client_secret:SECRET,refresh_token:connection.refreshToken,grant_type:'refresh_token'})});
+ const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:ID,client_secret:SECRET,refresh_token:connection.refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(8000)});
  const d=await r.json();if(!r.ok||!d.access_token)throw Error('Google connection needs renewing. The household owner can reconnect Google.');return d.access_token as string;
 }
 function toGoogle(e:any){
@@ -42,6 +43,17 @@ const redirect=(ok:boolean,message='')=>{const u=new URL(APP);u.searchParams.set
 Deno.serve(async(req:Request)=>{
  const url=new URL(req.url);
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
+ if(req.method==='POST'&&req.headers.has('x-hummel-cron')){
+  try{
+   const raw=await req.text();if(raw.length>1024)return json({error:'Invalid copy request'},400);
+   const body=JSON.parse(raw);if(body.action!=='sync'||typeof body.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(body.householdId))return json({error:'Invalid copy request'},400);
+   const r=await admin.rpc('push_service',{action:'secrets',payload:{}});const expected=r.data?.cronSecret;
+   const digest=async(value:string)=>new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)));
+   const [a,b]=await Promise.all([digest(req.headers.get('x-hummel-cron')||''),digest(expected||'')]);let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
+   if(r.error||!expected||diff)return json({error:'Unauthorized'},401);
+   return json(await runCalendarCopy(admin,body.householdId,{clientId:ID,clientSecret:SECRET}));
+  }catch{return json({error:'The Google copy could not finish. HH plans are preserved.'},400)}
+ }
  if(req.method==='GET'&&url.pathname.endsWith('/callback')){
   try{
    const state=url.searchParams.get('state');if(!state||state.length>200)return redirect(false,'Google connection expired. Please try connecting again.');
@@ -55,25 +67,25 @@ Deno.serve(async(req:Request)=>{
    if(old){try{calendar=await google(tokens.access_token,'calendars/'+encodeURIComponent(old.calendarId))}catch{return redirect(false,'Reconnect using the Google account that owns your existing family calendar.');}}
    if(!calendar)calendar=await google(tokens.access_token,'calendars','POST',{summary:member.data.name+' · Family',description:'Family plans shared through HH.',timeZone:'America/Toronto'});
    await service('connection_set',{householdId:record.household_id,userId:record.user_id,calendarId:calendar.id,refreshToken:tokens.refresh_token});
-   if(old?.migrationComplete){await service('migration_done',{householdId:record.household_id});return redirect(true);}
-   // Existing native events are copied only as part of this explicit Connect action.
-   const native=await admin.from('household_events').select('*').eq('household_id',record.household_id).limit(1001);if(native.error||native.data.length>1000)return redirect(false,'Google connected. Existing event import needs attention; your HH events are preserved.');
-   for(const e of native.data){const eventId='home'+e.id.replaceAll('-','');let exists=false;try{const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendar.id)+'/events/'+eventId,{headers:{Authorization:'Bearer '+tokens.access_token}});exists=r.ok;if(!r.ok&&r.status!==404)throw Error('Import check failed')}catch{return redirect(false,'Google connected, but the existing event import could not finish. Reconnect to retry safely.');}
-    if(!exists)await google(tokens.access_token,'calendars/'+encodeURIComponent(calendar.id)+'/events','POST',{...toGoogle(e),id:eventId});
-    if(e.recurrence?.length)await importNativeExceptions(e,'calendars/'+encodeURIComponent(calendar.id)+'/events/'+eventId,(path,method,body)=>google(tokens.access_token,path,method,body),toGoogle);
-   }
+   // Google is an outbound copy. Legacy Google homes are preserved and
+   // verified by the background worker before the source switches to HH.
    await service('migration_done',{householdId:record.household_id});return redirect(true);
   }catch{return redirect(false,'Google Calendar could not finish connecting. Your existing household events are preserved.');}
  }
  if(req.method!=='POST')return json({error:'Not found'},404);
  if(req.headers.get('origin')!==ORIGIN)return json({error:'Invalid request origin'},403);
+ let legacyLease='',legacyHousehold='';
  try{
   const bearer=req.headers.get('authorization')?.replace(/^Bearer /i,'');if(!bearer)return json({error:'Sign in first'},401);
   const auth=await admin.auth.getUser(bearer);if(auth.error||!auth.data.user)return json({error:'Sign in again to open the calendar'},401);
-  const b=await req.json();if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
+  const raw=await req.text();if(raw.length>16384)return json({error:'Request too large'},400);const b=JSON.parse(raw);if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
   const membership=await admin.from('household_members').select('role').eq('household_id',b.householdId).eq('user_id',auth.data.user.id).maybeSingle();if(membership.error||!membership.data)return json({error:'This household is not available to your account'},403);
-  const connection=await service('connection_get',{householdId:b.householdId});
-  if(b.action==='status')return json({configured:!!(ID&&SECRET),connected:!!connection&&connection.migrationComplete,setupRequired:!(ID&&SECRET),importIncomplete:!!connection&&!connection.migrationComplete});
+  const copy=await copyService('status',b.householdId);
+  if(b.action==='status')return json({configured:!!(ID&&SECRET),setupRequired:!(ID&&SECRET),connected:!copy.nativeReady&&copy.googleConnected,importIncomplete:false,...copy});
+  if(b.action==='sync'){
+   if(membership.data.role!=='owner')return json({error:'Only the household owner can request a Google copy'},403);
+   return json(await runCalendarCopy(admin,b.householdId,{clientId:ID,clientSecret:SECRET}));
+  }
   if(b.action==='start'){
    if(membership.data.role!=='owner')return json({error:'Only the household owner can connect Google'},403);
    if(!ID||!SECRET)return json({error:'Google connection needs its one-time Google Cloud setup. Your HH calendar already works and saves family events.'},409);
@@ -81,6 +93,13 @@ Deno.serve(async(req:Request)=>{
    await service('state_create',{hash:await hash(state),verifier,userId:auth.data.user.id,householdId:b.householdId});
    const googleUrl=new URL('https://accounts.google.com/o/oauth2/v2/auth');googleUrl.search=new URLSearchParams({client_id:ID,redirect_uri:CALLBACK,response_type:'code',scope:'https://www.googleapis.com/auth/calendar.app.created',access_type:'offline',prompt:'consent',state,code_challenge:challenge,code_challenge_method:'S256'}).toString();return json({url:googleUrl.toString()});
   }
+  if(copy.nativeReady)return json({error:'Your calendar is saved in HH now. Refresh HH before changing or searching for plans.'},409);
+  if(['create','update','delete'].includes(b.action)){
+   const lock=await copyService('legacy_lock',b.householdId);
+   if(!lock?.lease)return json({error:'Your existing calendar is being safely transferred to HH. Please try again in a moment.'},409);
+   legacyLease=lock.lease;legacyHousehold=b.householdId;
+  }
+  const connection=await service('connection_get',{householdId:b.householdId});
   if(!ID||!SECRET||!connection?.migrationComplete)return json({error:'Google is not connected. Your HH calendar is still available.'},409);
   const access=await accessToken(connection),base='calendars/'+encodeURIComponent(connection.calendarId)+'/events';
   if(b.action==='search'){
@@ -105,4 +124,5 @@ Deno.serve(async(req:Request)=>{
   if(current.recurringEventId&&b.event?.recurrence!==undefined)return json({error:'Choose the whole series to change how this event repeats.'},400);
   const draft=toGoogle(b.event);const event=await google(access,base+'/'+encodeURIComponent(b.id),'PATCH',{...draft,extendedProperties:{...current.extendedProperties,shared:{...current.extendedProperties?.shared,...draft.extendedProperties.shared,...(b.event.person_ids===undefined&&current.extendedProperties?.shared?.hummel_person!==b.event.person?{hummel_people:''}:{})}}},b.etag);return json({event:fromGoogle(event)});
  }catch(e){return json({error:e instanceof Error?e.message:'Calendar request failed'},400);}
+ finally{if(legacyLease)try{await copyService('finish',legacyHousehold,{lease:legacyLease})}catch{}}
 });

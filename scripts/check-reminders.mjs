@@ -29,14 +29,16 @@ const subscription={endpoint:'https://web.push.apple.com/test',keys:{p256dh:'A'.
 for(const endpoint of['http://fcm.googleapis.com/x','https://127.0.0.1/x','https://fcm.googleapis.com.evil.test/x','https://user:password@fcm.googleapis.com/x','https://web.push.apple.com:444/x','https://metadata.google.internal/x'])assert.throws(()=>validSubscription({...subscription,endpoint}));
 const raw=fs.readFileSync(new URL('../supabase/functions/event-reminders/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 const hid='11111111-1111-4111-8111-111111111111';
-function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only',exhaustWork=false}={}){
+function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only',exhaustWork=false,nativeReady=!connected}={}){
  let handler,pushes=0,claimed=false,retired=false;const calls=[];
  const now=Date.now();const dueEvent={...event,reminder_30_enabled:reminder30,starts_at:new Date(now+minutesBefore*60000).toISOString()};
  const device={id:'device',household_id:hid,user_id:'zeth',subscription};
  const rows=table=>({data:table==='household_items'?(task&&!completedTask?[{id:'11111111-1111-4111-8111-111111111111',title:'Hockey',person:'Everyone',remind_at:new Date(now+(futureTask?86400000:-60000)).toISOString()}]:[]):task||cancelled?[]:[{...dueEvent,ends_at:new Date(now+74*60000).toISOString(),...(stale?{reminder_minutes:null}:{})}],error:null});
  const query=table=>{const q={select:()=>q,eq:()=>q,not:()=>q,gte:()=>q,lte:()=>q,order:()=>q,range:async()=>rows(table),limit:async()=>rows(table),maybeSingle:async()=>({data:member?{user_id:'zeth'}:null,error:null}),single:async()=>({data:{owner_id:'zeth'},error:null}),then:resolve=>resolve({data:table==='household_people'?[]:members,error:null})};return q};
  const admin={auth:{getUser:async()=>({data:{user:validToken?{id:'zeth'}:null},error:!validToken})},from:query,rpc:async(name,{action,payload})=>{
+  if(name==='calendar_reminder_claim')action='claim';
   calls.push(action);
+  if(name==='calendar_copy_service')return {data:{nativeReady},error:null};
   if(name==='calendar_service')return {data:connected?{migrationComplete:true,calendarId:'family',userId:'zeth',refreshToken:'never-to-client'}:null};
   const data={config:'public-vapid-key',secrets:{cronSecret,keys:{publicKey:'public',privateKey:'server-only'}},lock:true,unlock:{},lock_household:true,unlock_household:{},households:[hid],devices:[device],status:{enabled:true},subscribe:{enabled:true},unsubscribe:{},test:device,retire:{},finish:{}};
   if(action==='claim'){const ok=!claimed&&!removed;claimed=true;return {data:ok}}
@@ -112,3 +114,8 @@ console.log('Household reminder job checks passed: scoped cron request, independ
 
 // Database and push network waits do not spend the recurrence CPU/wall-work allowance.
 time=0;const segmented=logic.recurrenceWorkBudget(10,100,()=>time);segmented.resume();segmented();time=40;segmented.pause();time=10000;segmented.resume();segmented();time=10061;assert.throws(()=>segmented(),/work budget/);
+
+// A Google-enabled ready home still reads HH and sends native reminders, even
+// with revoked Google permission; no provider credentials/API are consulted.
+f=fixture({connected:true,nativeReady:true,googleFailure:true});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(f.pushes,1);
+console.log('Native-authority reminder regression passed: a broken Google copy does not stop HH event reminders.');

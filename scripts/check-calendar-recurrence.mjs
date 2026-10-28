@@ -30,9 +30,9 @@ const code=compile(raw);
 const hid='11111111-1111-4111-8111-111111111111',origin='https://hh-pilot.example.test';
 const master={id:'series1',summary:'Birthday',description:'Keep these notes',location:'Home',start:{date:'2027-02-06'},end:{date:'2027-02-07'},recurrence:['RRULE:FREQ=YEARLY'],etag:'"v1"',extendedProperties:{private:{keep:'private'},shared:{hummel_person:'Chelsea',keep:'shared'}}};
 const instance={...master,id:'series1_20280206',start:{date:'2028-02-06'},end:{date:'2028-02-07'},recurringEventId:'series1',recurrence:undefined,etag:'"i1"'};
-function fixture({member=true,validToken=true}={}){
+function fixture({member=true,validToken=true,nativeReady=false,role='member',legacyBusy=false}={}){
  let handler;const calls=[],events=new Map([[master.id,structuredClone(master)],[instance.id,structuredClone(instance)]]);
- const admin={auth:{getUser:async token=>({error:!validToken||token!=='session',data:{user:validToken&&token==='session'?{id:'family-member'}:null}})},from:()=>{const filters={};const q={select:()=>q,eq:(k,v)=>{filters[k]=v;return q},maybeSingle:async()=>({data:member&&filters.household_id===hid&&filters.user_id==='family-member'?{role:'member'}:null,error:null})};return q},rpc:async(action,payload)=>({data:{calendarId:'family@example.com',refreshToken:'server-only',migrationComplete:true},error:null})};
+ const admin={auth:{getUser:async token=>({error:!validToken||token!=='session',data:{user:validToken&&token==='session'?{id:'family-member'}:null}})},from:()=>{const filters={};const q={select:()=>q,eq:(k,v)=>{filters[k]=v;return q},maybeSingle:async()=>({data:member&&filters.household_id===hid&&filters.user_id==='family-member'?{role}:null,error:null})};return q},rpc:async(name,{action})=>({data:name==='calendar_copy_service'?(action==='status'?{nativeReady,googleConnected:true,copyStatus:nativeReady?'up_to_date':'importing'}:action==='legacy_lock'?(legacyBusy?null:{lease:'synthetic-lease'}):{}):name==='push_service'?{cronSecret:'scheduler-only'}:{calendarId:'family@example.com',refreshToken:'server-only',migrationComplete:true},error:null})};
  const fakeFetch=async(url,init={})=>{
   if(url==='https://oauth2.googleapis.com/token')return Response.json({access_token:'google-access'});
   calls.push({url,method:init.method||'GET',headers:init.headers,body:init.body?JSON.parse(init.body):undefined});
@@ -46,7 +46,7 @@ function fixture({member=true,validToken=true}={}){
   if(method==='PATCH'){events.set(id,{...current,...JSON.parse(init.body),etag:'"v2"'});return Response.json(events.get(id))}
   return Response.json(current);
  };
- vm.runInNewContext(code,{reminderMinutes,readReminder,encodePersonIds,decodePersonIds,validateRecurrence,searchParameters,createClient:()=>admin,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'server-secret',SUPABASE_SERVICE_ROLE_KEY:'server-key'})[k]},serve:fn=>{handler=fn}},fetch:fakeFetch,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,btoa});
+ vm.runInNewContext(code,{reminderMinutes,readReminder,encodePersonIds,decodePersonIds,validateRecurrence,searchParameters,createClient:()=>admin,Deno:{env:{get:k=>({APP_URL:'https://hh-pilot.example.test/',SUPABASE_URL:'https://test.supabase.co',GOOGLE_CALENDAR_CLIENT_ID:'client',GOOGLE_CALENDAR_CLIENT_SECRET:'server-secret',SUPABASE_SERVICE_ROLE_KEY:'server-key'})[k]},serve:fn=>{handler=fn}},runCalendarCopy:async()=>({completed:1}),fetch:fakeFetch,AbortSignal,Response,Request,URL,URLSearchParams,TextEncoder,Uint8Array,crypto,btoa});
  return{calls,events,request:async(body,headers={})=>{const r=await handler(new Request('https://test.supabase.co/functions/v1/google-calendar',{method:'POST',headers:{origin,authorization:'Bearer session','content-type':'application/json',...headers},body:JSON.stringify({householdId:hid,...body})}));return{status:r.status,body:await r.json()}}};
 }
 const draft={title:'Birthday',description:'Notes',location:'Home',person:'Chelsea',starts_at:'2027-02-06T05:00:00Z',ends_at:'2027-02-07T05:00:00Z',all_day:true,start_date:'2027-02-06',end_date:'2027-02-07'};
@@ -81,3 +81,16 @@ f=fixture();r=await f.request({action:'update',id:instance.id,etag:instance.etag
 r=await f.request({action:'update',id:instance.id,etag:r.body.event.etag,event:{...draft,reminder_30_enabled:true,reminder_minutes:1020}});assert.equal(r.status,200);assert.equal(r.body.event.reminder_30_enabled,true);assert.equal(r.body.event.reminder_minutes,1020);
 f=fixture();r=await f.request({action:'update',id:master.id,etag:master.etag,event:{...draft,reminder_30_enabled:false}});assert.equal(r.status,200);assert.equal(r.body.event.reminder_30_enabled,false);
 f=fixture();r=await f.request({action:'update',id:master.id,etag:master.etag,event:{...draft,reminder_30_enabled:'false'}});assert.equal(r.status,400);assert.equal(f.calls.filter(c=>c.method==='PATCH').length,0);
+
+// Provider CRUD remains available only for an existing, untransferred home.
+for(const action of ['create','update','delete','events','search','series']){
+ f=fixture({nativeReady:true});r=await f.request({action,id:master.id,etag:master.etag,event:draft});
+ assert.equal(r.status,409);assert.match(r.body.error,/Refresh HH/);assert.equal(f.calls.length,0);
+}
+f=fixture({nativeReady:true});r=await f.request({action:'status'});assert.equal(r.body.connected,false);assert.equal(r.body.googleConnected,true);assert.equal(JSON.stringify(r.body).includes('server-only'),false);
+f=fixture({legacyBusy:true});r=await f.request({action:'update',id:master.id,etag:master.etag,event:draft});assert.equal(r.status,409);assert.equal(f.calls.length,0);
+f=fixture();r=await f.request({action:'sync'});assert.equal(r.status,403);
+f=fixture({role:'owner'});r=await f.request({action:'sync'});assert.equal(r.status,200);assert.equal(r.body.completed,1);
+f=fixture();r=await f.request({action:'sync'},{'x-hummel-cron':'wrong'});assert.equal(r.status,401);assert.equal(f.calls.length,0);
+f=fixture({validToken:false});r=await f.request({action:'sync'},{'x-hummel-cron':'scheduler-only',origin:'https://untrusted.example'});assert.equal(r.status,200);
+console.log('Calendar authority gateway passed: legacy compatibility, transfer write exclusion, native cutover blocks old provider actions, safe status, owner-only sync and scheduler authentication.');
