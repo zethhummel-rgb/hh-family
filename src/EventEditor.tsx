@@ -43,7 +43,7 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
   <section className="modal event-modal" role="dialog" aria-modal="true" aria-labelledby="event-editor-title" ref={modal}>
    <button type="button" className="modal-close icon-button" aria-label="Close event editor" disabled={busy} onClick={onClose}><X/></button>
    <span className="round-icon sage"><CalendarDays/></span><h2 id="event-editor-title">{event?'Edit family plans.':'Make a little time.'}</h2>
-   <p className="event-form-note">{connected?'Saves to your connected Google family calendar.':'Shared with your household in HH.'}</p>
+   <p className="event-form-note">{connected?'Your existing Google calendar stays active until its HH transfer is verified.':'Saved in HH. Your plans and reminders work even when Google is disconnected.'}</p>
    {event?.series_id&&<div className="series-scope"><label>Apply changes to<select value={scope} disabled={busy} onChange={e=>changeScope(e.target.value as 'occurrence'|'series')}><option value="occurrence">Only this occurrence</option><option value="series">The whole series</option></select></label><p className="field-help">{busy?'Loading…':scope==='series'?'Editing the original event and its repeat pattern. Changes apply to past and future occurrences.':'Other dates in this series stay as they are.'} Switching this choice reloads the saved details.</p></div>}
    <form onSubmit={submit}><fieldset disabled={busy} className="event-fields">
     <label>Event name<input required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Birthday dinner"/></label>

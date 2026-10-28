@@ -7,8 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:calendar": "node scripts/check-calendar.mjs && node scripts/check-calendar-auth.mjs && node scripts/check-calendar-recurrence.mjs && node scripts/check-native-calendar.mjs && node scripts/check-people.mjs && node scripts/check-reminders.mjs && node scripts/check-pilot.mjs",
-    "test:database": "node scripts/check-pilot-database.mjs && node scripts/check-admin-households.mjs && node scripts/check-self-service-deletion.mjs && node scripts/check-household-reminder-jobs.mjs",
+    "test:calendar": "node scripts/check-calendar.mjs && node scripts/check-calendar-auth.mjs && node scripts/check-calendar-recurrence.mjs && node scripts/check-native-calendar.mjs && node scripts/check-people.mjs && node scripts/check-reminders.mjs && node scripts/check-pilot.mjs && node scripts/check-calendar-copy.mjs",
+    "test:database": "node scripts/check-pilot-database.mjs && node scripts/check-admin-households.mjs && node scripts/check-self-service-deletion.mjs && node scripts/check-household-reminder-jobs.mjs && node scripts/check-calendar-copy-database.mjs",
     "test:invitations": "node scripts/check-invitation-email.mjs",
     "test:recovery": "node scripts/check-password-recovery.mjs && node scripts/check-login-storage.mjs",
     "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs && node scripts/check-notification-prompt.mjs && node scripts/check-getting-started.mjs"

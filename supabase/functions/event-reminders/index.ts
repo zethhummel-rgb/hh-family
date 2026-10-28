@@ -6,7 +6,7 @@ const APP=Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/'
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const cors={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:cors});
-async function service(action:string,payload:Record<string,unknown>={}){const r=await admin.rpc('push_service',{action,payload});if(r.error)throw Error('Notification storage is unavailable.');return r.data;}
+async function service(action:string,payload:Record<string,unknown>={}){const r=action==='claim'?await admin.rpc('calendar_reminder_claim',{payload}):await admin.rpc('push_service',{action,payload});if(r.error)throw Error('Notification storage is unavailable.');return r.data;}
 async function calendar(householdId:string){const r=await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId}});if(r.error)throw Error('Calendar connection unavailable');return r.data;}
 async function publicKey(){return await service('config')||await service('config',{keys:webpush.generateVAPIDKeys()})}
 async function send(device:any,payload:any,keys:any){
@@ -41,9 +41,10 @@ async function dispatch(keys:any,householdId:string){
     const devices=await service('devices',{householdId});
     const membership=await admin.from('household_members').select('user_id,display_name').eq('household_id',householdId);if(membership.error)throw Error('Membership unavailable');
     const profiles=await admin.from('household_people').select('id,display_name,linked_user_id').eq('household_id',householdId);if(profiles.error)throw Error('Family profiles unavailable');
+    const familyMembers=membership.data||[],familyPeople=profiles.data||[];
     async function deliver(events:ReminderEvent[]){
     for(const event of events.filter(e=>isDue(e,Date.now()))){
-     const users=recipients(event,membership.data,profiles.data),key=deliveryKey(event);
+     const users=recipients(event,familyMembers,familyPeople),key=deliveryKey(event);
      for(const device of devices.filter((d:any)=>users.includes(d.user_id))){
       if(Date.now()>deadline)throw Error('Reminder calendar work budget exceeded');
       if(!await service('claim',{deviceId:device.id,userId:device.user_id,key}))continue;
@@ -58,7 +59,8 @@ async function dispatch(keys:any,householdId:string){
      if(tasks.error||tasks.data.length>2000)throw Error('Reminder read failed');
      await deliver(tasks.data.map((t:any)=>({id:'task:'+t.id,task_id:t.id,title:t.title,person:t.person,starts_at:t.remind_at,all_day:false,reminder_minutes:0})));
     }catch{report.failed++}
-    const connection=await calendar(householdId);let events:ReminderEvent[];
+    const source=await admin.rpc('calendar_copy_service',{action:'status',payload:{householdId}});if(source.error)throw Error('Calendar source unavailable');
+    const connection=source.data?.nativeReady===false?await calendar(householdId):null;let events:ReminderEvent[];
     if(connection){
      if(!connection.migrationComplete)return report;
      const owner=await admin.from('households').select('owner_id').eq('id',householdId).single();if(owner.error||owner.data.owner_id!==connection.userId)return report;
