@@ -30,7 +30,7 @@ for(const endpoint of['http://fcm.googleapis.com/x','https://127.0.0.1/x','https
 const transitionModule=await import('data:text/javascript;base64,'+Buffer.from(compile(fs.readFileSync(new URL('../supabase/functions/google-calendar/transition.ts',import.meta.url),'utf8'))).toString('base64'));
 const raw=fs.readFileSync(new URL('../supabase/functions/event-reminders/index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 const hid='11111111-1111-4111-8111-111111111111';
-function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only',exhaustWork=false,nativeReady=!connected,transition=false,transitionFailure=false}={}){
+function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,connected=false,removed=false,stale=false,cancelled=false,expired=false,task=false,completedTask=false,futureTask=false,googleFailure=false,cronSecret='scheduler-only',exhaustWork=false,nativeReady=!connected,transition=false,transitionFailure=false,cutoverPaused=false}={}){
  let handler,pushes=0,claimed=false,retired=false;const calls=[];
  const now=Date.now();const dueEvent={...event,reminder_30_enabled:reminder30,starts_at:new Date(now+minutesBefore*60000).toISOString()};
  const device={id:'device',household_id:hid,user_id:'zeth',subscription};
@@ -39,6 +39,7 @@ function fixture({reminder30=true,minutesBefore=14,member=true,validToken=true,c
  const admin={auth:{getUser:async()=>({data:{user:validToken?{id:'zeth'}:null},error:!validToken})},from:query,rpc:async(name,{action,payload})=>{
   if(name==='calendar_reminder_claim')action='claim';
   calls.push(action);
+  if(name==='household_transition_state_service')return {data:{writePaused:cutoverPaused},error:null};
   if(name==='household_transition_service')return {data:transition?{householdId:hid,peerHouseholdId:'22222222-2222-4222-8222-222222222222',peerProject:'ybizqfghnplcxlmlhvyn',token:'c'.repeat(64),personMap:{zeth:'zeth'}}:null,error:null};
   if(name==='calendar_copy_service')return {data:{nativeReady},error:null};
   if(name==='calendar_service')return {data:connected?{migrationComplete:true,calendarId:'family',userId:'zeth',refreshToken:'never-to-client'}:null};
@@ -126,3 +127,5 @@ console.log('Native-authority reminder regression passed: a broken Google copy d
 for(const task of [false,true]){f=fixture({transition:true,task});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(r.data.sent,1);assert.ok(f.calls.includes('transition:transition_items'));assert.ok(f.calls.includes('transition:events'));assert.ok(!f.calls.includes('connection_get'))}
 f=fixture({transition:true,transitionFailure:true});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(r.data.sent,0);assert.ok(r.data.failed>0);assert.ok(!f.calls.includes('connection_get'));
 console.log('Transition reminder checks passed: shared event/task records, private forwarding, original calendar credential stays at source, and no native fallback on failure.');
+
+f=fixture({cutoverPaused:true});r=await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(r.status,200);assert.equal(r.data.paused,true);assert.equal(f.pushes,0);console.log('Cutover pause prevents HH reminder sends until the native import is verified.');

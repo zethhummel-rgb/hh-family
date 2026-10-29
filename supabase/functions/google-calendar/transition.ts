@@ -1,3 +1,8 @@
+export async function transitionState(admin:any,hid:string){
+ const r=await admin.rpc('household_transition_state_service',{hid});
+ if(r.error)throw Error('Household transfer status is unavailable');return r.data||{};
+}
+export function transitionWriteBlocked(state:any){return state?.writePaused||state?.direction==='source'&&state?.completed}
 // Shared transition protocol; only the explicitly configured household is accessible.
 export async function transitionConfig(admin:any,householdId:string){
  const r=await admin.rpc('household_transition_service',{action:'config',payload:{householdId}});
