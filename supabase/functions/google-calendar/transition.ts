@@ -1,7 +1,12 @@
 // Shared transition protocol; only the explicitly configured household is accessible.
 export async function transitionConfig(admin:any,householdId:string){
  const r=await admin.rpc('household_transition_service',{action:'config',payload:{householdId}});
- if(r.error)throw Error('The household transition is unavailable. Your original home is preserved.');return r.data;
+ if(r.error)throw Error('The household transition is unavailable. Your original home is preserved.');
+ if(!r.data)return null;
+ const profiles=await admin.from('household_people').select('id,linked_user_id').eq('household_id',householdId);
+ if(profiles.error)throw Error('The transition person links could not be checked.');
+ const personMap={...r.data.personMap};for(const [source,id] of Object.entries(personMap)){const person=(profiles.data||[]).find((p:any)=>p.id===id);if(person?.linked_user_id)personMap[source]=person.linked_user_id}
+ return {...r.data,personMap};
 }
 export function transitionPeople(ids:unknown,map:Record<string,string>,reverse=false){
  if(ids===undefined||ids===null)return ids;if(!Array.isArray(ids)||ids.length>20)throw Error('Check the people tagged on this event');
