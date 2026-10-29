@@ -1,3 +1,4 @@
+import {transitionConfig,transitionRequest} from '../google-calendar/transition.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
 import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,calendarReminders,recurrenceWorkBudget,type ReminderEvent} from './logic.ts';
@@ -52,13 +53,14 @@ async function dispatch(keys:any,householdId:string){
      }
     }
     }
-    const now=Date.now();
+    const now=Date.now(),transition=await transitionConfig(admin,householdId);
     // Household reminders stay independent of the Google connection.
     try{
-     const tasks=await admin.from('household_items').select('id,title,person,remind_at').eq('household_id',householdId).eq('kind','task').eq('done',false).gte('remind_at',new Date(now-5*60000).toISOString()).lte('remind_at',new Date(now).toISOString()).limit(2001);
+     const tasks=transition?{data:(await transitionRequest(transition,'transition_items')).items.filter((t:any)=>t.kind==='task'&&!t.done&&t.remind_at&&Date.parse(t.remind_at)>=now-5*60000&&Date.parse(t.remind_at)<=now),error:null}:await admin.from('household_items').select('id,title,person,remind_at').eq('household_id',householdId).eq('kind','task').eq('done',false).gte('remind_at',new Date(now-5*60000).toISOString()).lte('remind_at',new Date(now).toISOString()).limit(2001);
      if(tasks.error||tasks.data.length>2000)throw Error('Reminder read failed');
      await deliver(tasks.data.map((t:any)=>({id:'task:'+t.id,task_id:t.id,title:t.title,person:t.person,starts_at:t.remind_at,all_day:false,reminder_minutes:0})));
     }catch{report.failed++}
+    if(transition){const result=await transitionRequest(transition,'events',{from:new Date(now-86400000).toISOString(),to:new Date(now+8*86400000).toISOString()});await deliver(calendarReminders(result.events));report.households++;return report}
     const source=await admin.rpc('calendar_copy_service',{action:'status',payload:{householdId}});if(source.error)throw Error('Calendar source unavailable');
     const connection=source.data?.nativeReady===false?await calendar(householdId):null;let events:ReminderEvent[];
     if(connection){

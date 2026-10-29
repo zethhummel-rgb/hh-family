@@ -4,8 +4,9 @@ import {expandNativeEvents,type NativeEvent} from '../supabase/functions/google-
 import {validateRecurrence} from '../supabase/functions/google-calendar/recurrence';
 export type FamilyEvent=NativeEvent & {source:'home'|'google';etag?:string};
 export type EventDraft=Omit<FamilyEvent,'id'|'source'|'version'|'etag'|'recurring'|'series_id'|'original_date'|'exceptions'>;
-export type CalendarConnection={configured:boolean;connected:boolean;googleConnected?:boolean;nativeReady?:boolean;copyStatus?:'off'|'up_to_date'|'pending'|'reconnect'|'retry'|'importing'|'needs_attention'|'unavailable';pending?:number;lastSyncedAt?:string|null;calendarName?:string;setupRequired?:boolean;importIncomplete?:boolean};
+export type CalendarConnection={configured:boolean;connected:boolean;googleConnected?:boolean;nativeReady?:boolean;copyStatus?:'off'|'up_to_date'|'pending'|'reconnect'|'retry'|'importing'|'needs_attention'|'unavailable'|'transition';pending?:number;lastSyncedAt?:string|null;calendarName?:string;setupRequired?:boolean;importIncomplete?:boolean};
 export function calendarCopyNotice(connection:CalendarConnection,owner:boolean){
+ if(connection.copyStatus==='transition')return 'Your family is moving from Hummel Home. Both apps share your existing calendar and lists until everyone has moved. Changes made in either app appear in both.';
  if(connection.nativeReady===false){
   if(connection.copyStatus==='reconnect')return 'Your existing Google calendar is still active. '+(owner?'Reconnect Google':'Ask your household owner to reconnect Google')+' so its plans can be safely transferred into HH. The switch has not been made.';
   if(connection.copyStatus==='needs_attention')return 'Your existing Google calendar stays active while its transfer needs attention. Your Google plans have not been removed.';
