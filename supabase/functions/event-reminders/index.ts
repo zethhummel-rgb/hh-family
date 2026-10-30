@@ -1,4 +1,4 @@
-import {transitionConfig,transitionRequest} from '../google-calendar/transition.ts';
+import {transitionConfig,transitionRequest,transitionState,transitionWriteBlocked} from '../google-calendar/transition.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import webpush from 'npm:web-push@3.6.7';
 import {validSubscription,isDue,recipients,deliveryKey,notificationPayload,calendarReminders,recurrenceWorkBudget,type ReminderEvent} from './logic.ts';
@@ -39,6 +39,7 @@ async function dispatch(keys:any,householdId:string){
  const report={households:0,sent:0,failed:0,limited:false},deadline=Date.now()+20000;
  try{
    try{
+    if(transitionWriteBlocked(await transitionState(admin,householdId)))return {paused:true};
     const devices=await service('devices',{householdId});
     const membership=await admin.from('household_members').select('user_id,display_name').eq('household_id',householdId);if(membership.error)throw Error('Membership unavailable');
     const profiles=await admin.from('household_people').select('id,display_name,linked_user_id').eq('household_id',householdId);if(profiles.error)throw Error('Family profiles unavailable');

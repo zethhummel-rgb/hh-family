@@ -1,4 +1,4 @@
-import {transitionConfig,transitionRequest} from './transition.ts';
+import {transitionConfig,transitionRequest,transitionState,transitionWriteBlocked} from './transition.ts';
 import {runCalendarCopy} from './copy.ts';
 import {reminderMinutes,readReminder} from './reminders.ts';
 import {encodePersonIds,decodePersonIds} from './tags.ts';
@@ -81,6 +81,8 @@ Deno.serve(async(req:Request)=>{
   const auth=await admin.auth.getUser(bearer);if(auth.error||!auth.data.user)return json({error:'Sign in again to open the calendar'},401);
   const raw=await req.text();if(raw.length>16384)return json({error:'Request too large'},400);const b=JSON.parse(raw);if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
   const membership=await admin.from('household_members').select('role').eq('household_id',b.householdId).eq('user_id',auth.data.user.id).maybeSingle();if(membership.error||!membership.data)return json({error:'This household is not available to your account'},403);
+  const cutover=await transitionState(admin,b.householdId);
+  if(transitionWriteBlocked(cutover)&&['start','sync','create','update','delete','transition_change'].includes(b.action))return json({error:'Your household transfer is in progress. Please wait a moment and refresh HH.'},409);
   const transition=await transitionConfig(admin,b.householdId);
   if(transition){
    if(b.action==='transition_snapshot')return json({error:'Preservation snapshots are server-only'},403);
