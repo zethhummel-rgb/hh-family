@@ -1,3 +1,4 @@
+import './googleImportReturn';
 import PublicLinks from './PublicLinks';
 import SignupConfirmation from './SignupConfirmation';
 import PasswordReset from './PasswordReset';

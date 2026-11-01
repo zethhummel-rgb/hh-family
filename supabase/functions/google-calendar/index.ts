@@ -1,3 +1,4 @@
+import {handleImportAction,handleImportCallback} from './import.ts';
 import {transitionConfig,transitionRequest,transitionState,transitionWriteBlocked} from './transition.ts';
 import {runCalendarCopy} from './copy.ts';
 import {reminderMinutes,readReminder} from './reminders.ts';
@@ -56,6 +57,7 @@ Deno.serve(async(req:Request)=>{
   }catch{return json({error:'The Google copy could not finish. HH plans are preserved.'},400)}
  }
  if(req.method==='GET'&&url.pathname.endsWith('/callback')){
+  if(url.searchParams.get('state')?.startsWith('hhi_'))return handleImportCallback(admin,url,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app:APP});
   try{
    const state=url.searchParams.get('state');if(!state||state.length>200)return redirect(false,'Google connection expired. Please try connecting again.');
    const record=await service('state_take',{hash:await hash(state)});if(!record)return redirect(false,'Google connection expired. Please try connecting again.');
@@ -79,8 +81,9 @@ Deno.serve(async(req:Request)=>{
  try{
   const bearer=req.headers.get('authorization')?.replace(/^Bearer /i,'');if(!bearer)return json({error:'Sign in first'},401);
   const auth=await admin.auth.getUser(bearer);if(auth.error||!auth.data.user)return json({error:'Sign in again to open the calendar'},401);
-  const raw=await req.text();if(raw.length>16384)return json({error:'Request too large'},400);const b=JSON.parse(raw);if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
+  const raw=await req.text();if(raw.length>160000)return json({error:'Request too large'},400);const b=JSON.parse(raw);if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
   const membership=await admin.from('household_members').select('role').eq('household_id',b.householdId).eq('user_id',auth.data.user.id).maybeSingle();if(membership.error||!membership.data)return json({error:'This household is not available to your account'},403);
+  if(typeof b.action==='string'&&b.action.startsWith('import_'))return json(await handleImportAction(admin,b,auth.data.user.id,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app:APP}));
   const cutover=await transitionState(admin,b.householdId);
   if(transitionWriteBlocked(cutover)&&['start','sync','create','update','delete','transition_change'].includes(b.action))return json({error:'Your household transfer is in progress. Please wait a moment and refresh HH.'},409);
   const transition=await transitionConfig(admin,b.householdId);
