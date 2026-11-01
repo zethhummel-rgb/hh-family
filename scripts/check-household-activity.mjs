@@ -20,7 +20,7 @@ create function private.household_transition_active(hid uuid) returns boolean la
 create function private.household_transition_write_open(hid uuid) returns boolean language sql as $$select true$$;`);
 for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql'])await db.exec(read(file));
 const sql=read('household-activity.sql');await db.exec(sql);
-assert.equal(sql,fs.readFileSync(new URL('../supabase/migrations/20261101220928_household_activity.sql',import.meta.url),'utf8'));
+assert.equal(sql,fs.readFileSync(new URL('../supabase/migrations/20261101224407_household_activity.sql',import.meta.url),'utf8'));
 const scalar=async(query,args=[])=>Object.values((await db.query(query,args)).rows[0])[0];
 const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
 const users={owner:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',member:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',sibling:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',outsider:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'};
