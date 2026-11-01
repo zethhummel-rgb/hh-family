@@ -10,8 +10,10 @@ export function familyProfiles(members:Member[],people:HouseholdPerson[]=[]):Per
  for(const p of people)if(!p.linked_user_id||!profiles.some(m=>m.id===p.linked_user_id))profiles.push({id:p.id,name:p.display_name,color:safeColor(p.calendar_color)||defaultColor(p.display_name,p.id)});
  return profiles;
 }
-export function isEveryone(event:Pick<FamilyEvent,'person'|'person_ids'>){return Array.isArray(event.person_ids)?event.person_ids.length===0:normalized(event.person)==='everyone'}
+export function isUnassigned(event:Pick<FamilyEvent,'person'|'person_ids'>){return event.person==='Unassigned'&&Array.isArray(event.person_ids)&&event.person_ids.length===0}
+export function isEveryone(event:Pick<FamilyEvent,'person'|'person_ids'>){return !isUnassigned(event)&&(Array.isArray(event.person_ids)?event.person_ids.length===0:normalized(event.person)==='everyone')}
 export function eventPeople(event:Pick<FamilyEvent,'person'|'person_ids'>,profiles:PersonProfile[]):PersonProfile[]{
+ if(isUnassigned(event))return [];
  if(isEveryone(event))return profiles;
  if(Array.isArray(event.person_ids))return Array.from(new Map(event.person_ids.map(id=>{const p=profiles.find(p=>p.id===id||p.aliases?.includes(id));return[p?.id||id,p||{id,name:'Family member',color:'#8B7881'}] as const})).values());
  const label=normalized(event.person);const exact=profiles.filter(p=>normalized(p.name)===label);const first=profiles.filter(p=>normalized(p.name).split(/\s+/)[0]===label);

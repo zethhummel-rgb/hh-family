@@ -39,6 +39,8 @@ export function isDue(e:ReminderEvent,now:number){const due=reminderDue(e);retur
 export type ReminderPerson={id:string;display_name:string;linked_user_id:string|null};
 export function recipients(e:ReminderEvent,members:ReminderMember[],people:ReminderPerson[]=[]){
  const ids=e.person_ids;
+ // Empty tags are Everyone unless explicitly marked as a calendar-only plan.
+ if(Array.isArray(ids)&&ids.length===0&&e.person==='Unassigned')return [];
  if(Array.isArray(ids)){
   if(ids.length===0)return members.map(m=>m.user_id);
   // A child/profile without a login notifies the household's opted-in accounts.
