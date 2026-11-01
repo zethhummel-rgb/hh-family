@@ -9,14 +9,16 @@ import AdminHouseholds from './AdminHouseholds';
 import DeletionSettings from './DeletionSettings';
 import Tutorials from './Tutorials';
 import {PALETTES} from './palettes';
-import {supabase} from './supabase';
+import {supabase,staySignedIn} from './supabase';
+import AccountSwitcher from './AccountSwitcher';
+import {accountSwitchEligible,hasSavedSwitchAccount} from './accountSwitch';
 import {stopDevicePush} from './push';
 import GoogleCalendarImport from './GoogleCalendarImport';
 import {familyProfiles} from './people';
 import './settings.css';
 
-type Page='main'|'profile'|'appearance'|'notifications'|'household'|'calendar'|'help'|'pilot'|'admin'|'googleImport';
-const titles:Record<Page,string>={main:'Settings',profile:'Your profile',appearance:'Appearance',notifications:'Notifications',household:'Your household',calendar:'Calendar',help:'Help & tutorials',pilot:'Pilot invitations',admin:'Manage households',googleImport:'Import Google calendar'};
+type Page='main'|'profile'|'appearance'|'notifications'|'household'|'calendar'|'help'|'pilot'|'admin'|'googleImport'|'accounts';
+const titles:Record<Page,string>={main:'Settings',profile:'Your profile',appearance:'Appearance',notifications:'Notifications',household:'Your household',calendar:'Calendar',help:'Help & tutorials',pilot:'Pilot invitations',admin:'Manage households',googleImport:'Import Google calendar',accounts:'Switch account'};
 type Props={
  initialPage?:'main'|'help'|'notifications'|'googleImport';importError?:string;onCalendarImported:()=>unknown;initialGuide?:'install';onGettingStarted:()=>void;
  name:string;email:string;userId:string;householdId:string;householdName:string;owner:boolean;members:Member[];people:HouseholdPerson[];
@@ -34,6 +36,8 @@ export default function SettingsDialog(props:Props){
  const initials=name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join('').toUpperCase();
  const member=members.find(m=>m.user_id===userId),palette=PALETTES.find(p=>p.id===paletteId)||PALETTES[0];
  const peopleCount=members.length+people.filter(p=>!p.linked_user_id).length;
+ const canSwitchAccounts=accountSwitchEligible(email);
+ const [pairedAccount,setPairedAccount]=useState(()=>canSwitchAccounts&&hasSavedSwitchAccount(userId,email));
  function open(next:Page){if(leaving)return;setVisited(old=>old.includes(next)?old:[...old,next]);setHistory(old=>old.at(-1)===next?old:[...old,next])}
  function back(){if(!leaving)setHistory(old=>old.length>1?old.slice(0,-1):old)}
  useEffect(()=>{let active=true;supabase.rpc('pilot_status').then(({data})=>{if(active)setHost(!!data?.is_host)});return()=>{active=false}},[]);
@@ -58,14 +62,15 @@ export default function SettingsDialog(props:Props){
   <div className="settings-content" ref={content}>
    {screen('main',<>
     <p className="settings-intro">A little more at home.</p>
-    <button type="button" className="settings-account-card" onClick={()=>open('profile')}><span className="settings-person-avatar">{initials}</span><span><b>{name}</b><small>{email}</small><em>Your profile &amp; calendar colour</em></span><ChevronRight size={18}/></button>
-    <section className="settings-group" aria-labelledby="settings-personal"><h3 id="settings-personal">Personal</h3><div className="settings-group-rows"><Row icon={<Palette size={19}/>} title="Appearance" detail={palette.name} onClick={()=>open('appearance')}/><Row icon={<Bell size={19}/>} title="Notifications" detail="Reminders on this device" onClick={()=>open('notifications')}/></div></section>
+    <button type="button" className="settings-account-card" onClick={()=>open(canSwitchAccounts?'accounts':'profile')}><span className="settings-person-avatar">{initials}</span><span><b>{name}</b><small>{email}</small><em>{canSwitchAccounts?'Switch account · Your profile':'Your profile & calendar colour'}</em></span><ChevronRight size={18}/></button>
+    <section className="settings-group" aria-labelledby="settings-personal"><h3 id="settings-personal">Personal</h3><div className="settings-group-rows">{canSwitchAccounts&&<Row icon={<UserRound size={19}/>} title="Your profile" detail="Your calendar colour" onClick={()=>open('profile')}/>}<Row icon={<Palette size={19}/>} title="Appearance" detail={palette.name} onClick={()=>open('appearance')}/><Row icon={<Bell size={19}/>} title="Notifications" detail="Reminders on this device" onClick={()=>open('notifications')}/></div></section>
     <section className="settings-group" aria-labelledby="settings-home"><h3 id="settings-home">Your home</h3><div className="settings-group-rows"><Row icon={<Users size={19}/>} title="Your household" detail={`${householdName} · ${peopleCount} ${peopleCount===1?'person':'people'}`} onClick={()=>open('household')}/><Row icon={<CalendarDays size={19}/>} title="Calendar" detail={calendarTransition?'Moving from Hummel Home':calendarLegacy?'Google transfer pending':calendarConnected?'HH calendar · Google copy':'Your shared family calendar'} onClick={()=>open('calendar')}/>{host&&<Row icon={<MailPlus size={19}/>} title="Pilot invitations" detail="Invite a separate household" onClick={()=>open('pilot')}/>}</div></section>
     {host&&email.toLowerCase()==='hummelhomeapp@gmail.com'&&<section className="settings-group"><h3>Admin</h3><div className="settings-group-rows"><Row icon={<Users size={19}/>} title="Manage households" detail="Review and delete pilot households" onClick={()=>open('admin')}/></div></section>}<section className="settings-group" aria-labelledby="settings-help"><h3 id="settings-help">A helping hand</h3><div className="settings-group-rows"><Row icon={<BookOpen size={19}/>} title="Help & tutorials" detail="Phone guides & the quick tour" onClick={()=>open('help')}/></div></section>
-    <div className="settings-account-footer"><small>Signed in as {email}</small><button type="button" disabled={leaving} onClick={async()=>{if(leavingRef.current)return;leavingRef.current=true;setLeaving(true);setError('');try{try{await stopDevicePush(householdId)}catch{}const result=await onSignOut();if(result&&typeof result==='object'&&'error' in result&&result.error)throw result.error}catch(e){setError((e as {message?:string}).message||'Could not sign out. Please try again.');leavingRef.current=false;setLeaving(false)}}}><LogOut size={15}/>{leaving?'Signing out…':'Sign out'}</button></div>
+    <div className="settings-account-footer"><small>Signed in as {email}</small><button type="button" disabled={leaving} onClick={async()=>{if(leavingRef.current)return;leavingRef.current=true;setLeaving(true);setError('');try{try{await stopDevicePush(householdId)}catch{}const result=await onSignOut();if(result&&typeof result==='object'&&'error' in result&&result.error)throw result.error}catch(e){setError((e as {message?:string}).message||'Could not sign out. Please try again.');leavingRef.current=false;setLeaving(false)}}}><LogOut size={15}/>{leaving?'Signing out…':pairedAccount?'Sign out of both accounts':'Sign out'}</button>{pairedAccount&&<small>{staySignedIn()?'Removes both saved sign-ins from this device.':'Removes both sign-ins from this tab.'}</small>}</div>
     {error&&<p className="error" role="alert">{error}</p>}
     <button type="button" className="button primary wide settings-finish" disabled={leaving} onClick={onClose}>Done<Check size={17}/></button>
    </>)}
+   {canSwitchAccounts&&page==='accounts'&&<AccountSwitcher key={userId} userId={userId} email={email} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}} onProfile={()=>open('profile')} onSavedState={setPairedAccount}/>}
    {screen('profile',<><div className="settings-page-intro"><UserRound size={25}/><p>Your own account, with one shared home.</p></div><dl className="settings-profile-details"><div><dt>Name</dt><dd>{name}</dd></div><div><dt>Email</dt><dd>{email}</dd></div><div><dt>Role</dt><dd>{owner?'Household owner':'Family member'}</dd></div></dl><div className="settings-detail-card"><MyCalendarColor member={member} householdId={householdId} userId={userId} onSaved={onColorSaved}/></div>{owner?<p className="settings-caption">To delete your account and entire home, open <button type="button" className="text-button" onClick={()=>open('household')}>Your household</button>.</p>:<DeletionSettings owner={false} email={email} householdId={householdId} householdName={householdName} protectedAccount={host} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}}/>}</>)}
    {screen('appearance',<><p className="settings-page-description">Choose a look for HH. Your selection saves automatically on this device.</p><div className="settings-detail-card"><PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage}/></div></>)}
    {screen('notifications',<div className="settings-detail-card"><NotificationSettings householdId={householdId} userId={userId}/></div>)}

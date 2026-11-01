@@ -1,5 +1,6 @@
 import {useRef,useState} from 'react';
 import {supabase} from './supabase';
+import {signOutAccounts} from './accountSwitch';
 type Props={owner:boolean;email:string;householdId:string;householdName:string;protectedAccount:boolean;onBusy:(busy:boolean)=>void};
 export default function DeletionSettings({owner,email,householdId,householdName,protectedAccount,onBusy}:Props){
  const [open,setOpen]=useState(false),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -14,8 +15,7 @@ export default function DeletionSettings({owner,email,householdId,householdName,
      const {data,error:invokeError}=await supabase.functions.invoke('self-service-deletion',{body:{action:owner?'household':'account',householdId,confirmation}});
      if(invokeError){let message='Could not complete deletion. Sign in again to check before retrying.';try{const result=await invokeError.context?.json();if(result?.error)message=result.error}catch{}throw Error(message)}
      if(!data?.deleted)throw Error(data?.error||'Deletion could not be confirmed.');
-     await supabase.auth.signOut({scope:'local'});
-     location.replace(location.pathname);
+     await signOutAccounts();
     }catch(e){setError((e as Error).message);inFlight.current=false;setBusy(false);onBusy(false)}
    }}><p className="deletion-warning">{owner?'This deletes every member’s account and the household’s calendar records, groceries, to-dos, reminders and profiles. Everyone will lose access.':'You will lose access to this household and will need a new account and invitation to return.'} This cannot be undone through HH. No deletion email will be sent.</p>
     {owner&&<p>Any calendar or events already stored in Google remain there. HH removes its stored connection. Provider logs and backup copies follow their retention processes.</p>}

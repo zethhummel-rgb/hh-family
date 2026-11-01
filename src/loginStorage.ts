@@ -29,8 +29,8 @@ export function createLoginStorage(local:()=>Store,tab:()=>Store,newId:()=>strin
  const tabChoice=visit.getItem(tabPreferenceKey);
  let remember=tabChoice?tabChoice==='keep':saved.getItem(preferenceKey)!=='no';
  let visitId=visit.getItem(visitIdKey);
- function options(){
-  if(remember)return {storage:saved,storageKey:rememberedAuthKey};
+ function optionsFor(value:boolean){
+  if(value)return {storage:saved,storageKey:rememberedAuthKey};
   if(!visitId){visitId=newId();visit.setItem(visitIdKey,visitId)}
   // A separate channel/key keeps a shared-device login out of other tabs.
   return {storage:visit,storageKey:'hh:visit-auth:v1:'+visitId};
@@ -38,7 +38,9 @@ export function createLoginStorage(local:()=>Store,tab:()=>Store,newId:()=>strin
  return {
   visit,
   get remember(){return remember},
-  options,
+  options:()=>optionsFor(remember),
+  optionsFor,
+  storageFor:(value:boolean)=>value?saved:visit,
   select(value:boolean){
    remember=value;visit.setItem(tabPreferenceKey,value?'keep':'visit');saved.setItem(preferenceKey,value?'yes':'no');
   },
