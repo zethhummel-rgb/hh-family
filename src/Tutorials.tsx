@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy,Palette,ShoppingCart} from 'lucide-react';
+import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy,Palette,ShoppingCart,NotebookPen} from 'lucide-react';
 import './tutorials.css';
 import HomeScreenPictures from './HomeScreenPictures';
 
@@ -18,6 +18,10 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome,onGetti
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><ShoppingCart size={22}/></span><span><small>GROCERIES</small><h2>Keep your usual groceries handy</h2><p>Save household staples and add what you need.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><Steps><li><h3>Open Our staples</h3><p>Tap <strong>Groceries</strong>, then <strong>Our staples</strong>. Everyone in your household shares the same saved staples.</p></li><li><h3>Save the things you buy often</h3><p>Add an item name and category, or save an item from your existing shopping list. Saving a staple keeps it handy for later.</p></li><li><h3>Choose what you need this time</h3><p>Select staples and tap the <strong>Add to list</strong> button, which shows how many you chose. Items already on the shopping list are marked <strong>On list</strong>. Tick groceries off as you shop; the saved staples stay ready for next time.</p></li></Steps><p>You can edit or remove a saved staple anytime. This changes the saved staple, not an item already on your shopping list. Groceries are added only when you choose them.</p></div>
+  </details>
+  <details className="tutorial-guide">
+   <summary><span className="tutorial-icon"><NotebookPen size={22}/></span><span><small>FAMILY NOTES</small><h2>Keep useful information together</h2><p>Shared notes your household can find again.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
+   <div className="tutorial-body"><Steps><li><h3>Find Family notes on Home</h3><p>Open <strong>Home</strong> and find the <strong>Family notes</strong> card. Open the notes list or add a note with a title and the information you want to share.</p></li><li><h3>Keep important notes handy</h3><p>Pin a note to keep it at the top. Search looks through note titles and text, so you can find what you need later.</p></li><li><h3>Read, then edit</h3><p>Tap a note to read it. Choose <strong>Edit</strong> to change it, or confirm deletion to remove it from the shared notes. Everyone in your household can read, edit, pin and delete these notes.</p></li></Steps><p>If someone else changes a note while you are editing, HH keeps your draft and asks you to review the latest version before saving again. Notes stay with the household when one member leaves, and are removed when the household is deleted.</p></div>
   </details>
   <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
