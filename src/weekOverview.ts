@@ -3,6 +3,7 @@ import type {ReminderItem} from './taskReminders';
 
 export type WeekDay={date:string;events:FamilyEvent[];tasks:ReminderItem[]};
 export type WeekOverview={start:string;end:string;days:WeekDay[];overdue:ReminderItem[];eventCount:number;taskCount:number};
+export type OverviewMode='upcoming'|'week';
 const easternDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'});
 function validDate(value:string){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
@@ -16,8 +17,17 @@ function shift(date:string,days:number){const value=new Date(date+'T12:00:00Z');
 export function weekRange(anchor:string){
  if(!validDate(anchor))throw Error('Choose a valid date for the week.');
  const weekday=new Date(anchor+'T12:00:00Z').getUTCDay();
- const start=shift(anchor,-((weekday+6)%7));
+ const start=shift(anchor,-weekday);
  return {start,end:shift(start,7),days:Array.from({length:7},(_,i)=>shift(start,i))};
+}
+export function upcomingRange(today:string){
+ if(!validDate(today))throw Error('Choose a valid current date.');
+ return {start:today,end:shift(today,7),days:Array.from({length:7},(_,i)=>shift(today,i))};
+}
+export function overviewRange(anchor:string,today:string,mode:OverviewMode){return mode==='upcoming'?upcomingRange(today):weekRange(anchor)}
+export function adjacentWeek(anchor:string,today:string,mode:OverviewMode,direction:-1|1){
+ const start=weekRange(mode==='upcoming'?today:anchor).start;
+ return shift(start,direction*7);
 }
 function spansDay(event:FamilyEvent,date:string){
  if(event.all_day)return !!event.start_date&&!!event.end_date&&validDate(event.start_date)&&validDate(event.end_date)&&event.start_date<=date&&event.end_date>date;
@@ -30,8 +40,8 @@ function spansDay(event:FamilyEvent,date:string){
 const compareEvents=(a:FamilyEvent,b:FamilyEvent)=>Number(b.all_day)-Number(a.all_day)||(Date.parse(a.starts_at)-Date.parse(b.starts_at)||0)||a.title.localeCompare(b.title,'en')||a.id.localeCompare(b.id,'en');
 const compareTasks=(a:ReminderItem,b:ReminderItem)=>a.due.localeCompare(b.due)||((a.reminder_time||'99:99').localeCompare(b.reminder_time||'99:99'))||a.title.localeCompare(b.title,'en')||a.id.localeCompare(b.id,'en');
 
-export function buildWeekOverview(events:FamilyEvent[],items:ReminderItem[],anchor:string,today:string):WeekOverview{
- const range=weekRange(anchor);
+export function buildWeekOverview(events:FamilyEvent[],items:ReminderItem[],anchor:string,today:string,mode:OverviewMode='week'):WeekOverview{
+ const range=overviewRange(anchor,today,mode);
  if(!validDate(today))throw Error('Choose a valid current date.');
  const uniqueEvents=[...new Map(events.map(event=>[event.id,event])).values()];
  const pendingTasks=[...new Map(items.map(item=>[item.id,item])).values()].filter(item=>item.kind==='task'&&!item.done&&validDate(item.due));
