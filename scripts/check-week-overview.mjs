@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 const source=fs.readFileSync(new URL('../src/weekOverview.ts',import.meta.url),'utf8');
 const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
 const url='data:text/javascript;base64,'+Buffer.from(js).toString('base64');
@@ -88,4 +93,39 @@ try{
   assert.deepEqual(inZone(events,items,'2026-10-27','2026-10-27','upcoming'),expected,'Host time zone must not change the HH week: '+zone);
  }
 }finally{if(previousZone===undefined)delete process.env.TZ;else process.env.TZ=previousZone}
-console.log('Week overview checks passed: Sunday–Saturday calendar weeks, today-first rolling seven days, midnight advance, week navigation/reset, Eastern dates independent of host timezone, year/leap boundaries, exclusive multi-day ends, 23/25-hour DST dates, distinct recurring occurrences, next-due repeat tasks, overdue/done/undated/grocery handling and stable sorting.');
+// Render the real overview components with synthetic data. Supabase and its
+// calendar request adapter are blocked, so these view checks cannot reach live
+// household APIs. The actual date helpers and JSX remain in use.
+const require=createRequire(import.meta.url),moduleCache=new Map();
+function loadView(file){
+ if(moduleCache.has(file))return moduleCache.get(file).exports;
+ const module={exports:{}};moduleCache.set(file,module);
+ const source=fs.readFileSync(file,'utf8');
+ const code=ts.transpileModule(source,{fileName:file,compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+ const localRequire=name=>{
+  if(name.endsWith('.css'))return {};
+  if(name==='./supabase'||name==='./calendarAuth')return new Proxy({},{get(){throw Error('Overview views must not access a backend')}});
+  if(!name.startsWith('.'))return require(name);
+  let next=path.resolve(path.dirname(file),name);if(!fs.existsSync(next))next=['.ts','.tsx'].map(ext=>next+ext).find(candidate=>fs.existsSync(candidate));
+  assert.ok(next,'Resolve view dependency '+name);return loadView(next);
+ };
+ new Function('require','module','exports',code)(localRequire,module,module.exports);return module.exports;
+}
+const {default:WeekView,WeekPreview}=loadView(fileURLToPath(new URL('../src/WeekOverview.tsx',import.meta.url)));
+const noop=()=>{},meal=(date,title)=>({id:date,household_id:'home-a',meal_date:date,title,ingredients:[],instructions:'',source_url:'',version:1,created_at:'2026-11-01T00:00:00Z',updated_at:'2026-11-01T00:00:00Z'});
+const viewProps={events:[],items:[],today:'2026-11-04',calendarLoading:false,calendarError:'',itemsLoading:false,itemsError:'',loadedRange:{from:'2026-11-04T05:00:00Z',to:'2026-11-11T05:00:00Z'},meals:[meal('2026-11-03','Past dinner'),meal('2026-11-04','Soup tonight'),meal('2026-11-10','Tacos next Tuesday'),meal('2026-11-11','Outside range')],mealsError:'',mealsLoadedRange:{from:'2026-11-04',to:'2026-11-11'},anchor:'2026-11-04',onAnchor:noop,onRange:noop,onMealRange:noop,onBack:noop,onRefresh:noop,onEvent:noop,onTask:noop,onMeal:noop,onAddEvent:noop,onAllTasks:noop,onMealPlanner:noop,profiles:[]};
+const render=(overrides={})=>renderToStaticMarkup(createElement(WeekView,{...viewProps,...overrides}));
+const mealView=render();
+assert.match(mealView,/Soup tonight/);assert.match(mealView,/Tacos next Tuesday/);assert.doesNotMatch(mealView,/Past dinner|Outside range/,'Meal rows respect the rolling seven displayed dates');
+assert.match(mealView,/Dinner · Whole household/,'Dinners are distinct household plans without person filters');
+assert.match(mealView,/Open meal planner/,'The overview offers a route to planning even on an empty week');
+assert.match(render({calendarError:'Calendar unavailable',loadedRange:null}),/Soup tonight/,'Calendar failures do not hide ready dinner plans');
+const staleMealRange=render({mealsLoadedRange:{from:'2026-10-25',to:'2026-11-01'}});
+assert.doesNotMatch(staleMealRange,/Soup tonight|Tacos next Tuesday/,'An old meal range cannot populate the current overview');
+assert.match(staleMealRange,/Loading dinner plans/);assert.doesNotMatch(staleMealRange,/A little room to breathe/,'Unknown dinner availability is never presented as an empty day');
+assert.doesNotMatch(render({mealsError:'Could not load meals'}),/Soup tonight/);assert.match(render({mealsError:'Could not load meals'}),/Dinner plans could not be loaded/);
+const preview=renderToStaticMarkup(createElement(WeekPreview,{...viewProps,onOpen:noop}));
+assert.match(preview,/2 dinners/,'Home counts only dinner plans in its next-seven-day window');
+assert.match(renderToStaticMarkup(createElement(WeekPreview,{...viewProps,onOpen:noop,mealsLoadedRange:null})),/Loading meals/);
+assert.match(renderToStaticMarkup(createElement(WeekPreview,{...viewProps,onOpen:noop,mealsError:'Unavailable'})),/Meals unavailable/);
+console.log('Week overview checks passed: Sunday–Saturday calendar weeks, today-first rolling seven days, midnight advance, week navigation/reset, Eastern dates independent of host timezone, year/leap boundaries, exclusive multi-day ends, 23/25-hour DST dates, distinct recurring occurrences, next-due repeat tasks, overdue/done/undated/grocery handling, stable sorting, and separately loaded dinner rows/counts without stale or false-empty meal states.');
