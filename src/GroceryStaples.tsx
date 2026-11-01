@@ -4,13 +4,14 @@ import {addGroceryStaples,deleteGroceryStaple,groceryCategories,loadGroceryStapl
 import './grocery-staples.css';
 
 type Grocery={id:string;title:string;category:string;done:number|boolean};
-type Props={householdId:string;groceries:Grocery[];itemsLoading:boolean;itemsError:string;onListChanged:()=>Promise<void>};
+type Props={openItemId?:string;householdId:string;groceries:Grocery[];itemsLoading:boolean;itemsError:string;onListChanged:()=>Promise<void>};
 const errorMessage=(error:unknown)=>error instanceof Error?error.message:(error as {message?:string})?.message||'Please try again.';
 
-export default function GroceryStaples({householdId,groceries,itemsLoading,itemsError,onListChanged}:Props){
+export default function GroceryStaples({openItemId,householdId,groceries,itemsLoading,itemsError,onListChanged}:Props){
  const [open,setOpen]=useState(false),[staples,setStaples]=useState<GroceryStaple[]>([]),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
  const [selected,setSelected]=useState<string[]>([]),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[notice,setNotice]=useState('');
  const [editor,setEditor]=useState<{item:GroceryStaple|null}|null>(null),[title,setTitle]=useState(''),[category,setCategory]=useState('Other'),[removeConfirm,setRemoveConfirm]=useState(false);
+ const revealedItem=useRef<string|undefined>(undefined);
  const pending=useRef(false),mounted=useRef(false),generation=useRef(0),titleInput=useRef<HTMLInputElement>(null),newButton=useRef<HTMLButtonElement>(null),editorTrigger=useRef<HTMLElement|null>(null);
  const load=useCallback(async()=>{
   const request=++generation.current;setLoading(true);
@@ -20,6 +21,8 @@ export default function GroceryStaples({householdId,groceries,itemsLoading,items
  },[householdId]);
  useEffect(()=>{mounted.current=true;void load();const refresh=()=>{if(!document.hidden&&!pending.current)void load()};window.addEventListener('focus',refresh);const timer=setInterval(refresh,30000);return()=>{mounted.current=false;generation.current++;window.removeEventListener('focus',refresh);clearInterval(timer)}},[load]);
  useEffect(()=>{if(editor)titleInput.current?.focus()},[editor]);
+ useEffect(()=>{if(openItemId)setOpen(true)},[openItemId]);
+ useEffect(()=>{if(!openItemId||revealedItem.current===openItemId||!open||loading)return;const frame=requestAnimationFrame(()=>{const node=document.getElementById('staple-'+openItemId);if(node){revealedItem.current=openItemId;node.focus({preventScroll:true});node.scrollIntoView({block:'center',behavior:'smooth'})}});return()=>cancelAnimationFrame(frame)},[openItemId,open,loading]);
  const openNames=useMemo(()=>new Set(groceries.filter(item=>!item.done).map(item=>normalizeGroceryTitle(item.title))),[groceries]);
  useEffect(()=>{setSelected(old=>{const next=old.filter(id=>staples.some(item=>item.id===id&&!openNames.has(normalizeGroceryTitle(item.title))));return next.length===old.length?old:next})},[staples,openNames]);
  const eligible=staples.filter(item=>!openNames.has(normalizeGroceryTitle(item.title)));
@@ -61,7 +64,7 @@ export default function GroceryStaples({householdId,groceries,itemsLoading,items
     {!staples.length&&<div className="staples-empty"><ShoppingBasket size={24}/><p>Milk, bread, coffee… save your first staple and it’ll be ready whenever you need it.</p></div>}
     {!!staples.length&&<>
      {!canUseList&&<p className="staples-list-help" role="status">{itemsError?'Your shopping list could not be refreshed. Try the list’s refresh above before adding staples.':'Checking your shopping list…'}</p>}
-     <div className="staples-rows">{staples.map(item=>{const onList=canUseList&&openNames.has(normalizeGroceryTitle(item.title));return <div className={'staple-row'+(onList?' on-list':'')} key={item.id}><label className="staple-choice"><input type="checkbox" checked={onList||selectedAvailable.includes(item.id)} disabled={busy||onList||!canUseList||(!selectedAvailable.includes(item.id)&&selectedAvailable.length>=100)} onChange={()=>toggle(item.id)} aria-label={item.title+', add to shopping list'}/><span><b>{item.title}</b><small>{item.category}</small></span></label>{onList&&<span className="staple-on-list"><Check size={12}/>On list</span>}<button type="button" className="icon-button staple-edit" disabled={busy} aria-label={'Edit staple '+item.title} onClick={event=>beginEdit(item,event.currentTarget)}><Pencil size={16}/></button></div>})}</div>
+     <div className="staples-rows">{staples.map(item=>{const onList=canUseList&&openNames.has(normalizeGroceryTitle(item.title));return <div id={'staple-'+item.id} tabIndex={-1} className={'staple-row'+(onList?' on-list':'')+(openItemId===item.id?' activity-destination':'')} key={item.id}><label className="staple-choice"><input type="checkbox" checked={onList||selectedAvailable.includes(item.id)} disabled={busy||onList||!canUseList||(!selectedAvailable.includes(item.id)&&selectedAvailable.length>=100)} onChange={()=>toggle(item.id)} aria-label={item.title+', add to shopping list'}/><span><b>{item.title}</b><small>{item.category}</small></span></label>{onList&&<span className="staple-on-list"><Check size={12}/>On list</span>}<button type="button" className="icon-button staple-edit" disabled={busy} aria-label={'Edit staple '+item.title} onClick={event=>beginEdit(item,event.currentTarget)}><Pencil size={16}/></button></div>})}</div>
      <div className="staples-add-actions"><button type="button" className="text-button" disabled={busy||!canUseList||!eligible.length} onClick={()=>setSelected(selectedAvailable.length?[]:eligible.slice(0,100).map(item=>item.id))}>{selectedAvailable.length?'Clear selection':'Select available'}</button><button type="button" className="button primary" disabled={busy||!canUseList||!selectedAvailable.length} onClick={()=>void add()}><Plus size={16}/>{busy?'Adding…':selectedAvailable.length?`Add ${selectedAvailable.length} to list`:'Add to list'}</button></div>
      {selectedAvailable.length>=100&&<p className="staples-list-help">Add up to 100 staples at a time.</p>}
      <p className="staples-footnote">Picking an item up won’t remove it from your staples.</p>
