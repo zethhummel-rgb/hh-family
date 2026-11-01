@@ -154,7 +154,7 @@ Deployment: apply `database/grocery-staples.sql` (also checked in as a migration
 
 ## Shared family notes
 
-Home's Family notes card opens a shared notes list while keeping the four main navigation tabs. Notes have a title and plain text body; members can search titles/text and pin important notes above recently updated ones. Tapping a note opens it for reading, with explicit edit/delete actions. Every current household member can create, edit, pin or delete household notes. No file uploads, rich HTML, external sharing or note notifications are added.
+More → Family notes opens the shared notes list from any main screen. Home also keeps its Family notes preview. Notes have a title and plain text body; members can search titles/text and pin important notes above recently updated ones. Tapping a note opens it for reading, with explicit edit/delete actions. Every current household member can create, edit, pin or delete household notes. No file uploads, rich HTML, external sharing or note notifications are added.
 
 `public.household_notes` uses current-membership RLS, restricted column grants, and household cascade deletion. Note IDs, household IDs, creation/update timestamps and version counters are controlled on the server. Updates, pin changes and deletion match the version that was read, so a newer note is not silently overwritten or deleted. The editor retains an unsaved draft during refreshes, failed saves and conflicts; the user reviews the latest saved note before choosing how to continue. Removing one member leaves shared notes for the household; deleting the household removes its notes.
 
@@ -163,7 +163,7 @@ Deploy the additive `database/family-notes.sql` migration to HH Family before pu
 
 ## Family meal planner
 
-Home shows tonight’s dinner and opens Plan meals. The planner starts today and shows the next six days; arrows browse Sunday–Saturday weeks. Dinner plans also appear alongside events and to-dos in the weekly overview. One dinner per household/date is supported. A title is enough (including leftovers/eating out); ingredients, instructions and a source link are optional. The four main navigation tabs remain unchanged.
+More → Meal planner opens dinner planning from any main screen. Home also shows tonight’s dinner with a Plan meals shortcut. The planner starts today and shows the next six days; arrows browse Sunday–Saturday weeks. Dinner plans also appear alongside events and to-dos in the weekly overview. One dinner per household/date is supported. A title is enough (including leftovers/eating out); ingredients, instructions and a source link are optional. The navigation is Home, Calendar, Groceries, To Do and More. More opens Meal planner and Family notes without losing the current screen when dismissed.
 
 Saved meals are shared household favourites. Planning one copies its contents into a dated snapshot. Editing or deleting a favourite does not rewrite existing dinners; editing or removing a dinner does not change the favourite or groceries already added. Move and copy actions require an empty target date. Versions protect edits and deletes; failed saves/conflicts keep the draft for comparison with the latest saved record. Source links accept http(s) only and open externally; HH does not fetch or import recipe websites.
 
