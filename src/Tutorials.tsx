@@ -12,6 +12,10 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome,onGetti
   <button type="button" className="button soft tutorial-replay" onClick={onGettingStarted}><Check size={17}/>Show getting-started checklist</button>
   <button type="button" className="button soft tutorial-replay" onClick={onWelcome}><BookOpen size={17}/>Take the quick tour</button>
   <details className="tutorial-guide">
+   <summary><span className="tutorial-icon"><CalendarDays size={22}/></span><span><small>YOUR WEEK</small><h2>Plan the week together</h2><p>Events and dated to-dos in one place.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
+   <div className="tutorial-body"><Steps><li><h3>Open This week on Home</h3><p>Tap <strong>Home</strong>, then <strong>See week</strong> on the This week card. It shows the whole household, including plans without person tags.</p></li><li><h3>Look ahead</h3><p>Weeks run Monday to Sunday in Eastern time. Use the arrows for another week, or <strong>This week</strong> to return. Multi-day events appear on each day they cover.</p></li><li><h3>Open or add a plan</h3><p>Tap an event for details, then Edit to change it. Tap a to-do to edit it. Use the plus beside a day to add an event with that date already selected.</p></li></Steps><p>Finished to-dos are left out. Repeating to-dos show their next saved due date, even while waiting in Done. Dates after that appear as each occurrence is completed. Earlier overdue tasks have their own section; undated tasks stay in To Do &amp; Reminders.</p></div>
+  </details>
+  <details className="tutorial-guide">
    <summary><span className="tutorial-icon"><Mail size={22}/></span><span><small>01 · FAMILY ACCOUNTS</small><h2>Invite someone by email</h2><p>Give them their own login to your shared home.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary>
    <div className="tutorial-body"><span className="tutorial-role">The household owner sends the invitation</span>
     <Steps>
