@@ -20,7 +20,7 @@ import './settings.css';
 type Page='main'|'profile'|'appearance'|'notifications'|'household'|'calendar'|'help'|'pilot'|'admin'|'googleImport'|'accounts';
 const titles:Record<Page,string>={main:'Settings',profile:'Your profile',appearance:'Appearance',notifications:'Notifications',household:'Your household',calendar:'Calendar',help:'Help & tutorials',pilot:'Pilot invitations',admin:'Manage households',googleImport:'Import Google calendar',accounts:'Switch account'};
 type Props={
- initialPage?:'main'|'help'|'notifications'|'googleImport';importError?:string;onCalendarImported:()=>unknown;initialGuide?:'install';onGettingStarted:()=>void;
+ initialPage?:'main'|'help'|'notifications'|'googleImport'|'household';importError?:string;onCalendarImported:()=>unknown;initialGuide?:'install';onGettingStarted:()=>void;
  name:string;email:string;userId:string;householdId:string;householdName:string;owner:boolean;members:Member[];people:HouseholdPerson[];
  paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onColorSaved:(color:string)=>void;onHouseholdSaved:()=>unknown;
  calendarConnected:boolean;calendarLegacy:boolean;calendarTransition?:boolean;calendarCopyMessage:string;calendarConfigured:boolean;onOpenCalendar:()=>void;onConnectGoogle:()=>void;onWelcome:()=>void;onClose:()=>void;onSignOut:()=>unknown;
