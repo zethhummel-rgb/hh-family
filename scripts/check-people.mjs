@@ -1,6 +1,6 @@
 import fs from 'node:fs';import ts from 'typescript';import assert from 'node:assert/strict';
 const load=async path=>{const source=fs.readFileSync(new URL(path,import.meta.url),'utf8');const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;return import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))};
-const {familyProfiles,eventPeople,matchesPerson,selectedPeople,safeColor}=await load('../src/people.ts');
+const {familyProfiles,eventPeople,matchesPerson,selectedPeople,safeColor,isEveryone,isUnassigned}=await load('../src/people.ts');
 const members=[{user_id:'11111111-1111-4111-8111-111111111111',display_name:'Alex',calendar_color:'#467EB6'},{user_id:'22222222-2222-4222-8222-222222222222',display_name:'Sam',calendar_color:'#C46B8C'}];
 const child={id:'33333333-3333-4333-8333-333333333333',display_name:'Charlie',calendar_color:'#E78725',linked_user_id:null};
 assert.equal(familyProfiles(members).length,2,'No automatic children from another household');
@@ -19,4 +19,10 @@ assert.deepEqual(recipients({person_ids:[child.id]},[...members,account],[{...ch
 assert.deepEqual(recipients({person_ids:[child.id]},members,[]),[],'Foreign profile IDs do not route to another family');
 assert.deepEqual(recipients({person:'Charlie'},members,[child]),members.map(m=>m.user_id));
 assert.deepEqual(recipients({person_ids:[members[0].user_id]},members,[child]),[members[0].user_id]);
+const unassigned={person:'Unassigned',person_ids:[]};
+assert.equal(isUnassigned(unassigned),true);assert.equal(isEveryone(unassigned),false);assert.deepEqual(eventPeople(unassigned,profiles),[]);assert.deepEqual(selectedPeople(unassigned,profiles),[]);
+assert.equal(matchesPerson(unassigned,'all',profiles),true);for(const p of profiles)assert.equal(matchesPerson(unassigned,p.id,profiles),false);
+assert.deepEqual(recipients({...unassigned,id:'calendar-only',title:'Old imported plan',starts_at:'2026-11-03T15:00:00Z',all_day:false,reminder_30_enabled:true},members,[child]),[],'Untagged imported events must never notify everyone');
+assert.deepEqual(recipients({person:'Everyone',person_ids:[]},members,[child]),members.map(m=>m.user_id),'Existing Everyone semantics are preserved');
+assert.equal(isUnassigned({person:'Unassigned',person_ids:[members[0].user_id]}),false,'An actual tagged account named Unassigned is not the marker');
 console.log('Family profile checks passed: no seeded relatives, chosen colours, Everyone, child notification routing, linked accounts preserve event tags, and foreign profile IDs denied.');

@@ -44,6 +44,9 @@ try{
  await handleImportAction(admin,valid,userId,config);const committed=calls.at(-1);assert.equal(committed.payload.userId,userId);assert.equal(committed.payload.events,undefined);assert.deepEqual(committed.payload.sourceKeys,['a'.repeat(64)]);
  await assert.rejects(handleImportAction(admin,{...valid,acknowledgeShared:false},userId,config),/confirm sharing/);
  await assert.rejects(handleImportAction(admin,{...valid,sourceKeys:['malicious SQL']},userId,config),/Choose events/);
+ await handleImportAction(admin,{...valid,personIds:[],unassigned:true},userId,config);assert.equal(calls.at(-1).payload.unassigned,true);assert.equal(calls.at(-1).payload.reminder30,false);
+ await assert.rejects(handleImportAction(admin,{...valid,unassigned:true},userId,config),/Choose events/);
+ await assert.rejects(handleImportAction(admin,{...valid,personIds:[],unassigned:'true'},userId,config),/Choose events/);
  failRpc=true;await assert.rejects(handleImportAction(admin,{action:'import_status',householdId:hid},userId,config),error=>!error.message.includes('credential')&&error.message.includes('could not complete'));failRpc=false;
  granted='https://www.googleapis.com/auth/calendar.calendarlist.readonly';const again=await handleImportAction(admin,{action:'import_start',householdId:hid},userId,config);callback.searchParams.set('state',new URL(again.url).searchParams.get('state'));
  const denied=await handleImportCallback(admin,callback,config);assert.equal(new URL(denied.headers.get('location')).searchParams.get('calendar_import'),'error');assert.equal(calls.at(-1).action,'cancel');assert.equal(active,null);

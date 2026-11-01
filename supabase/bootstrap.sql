@@ -1614,7 +1614,10 @@ begin
   if exists(select 1 from unnest(keys) k where k is null or not exists(select 1 from jsonb_array_elements(sess.preview) e where e->>'sourceKey'=k)) then raise exception 'An event is not in this preview';end if;
   select coalesce(array_agg(distinct v),'{}') into people from jsonb_array_elements_text(payload->'personIds') v;
   if exists(select 1 from unnest(people) p where p is null or not exists(select 1 from public.household_members m where m.household_id=hid and m.user_id::text=p) and not exists(select 1 from public.household_people hp where hp.household_id=hid and hp.id::text=p)) then raise exception 'Choose people from this household';end if;
-  enabled:=(payload->>'reminder30')::boolean;label:=case when cardinality(people)=0 then 'Everyone' else 'Family' end;
+  if payload ? 'unassigned' and jsonb_typeof(payload->'unassigned')<>'boolean' then raise exception 'Choose valid people options';end if;
+  if coalesce((payload->>'unassigned')::boolean,false) and cardinality(people)>0 then raise exception 'An unassigned event cannot also tag people';end if;
+  enabled:=(payload->>'reminder30')::boolean and not coalesce((payload->>'unassigned')::boolean,false);
+  label:=case when coalesce((payload->>'unassigned')::boolean,false) then 'Unassigned' when cardinality(people)=0 then 'Everyone' else 'Family' end;
   -- Serialize all imports for this home. The ledger survives deleting an event.
   perform pg_advisory_xact_lock(hashtextextended('google-import:'||hid::text,0));
   if (select count(*) from public.household_events where household_id=hid)+(select count(*) from jsonb_array_elements(sess.preview) e where e->>'sourceKey'=any(keys) and not exists(select 1 from private.google_import_ledger where household_id=hid and source_key=e->>'sourceKey'))>9999 then raise exception 'Your HH calendar is too large for this import. Choose fewer events';end if;

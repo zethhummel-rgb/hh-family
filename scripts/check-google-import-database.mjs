@@ -65,6 +65,18 @@ const repeated=await api('preview',{calendarId:'google-calendar',entries:[entry]
 assert.deepEqual(await api('commit',{...commit,previewId:repeated.previewId}),{imported:0,skipped:1},'Deleted events are not silently reimported');
 await login(other,b);let another=await api('preview',{calendarId:'google-calendar',entries:[entry]},other,b);
 assert.deepEqual(await api('commit',{...commit,previewId:another.previewId,personIds:[other]},other,b),{imported:1,skipped:0},'Another home can import the same shared Google calendar');
+// Skipping tags is distinct from Everyone, including changed recurring dates.
+await login(other,b);const untaggedEntry={sourceKey:'8'.repeat(64),event};
+const untagged=await api('preview',{calendarId:'google-calendar',entries:[untaggedEntry]},other,b);
+const noPeople={...commit,previewId:untagged.previewId,sourceKeys:[untaggedEntry.sourceKey],personIds:[],unassigned:true,reminder30:true};
+await assert.rejects(api('commit',{...noPeople,personIds:[other]},other,b),/cannot also tag/);
+await assert.rejects(api('commit',{...noPeople,unassigned:'true'},other,b),/valid people/);
+assert.deepEqual(await api('commit',noPeople,other,b),{imported:1,skipped:0});
+await db.exec('reset role');
+const unassignedRow=(await db.query("select * from public.household_events where household_id=$1 and person='Unassigned'",[b])).rows[0];
+assert.deepEqual(unassignedRow.person_ids,[]);assert.equal(unassignedRow.reminder_30_enabled,false);
+assert.equal(unassignedRow.exceptions['2026-11-17'].person,'Unassigned');assert.deepEqual(unassignedRow.exceptions['2026-11-17'].person_ids,[]);assert.equal(unassignedRow.exceptions['2026-11-17'].reminder_30_enabled,false);
+await db.exec('set role service_role');
 // A bad later row rolls back every insert and the ledger.
 await login();const invalid={sourceKey:'3'.repeat(64),event:{...event,title:''}},valid={sourceKey:'2'.repeat(64),event};
 const failed=await api('preview',{calendarId:'google-calendar',entries:[valid,invalid]});
