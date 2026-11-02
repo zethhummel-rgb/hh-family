@@ -1,3 +1,4 @@
+import {useBottomNavigation} from './useBottomNavigation';
 import GroceryEditor from './GroceryEditor';
 import {groceryDetails,groceryMatches,groceryGroups,type GroceryGrouping} from './groceryData';
 import HomeCountdowns from './HomeCountdowns';
@@ -44,6 +45,7 @@ const categories=groceryCategories;
 
 const tabs=[{name:'Home',icon:Home},{name:'Calendar',icon:CalendarDays},{name:'Groceries',icon:ShoppingCart},{name:'Reminders',label:'To Do',icon:ListChecks},{name:'More',icon:Ellipsis}];
 export default function Household({email,name,householdId,members,owner,onSignOut,userId}:{email:string;name:string;householdId:string;userId:string;members:Member[];owner:boolean;onSignOut:()=>unknown}){
+ useBottomNavigation();
  const groceryGroupKey='hh:grocery-group:'+userId+':'+householdId;
  const [groceryGrouping,setGroceryGrouping]=useState<GroceryGrouping>(()=>{try{return localStorage.getItem(groceryGroupKey)==='store'?'store':'department'}catch{return 'department'}});
  function chooseGroceryGrouping(value:GroceryGrouping){setGroceryGrouping(value);try{localStorage.setItem(groceryGroupKey,value)}catch{}}

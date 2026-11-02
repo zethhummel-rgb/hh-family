@@ -4,7 +4,7 @@ import {groceryCategories} from './groceryStaplesData';
 export const mealTypes=['breakfast','lunch','supper','snacks'] as const;
 export type MealType=typeof mealTypes[number];
 export const mealTypeLabels:Record<MealType,string>={breakfast:'Breakfast',lunch:'Lunch',supper:'Supper',snacks:'Snacks'};
-export type MealIngredient={id:string;title:string;category:string};
+export type MealIngredient={id:string;title:string;category:string;quantity?:number|null;unit?:string|null};
 export type MealContentDraft={title:string;instructions:string;source_url:string;ingredients:MealIngredient[]};
 export type SavedMeal=MealContentDraft&{id:string;household_id:string;created_at:string;updated_at:string;version:number};
 export type MealPlan=SavedMeal&{meal_date:string;meal_type:MealType};
@@ -49,7 +49,11 @@ function content(draft:MealContentDraft):MealContentDraft{
   if(!item||typeof item.id!=='string'||!uuid.test(item.id)||seen.has(item.id))throw Error('Check your ingredient lines and try again.');
   if(typeof item.title!=='string'||!item.title.trim()||item.title.trim().length>160)throw Error('Give each ingredient a name of up to 160 characters.');
   if(!groceryCategories.some(category=>category===item.category))throw Error('Choose a grocery category for each ingredient.');
-  seen.add(item.id);return {id:item.id,title:item.title.trim(),category:item.category};
+  if(item.unit!=null&&typeof item.unit!=='string')throw Error('Use a unit of up to 30 characters.');
+  const quantity=item.quantity??null,unit=item.unit?.trim()||null;
+  if(quantity!==null&&(typeof quantity!=='number'||!Number.isFinite(quantity)||quantity<=0||quantity>9999||Math.abs(quantity*1000-Math.round(quantity*1000))>0.000001))throw Error('Use an ingredient quantity above zero and up to 9,999, with up to three decimal places.');
+  if(unit&&(quantity===null||unit.length>30))throw Error('Add a quantity and a unit of up to 30 characters.');
+  seen.add(item.id);return {id:item.id,title:item.title.trim(),category:item.category,...(quantity!==null?{quantity,...(unit?{unit}:{})}:{})};
  });
  return {title:draft.title.trim(),instructions:draft.instructions,source_url,ingredients};
 }
@@ -120,3 +124,6 @@ export async function addMealIngredients(hid:string,selections:MealIngredientSel
  if(!result.data||!Number.isInteger(result.data.added)||!Number.isInteger(result.data.skipped)||result.data.added<0||result.data.skipped<0||result.data.added+result.data.skipped!==total)throw Error('Could not confirm the grocery update. Refresh the shopping list before trying again.');
  return {added:result.data.added,skipped:result.data.skipped};
 }
+
+export function ingredientAmount(item:MealIngredient){return item.quantity==null?'':Number(item.quantity).toLocaleString('en-CA',{maximumFractionDigits:3})+(item.unit?' '+item.unit:'')}
+export function ingredientShoppingKey(item:{title:string;quantity?:number|null;unit?:string|null}){return JSON.stringify([item.title.trim().toLowerCase().replace(/\s+/g,' '),item.quantity??null,(item.unit||'').trim().toLowerCase()])}
