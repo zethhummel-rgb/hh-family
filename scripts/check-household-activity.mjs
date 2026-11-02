@@ -18,7 +18,7 @@ for(const file of ['native-calendar-repeats.sql','event-notification-toggle.sql'
 await db.exec(`create table private.calendar_copy_state(household_id uuid primary key,native_ready boolean default true);
 create function private.household_transition_active(hid uuid) returns boolean language sql as $$select false$$;
 create function private.household_transition_write_open(hid uuid) returns boolean language sql as $$select true$$;`);
-for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql'])await db.exec(read(file));
+for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql','event-countdowns.sql'])await db.exec(read(file));
 const sql=read('household-activity.sql');await db.exec(sql);
 assert.equal(sql,fs.readFileSync(new URL('../supabase/migrations/20261101224407_household_activity.sql',import.meta.url),'utf8'));
 const scalar=async(query,args=[])=>Object.values((await db.query(query,args)).rows[0])[0];
@@ -93,6 +93,11 @@ assert.equal(updates.filter(row=>row.entity_id===event.id).length,1,'Event revis
 assert.equal(updates.find(row=>row.entity_id===event.id).entity_date.toISOString().slice(0,10),'2026-11-04','Event dates use Eastern time');
 assert.equal(updates.find(row=>row.title==='Pizza').entity_date.toISOString().slice(0,10),'2026-11-06');
 assert.equal(updates.find(row=>row.entity_id===note.id&&row.action==='removed').title,'School pickup','Removed content remains identifiable until seen');
+
+// Countdown choices use the existing calendar activity path.
+await as('owner');await db.query('update public.household_events set countdown_enabled=true,version=version+1 where id=$1',[event.id]);
+await as('sibling');assert.equal((await inbox()).filter(row=>row.entity_id===event.id).length,2,'Enabling a Home countdown is a shared event update');
+assert.equal((await inbox()).filter(row=>row.entity_id===event.id).at(-1).action,'updated');
 
 // No retrospective attribution to an owner for service/maintenance writes.
 await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub','',false)");
