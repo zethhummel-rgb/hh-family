@@ -57,4 +57,15 @@ for(const quantity of [0,-1,NaN,Infinity,10000,1.0001])assert.throws(()=>g.valid
 await g.saveGrocery(a,draft,null,'id');assert.equal(calls[0].value.grocery_unit,'cans');assert.equal(calls[0].value.household_id,a);
 await g.saveGrocery(a,{...draft,grocery_quantity:null,grocery_unit:null,grocery_store:null},{id:'item',reminder_version:7},'unused',true);assert.equal(calls[1].value.done,false);assert.equal(calls[1].value.grocery_store,null);assert.deepEqual(Array.from(calls[1].filters,pair=>Array.from(pair)),[['household_id',a],['kind','grocery'],['id','item'],['reminder_version',7]]);
 result={data:null,error:null};await assert.rejects(g.saveGrocery(a,draft,{id:'item',reminder_version:7},'unused'),/changed or was removed/);transition=true;const beforeCalls=calls.length;await assert.rejects(g.saveGrocery(a,draft,null,'id'),/transfer/);assert.equal(calls.length,beforeCalls);
+const groupedItems=[
+ {id:'beans',kind:'grocery',title:'Beans',category:'Pantry',done:0,grocery_store:' Costco '},
+ {id:'ham',kind:'grocery',title:'Ham',category:'Deli',done:0,grocery_store:'costco'},
+ {id:'apple',kind:'grocery',title:'Apple',category:'Produce',done:0,grocery_store:'Metro'},
+ {id:'plain',kind:'grocery',title:'No store',category:'Pantry',done:0},
+ {id:'picked',kind:'grocery',title:'Picked',category:'Pantry',done:1,grocery_store:'Costco'},
+ {id:'task',kind:'task',title:'Task',category:'Pantry',done:0}
+];
+const groupedBefore=JSON.stringify(groupedItems),stores=g.groceryGroups(groupedItems,'store'),departments=g.groceryGroups(groupedItems,'department');
+assert.deepEqual(Array.from(stores,x=>x.title),['Costco','Metro','No store set']);assert.deepEqual(Array.from(stores[0].items,x=>x.id),['ham','beans']);assert.deepEqual(Array.from(departments,x=>x.title),['Produce','Deli','Pantry']);assert.equal(stores.flatMap(x=>x.items).length,4);assert.equal(JSON.stringify(groupedItems),groupedBefore,'Grouping never mutates shared records');assert.equal(g.groceryGroups(groupedItems.filter(item=>g.groceryMatches(item,'beans','all')),'store').length,1);
+console.log('Grocery grouping passed: department order, case-insensitive stores, unassigned last, picked/task exclusion, search compatibility and no record mutation.');
 console.log('Grocery client checks passed: display, optional details, validation, store/search filtering, atomic scoped saves, picked-up reuse, stale conflicts and transfer blocking. Mocked requests only.');

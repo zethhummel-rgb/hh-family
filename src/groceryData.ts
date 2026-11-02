@@ -4,6 +4,18 @@ import {groceryCategories} from './groceryStaplesData';
 import type {ReminderItem} from './taskReminders';
 
 export type GroceryDraft={title:string;category:string;grocery_quantity:number|null;grocery_unit:string|null;grocery_store:string|null};
+export type GroceryGrouping='department'|'store';
+export function groceryGroups(items:ReminderItem[],mode:GroceryGrouping){
+ const open=items.filter(item=>item.kind==='grocery'&&!item.done);
+ if(mode==='department')return groceryCategories.map(category=>({key:category,title:category,items:open.filter(item=>(groceryCategories.some(value=>value===item.category)?item.category:'Other')===category)})).filter(group=>group.items.length);
+ const groups=new Map<string,{key:string;title:string;items:ReminderItem[]}>();
+ for(const item of open){
+  const store=item.grocery_store?.trim()||'',key=store.toLowerCase();
+  if(!groups.has(key))groups.set(key,{key,title:store||'No store set',items:[]});
+  groups.get(key)!.items.push(item);
+ }
+ return [...groups.values()].sort((a,b)=>!a.key?1:!b.key?-1:a.title.localeCompare(b.title,'en-CA')).map(group=>({...group,items:[...group.items].sort((a,b)=>groceryCategories.findIndex(value=>value===a.category)-groceryCategories.findIndex(value=>value===b.category)||a.title.localeCompare(b.title,'en-CA'))}));
+}
 export function groceryDetails(item:Pick<ReminderItem,'grocery_quantity'|'grocery_unit'|'grocery_store'>){
  const quantity=item.grocery_quantity==null?'':Number(item.grocery_quantity).toLocaleString('en-CA',{maximumFractionDigits:3})+(item.grocery_unit?' '+item.grocery_unit:'');
  return [quantity,item.grocery_store].filter(Boolean).join(' · ');
