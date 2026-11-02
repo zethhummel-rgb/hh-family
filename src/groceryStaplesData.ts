@@ -1,6 +1,6 @@
 import {supabase} from './supabase';
 
-export const groceryCategories=['Produce','Dairy & eggs','Meat & fish','Bakery','Pantry','Frozen','Household','Other'] as const;
+export const groceryCategories=['Produce','Dairy & eggs','Deli','Meat & fish','Bakery','Pantry','Frozen','Household','Other'] as const;
 export type GroceryStaple={id:string;household_id:string;title:string;category:string;created_at:string};
 export type GroceryStapleDraft={title:string;category:string};
 const fields='id,household_id,title,category,created_at';
