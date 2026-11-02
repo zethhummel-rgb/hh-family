@@ -4,7 +4,7 @@ import {readRecurrence} from './recurrence.ts';
 const zone='America/Toronto';
 const dateFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'});
 const partsFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
-export type NativeEvent={id:string;title:string;description:string;location:string;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
+export type NativeEvent={id:string;title:string;description:string;location:string;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;countdown_enabled?:boolean;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
 export const localDate=(iso:string)=>dateFormat.format(new Date(iso));
 function shift(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 function localParts(iso:string){return Object.fromEntries(partsFormat.formatToParts(new Date(iso)).map(p=>[p.type,p.value]))}
@@ -37,10 +37,12 @@ function occurrence(master:NativeEvent,date:string,context:ReturnType<typeof occ
 export function occurrenceForDate(master:NativeEvent,date:string):NativeEvent|null{return occurrence(master,date,occurrenceContext(master))}
 // Only calendar/time arithmetic is cached, never event content, people or household identifiers.
 const countedPrefixes=new Map<string,{index:number;count:number}>();
-export function expandNativeEvent(master:NativeEvent,from:string,to:string,limit=2000,firstOnly=false,work?:()=>void):NativeEvent[]{
+// Countdown callers can require starts inside the range; other callers retain
+// the existing overlap semantics for views, search and notification windows.
+export function expandNativeEvent(master:NativeEvent,from:string,to:string,limit=2000,firstOnly=false,work?:()=>void,startsOnly=false):NativeEvent[]{
  let steps=0;const tick=()=>{if(++steps>100000)throw Error('Calendar repeat work limit reached. Choose a smaller date range.');work?.()};
  tick();
- const low=Date.parse(from),high=Date.parse(to),overlaps=(e:NativeEvent)=>Date.parse(e.starts_at)<high&&Date.parse(e.ends_at)>low;
+ const low=Date.parse(from),high=Date.parse(to),overlaps=(e:NativeEvent)=>Date.parse(e.starts_at)<high&&(startsOnly?Date.parse(e.starts_at)>=low:Date.parse(e.ends_at)>low);
  if(!master.recurrence?.length)return overlaps(master)?[{...master,source:'home'}]:[];
  const options=readRecurrence(master.recurrence,master.all_day);if(!options)throw Error('This event has an unsupported repeat pattern.');
  const context=occurrenceContext(master),first=context.first,[year,month,day]=first.split('-').map(Number);

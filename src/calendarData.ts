@@ -57,6 +57,10 @@ export async function getEvents(hid:string,from:string,to:string,connected:boole
  if(connected){const d=await googleRequest('events',{householdId:hid,from,to});return d.events}
  return expandNativeEvents(await nativeMasters(hid),from,to) as FamilyEvent[];
 }
+export async function nativeCalendarSnapshot(hid:string,from:string,to:string){
+ const masters=await nativeMasters(hid);
+ return {events:expandNativeEvents(masters,from,to) as FamilyEvent[],countdownMasters:masters.filter(event=>event.countdown_enabled===true)};
+}
 export async function nativeMasters(hid:string):Promise<FamilyEvent[]>{
  const events:FamilyEvent[]=[];
  for(let offset=0;offset<10000;offset+=500){const r=await supabase.from('household_events').select('*').eq('household_id',hid).order('id').range(offset,offset+499);if(r.error)throw r.error;events.push(...r.data.map(e=>({...e,source:'home' as const})));if(r.data.length<500)return events}
@@ -72,7 +76,7 @@ async function saveNativeException(hid:string,event:FamilyEvent,draft:EventDraft
 export async function saveEvent(hid:string,draft:EventDraft,current:FamilyEvent|null,connected:boolean,requestId:string){
  if(connected){return googleRequest(current?'update':'create',{householdId:hid,event:draft,id:current?.id,etag:current?.etag,requestId:requestId.replaceAll('-','')})}
  if(current?.source==='google')throw Error('Your calendar has moved to HH. Refresh before editing this plan.');
- if(current?.series_id)return saveNativeException(hid,current,draft);
+ if(current?.series_id){if(draft.countdown_enabled!==undefined)throw Error('Choose the whole series to change its countdown.');return saveNativeException(hid,current,draft)}
  const nativeDraft={...draft,...(draft.recurrence!==undefined?{recurrence:validateRecurrence(draft.recurrence,eventDate(draft as FamilyEvent),draft.all_day)}:{})};
  const r=current?await supabase.from('household_events').update({...nativeDraft,version:(current.version||1)+1}).eq('household_id',hid).eq('id',current.id).eq('version',current.version||1).select('id').maybeSingle():await supabase.from('household_events').insert({...nativeDraft,household_id:hid,id:requestId}).select('id').single();
  if(r.error)throw r.error;if(!r.data)throw Error('This event changed on another device. Close this form and refresh before editing again.');
