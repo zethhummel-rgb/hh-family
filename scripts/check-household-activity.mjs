@@ -18,7 +18,7 @@ for(const file of ['native-calendar-repeats.sql','event-notification-toggle.sql'
 await db.exec(`create table private.calendar_copy_state(household_id uuid primary key,native_ready boolean default true);
 create function private.household_transition_active(hid uuid) returns boolean language sql as $$select false$$;
 create function private.household_transition_write_open(hid uuid) returns boolean language sql as $$select true$$;`);
-for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql','event-countdowns.sql','grocery-details.sql'])await db.exec(read(file));
+for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql','event-countdowns.sql','grocery-details.sql','full-meal-planning.sql'])await db.exec(read(file));
 const sql=read('household-activity.sql');await db.exec(sql);
 assert.equal(sql,fs.readFileSync(new URL('../supabase/migrations/20261101224407_household_activity.sql',import.meta.url),'utf8'));
 const scalar=async(query,args=[])=>Object.values((await db.query(query,args)).rows[0])[0];
@@ -79,7 +79,9 @@ const note=(await db.query("insert into public.household_notes(household_id,titl
 await db.query('update public.household_notes set body=body where id=$1',[note.id]);
 await db.query('update public.household_notes set pinned=true where id=$1',[note.id]);
 await db.query("insert into public.household_meal_recipes(household_id,title) values($1,'Pasta')",[a]);
-await db.query("insert into public.household_meal_plans(household_id,title,meal_date) values($1,'Pizza','2026-11-06')",[a]);
+const meal=(await db.query("insert into public.household_meal_plans(household_id,title,meal_date) values($1,'Pizza','2026-11-06') returning *",[a])).rows[0];
+await db.query("update public.household_meal_plans set meal_type='supper' where id=$1",[meal.id]);
+await db.query("update public.household_meal_plans set meal_type='lunch' where id=$1",[meal.id]);
 await db.query("insert into public.household_grocery_staples(household_id,title) values($1,'Eggs')",[a]);
 await db.query("select public.add_household_person('Child profile','#467EB6')");
 const event=(await db.query("insert into public.household_events(household_id,title,starts_at,ends_at) values($1,'Evening plan','2026-11-05T00:30:00Z','2026-11-05T01:30:00Z') returning *",[a])).rows[0];
@@ -92,6 +94,8 @@ assert.equal(updates.filter(row=>row.entity_id===note.id).length,3,'Add, pin and
 assert.equal(updates.filter(row=>row.entity_id===event.id).length,1,'Event revision-only writes are not changes');
 assert.equal(updates.find(row=>row.entity_id===event.id).entity_date.toISOString().slice(0,10),'2026-11-04','Event dates use Eastern time');
 assert.equal(updates.find(row=>row.title==='Pizza').entity_date.toISOString().slice(0,10),'2026-11-06');
+assert.equal(updates.filter(row=>row.entity_id===meal.id).length,2,'Moving supper to lunch is reported; selecting the existing slot is a no-op');
+assert.equal(updates.filter(row=>row.entity_id===meal.id).at(-1).action,'updated');
 assert.equal(updates.find(row=>row.entity_id===note.id&&row.action==='removed').title,'School pickup','Removed content remains identifiable until seen');
 
 // Countdown choices use the existing calendar activity path.

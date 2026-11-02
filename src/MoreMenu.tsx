@@ -29,7 +29,7 @@ export default function MoreMenu({activeTab,opener,onSelect,onClose}:Props){
   <section ref={dialog} id="more-menu-dialog" className="more-menu-dialog" role="dialog" aria-modal="true" aria-labelledby="more-menu-title">
    <div className="more-menu-heading"><div><p className="eyebrow">A LITTLE MORE TOGETHER</p><h2 id="more-menu-title">More for your home</h2></div><button type="button" className="icon-button" aria-label="Close More menu" onClick={onClose}><X size={20}/></button></div>
    <div className="more-menu-options">
-    <button ref={firstAction} type="button" className={'more-menu-option'+(activeTab==='Meals'?' is-current':'')} aria-current={activeTab==='Meals'?'page':undefined} onClick={()=>choose('Meals')}><span className="round-icon sage"><Utensils size={22}/></span><span><b>Meal planner</b><small>Dinners, saved meals and ingredients.</small></span><ArrowRight size={18}/></button>
+    <button ref={firstAction} type="button" className={'more-menu-option'+(activeTab==='Meals'?' is-current':'')} aria-current={activeTab==='Meals'?'page':undefined} onClick={()=>choose('Meals')}><span className="round-icon sage"><Utensils size={22}/></span><span><b>Meal planner</b><small>Daily meals, favourites and ingredients.</small></span><ArrowRight size={18}/></button>
     <button type="button" className={'more-menu-option'+(activeTab==='Notes'?' is-current':'')} aria-current={activeTab==='Notes'?'page':undefined} onClick={()=>choose('Notes')}><span className="round-icon sage"><NotebookPen size={22}/></span><span><b>Family notes</b><small>The useful details, shared together.</small></span><ArrowRight size={18}/></button>
    </div>
   </section>

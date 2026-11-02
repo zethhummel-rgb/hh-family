@@ -167,7 +167,7 @@ try{
  const source=fs.readFileSync(new URL('../src/mealPlannerData.ts',import.meta.url),'utf8').replace("import {supabase} from './supabase';",'const supabase=globalThis.__mealClient;').replace("import {groceryCategories} from './groceryStaplesData';","const groceryCategories=['Produce','Dairy & eggs','Meat & fish','Bakery','Pantry','Frozen','Household','Other'];");
  const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
  const api=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
- const make=i=>({id:'00000000-0000-0000-0000-'+String(i).padStart(12,'0'),household_id:a,...draft('Meal '+i,[rice]),meal_date:new Date(Date.UTC(2026,0,i)).toISOString().slice(0,10),version:4,created_at:'2026-11-01T14:00:00Z',updated_at:'2026-11-01T15:00:00Z'});
+ const make=i=>({id:'00000000-0000-0000-0000-'+String(i).padStart(12,'0'),household_id:a,...draft('Meal '+i,[rice]),meal_type:'supper',meal_date:new Date(Date.UTC(2026,0,i)).toISOString().slice(0,10),version:4,created_at:'2026-11-01T14:00:00Z',updated_at:'2026-11-01T15:00:00Z'});
  const many=Array.from({length:201},(_,i)=>make(i+1));respond=call=>({data:call.after?many.slice(200):many.slice(0,200),error:null});
  assert.equal((await api.loadSavedMeals(a)).length,201);assert.deepEqual(calls[1].after,['id',many[199].id]);assert.ok(calls.every(call=>call.order==='id'&&call.limit===200));
  calls.length=0;assert.equal((await api.loadMealPlans(a,'2026-01-01','2027-01-01')).length,201);
@@ -175,13 +175,13 @@ try{
  for(const [from,to] of [['2026-02-30','2026-03-08'],['2026-11-01','2026-11-01'],['2026-01-01','2028-01-01']])await assert.rejects(api.loadMealPlans(a,from,to),/range/);
  calls.length=0;respond=()=>({data:null,error:null});const stale=make(1);
  await assert.rejects(api.saveSavedMeal(a,draft('Changed'),stale),api.MealConflictError);await assert.rejects(api.deleteSavedMeal(a,stale),api.MealConflictError);
- await assert.rejects(api.saveMealPlan(a,{...draft('Changed'),meal_date:'2026-11-02'},stale),api.MealConflictError);await assert.rejects(api.deleteMealPlan(a,stale),api.MealConflictError);
+ await assert.rejects(api.saveMealPlan(a,{...draft('Changed'),meal_date:'2026-11-02',meal_type:'supper'},stale),api.MealConflictError);await assert.rejects(api.deleteMealPlan(a,stale),api.MealConflictError);
  assert.ok(calls.every(call=>JSON.stringify(call.filters)===JSON.stringify([['household_id',a],['id',stale.id],['version',4]])),'All mutations carry household, ID and original version');
- respond=()=>({data:null,error:{code:'23505',message:'Unique date'}});await assert.rejects(api.saveMealPlan(a,{...draft(),meal_date:'2026-11-02'}),api.MealDateOccupiedError);
+ respond=()=>({data:null,error:{code:'23505',message:'Synthetic insert conflict'}});await assert.rejects(api.saveMealPlan(a,{...draft(),meal_date:'2026-11-02',meal_type:'supper'}),/Synthetic insert conflict/);
  calls.length=0;respond=call=>({data:{...stale,...call.value},error:null});
  const input={...draft('  Rice dinner  ',[rice]),instructions:'Line 1\n  line 2\n',source_url:'https://example.invalid/recipe'};
- await api.saveMealPlan(a,{...input,meal_date:'2026-11-03'});
- assert.deepEqual(calls[0].value,{household_id:a,...input,title:'Rice dinner',meal_date:'2026-11-03'},'Client preserves quantity text and instructions, sends only editable fields');
+ await api.saveMealPlan(a,{...input,meal_date:'2026-11-03',meal_type:'lunch'});
+ assert.deepEqual(calls[0].value,{id:calls[0].value.id,household_id:a,...input,title:'Rice dinner',meal_date:'2026-11-03',meal_type:'lunch'},'Client preserves quantity text and instructions, sends only editable fields');
  const count=calls.length;
  for(const invalid of [{...input,title:'\u00a0'},{...input,ingredients:[rice,rice]},{...input,ingredients:[{...rice,id:'invalid'}]},{...input,source_url:'javascript:alert(1)'},{...input,source_url:'https://example.invalid/space here'}])await assert.rejects(api.saveSavedMeal(a,invalid));
  assert.equal(calls.length,count,'Invalid fields fail before a request');
@@ -191,5 +191,5 @@ try{
  respond=()=>({data:null,error:{code:'P0001',message:'Meal plan changed. Refresh and choose ingredients again'}});await assert.rejects(api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),api.MealConflictError);
  respond=()=>({data:{added:2,skipped:0},error:null});await assert.rejects(api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),/confirm/);
  assert.equal(api.validMealDate('2024-02-29'),true);assert.equal(api.validMealDate('2026-02-29'),false);
- console.log('Meal client checks passed: complete pagination, date-scoped reads, revision filters, typed conflicts/date collisions, preserved instructions and quantities, input rejection and identifier-only grocery batches. Mocked requests only.');
+ console.log('Meal client checks passed: complete pagination, date-scoped reads, revision filters, typed conflicts and server errors, preserved instructions and quantities, input rejection and identifier-only grocery batches. Mocked requests only.');
 }finally{delete globalThis.__mealClient}
