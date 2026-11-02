@@ -18,7 +18,7 @@ for(const file of ['native-calendar-repeats.sql','event-notification-toggle.sql'
 await db.exec(`create table private.calendar_copy_state(household_id uuid primary key,native_ready boolean default true);
 create function private.household_transition_active(hid uuid) returns boolean language sql as $$select false$$;
 create function private.household_transition_write_open(hid uuid) returns boolean language sql as $$select true$$;`);
-for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql','event-countdowns.sql'])await db.exec(read(file));
+for(const file of ['google-calendar-import.sql','grocery-staples.sql','family-notes.sql','meal-planner.sql','event-countdowns.sql','grocery-details.sql'])await db.exec(read(file));
 const sql=read('household-activity.sql');await db.exec(sql);
 assert.equal(sql,fs.readFileSync(new URL('../supabase/migrations/20261101224407_household_activity.sql',import.meta.url),'utf8'));
 const scalar=async(query,args=[])=>Object.values((await db.query(query,args)).rows[0])[0];

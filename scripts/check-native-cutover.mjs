@@ -8,6 +8,8 @@ await db.exec(`create table private.calendar_copy_state(household_id uuid primar
 const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222',owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',id='cccccccc-cccc-4ccc-8ccc-cccccccccccc',id2='dddddddd-dddd-4ddd-8ddd-dddddddddddd',list='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',list2='ffffffff-ffff-4fff-8fff-ffffffffffff';
 for(const [hid,uid] of [[a,owner],[b,other]]){await db.query('insert into auth.users values($1,$2,now())',[uid,uid+'@synthetic.invalid']);await db.query("insert into public.households(id,name,owner_id) values($1,'Synthetic',$2)",[hid,uid]);await db.query("insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,'Synthetic','owner')",[hid,uid]);}
 await db.exec(read('household-transition.sql'));await db.exec(read('household-native-cutover.sql'));
+await db.exec(read('grocery-staples.sql'));await db.exec(read('grocery-details.sql'));
+
 await db.exec("create function public.household_calendar_source(hid uuid) returns text language sql security invoker as $$select private.household_calendar_source(hid)$$;grant execute on function public.household_calendar_source(uuid) to authenticated");
 await db.query("insert into private.household_transitions(household_id,owner_id,direction,peer_household_id,peer_project,token_secret_id,token_hash,active,write_paused) values($1,$2,'target',$3,'ybizqfghnplcxlmlhvyn',gen_random_uuid(),'synthetic',true,true)",[a,owner,b]);
 await db.query("insert into private.household_transitions(household_id,owner_id,direction,peer_household_id,peer_project,token_hash,active,write_paused) values($1,$2,'source',$3,'njpdqiwrwgoothkstoql','synthetic',true,true)",[b,other,a]);
