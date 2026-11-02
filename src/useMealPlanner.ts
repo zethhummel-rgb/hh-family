@@ -51,8 +51,8 @@ export function useMealPlanner(householdId:string){
  },[householdId,refresh,refreshRecipes]);
  useEffect(()=>{void refreshPlans()},[householdId,range.from,range.to,refreshPlans]);
 
- const savePlan=useCallback(async(draft:MealPlanDraft,current?:MealPlan|null)=>{
-  const epoch=scope.current.epoch,saved=await saveMealPlan(householdId,draft,current);
+ const savePlan=useCallback(async(draft:MealPlanDraft,current?:MealPlan|null,requestId?:string)=>{
+  const epoch=scope.current.epoch,saved=await saveMealPlan(householdId,draft,current,requestId);
   if(isCurrent(epoch)){
    planGeneration.current++;const target={...rangeRef.current};
    setPlanState(old=>{

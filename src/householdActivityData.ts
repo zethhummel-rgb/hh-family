@@ -7,7 +7,7 @@ import type {ReminderItem} from './taskReminders';
 export type ActivityKind='grocery'|'task'|'event'|'note'|'meal_plan'|'meal_recipe'|'staple'|'profile';
 export type HouseholdChange={id:string;household_id:string;recipient_id:string;actor_id:string|null;actor_name:string;entity_kind:ActivityKind;entity_id:string;action:'added'|'updated'|'completed'|'reopened'|'removed';title:string;entity_date:string|null;created_at:string};
 const fields='id,household_id,recipient_id,actor_id,actor_name,entity_kind,entity_id,action,title,entity_date,created_at';
-const nouns:Record<ActivityKind,string>={grocery:'a grocery item',task:'a to-do',event:'an event',note:'a family note',meal_plan:'a dinner plan',meal_recipe:'a saved meal',staple:'a grocery staple',profile:'a family profile'};
+const nouns:Record<ActivityKind,string>={grocery:'a grocery item',task:'a to-do',event:'an event',note:'a family note',meal_plan:'a meal plan',meal_recipe:'a saved meal',staple:'a grocery staple',profile:'a family profile'};
 export function changeSummary(change:HouseholdChange){return `${change.actor_name} ${change.action} ${nouns[change.entity_kind]}`}
 export function activitySummary(changes:HouseholdChange[]){
  if(!changes.length)return '';
