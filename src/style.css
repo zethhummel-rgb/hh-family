@@ -317,3 +317,5 @@ input::placeholder,textarea::placeholder{color:var(--theme-subtle,#a48a96)}
 
 @media(max-width:600px){.home-encouragement{font-size:11px}}
 @media(max-width:359px){.home-encouragement{font-size:10px}}
+
+@media(max-width:600px){body>.mobile-nav{position:fixed;inset:auto 0 var(--hh-navigation-bottom,0px);transform:none;backface-visibility:visible;isolation:isolate;z-index:40;flex-shrink:0}}
