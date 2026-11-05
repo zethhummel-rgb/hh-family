@@ -36,7 +36,7 @@ Deno.serve(async(req:Request)=>{
   if(row.status==='pending')return json({error:'This submission is already being processed or its delivery could not be confirmed. Please do not resend the same comment yet.'},409);
   if(row.status!=='claimed')throw Error('Unexpected claim');
   claim={id:body.requestId,actorId:user.id};
-  await sendGmail({from:FROM,to:feedbackRecipient,replyTo:row.email,password:PASSWORD,deliveryId:row.id,...feedbackMessage(row,isTest)});
+  await sendGmail({from:FROM,to:feedbackRecipient,replyTo:row.email,password:PASSWORD,deliveryId:row.id,...feedbackMessage(row,isTest)},undefined,30000,stage=>console.info('feedback_delivery_stage',row.id,stage));
   // SMTP has accepted the message. A database failure must not encourage a duplicate email.
   try{await admin.rpc('feedback_mail_service',{action:'finish',payload:{...claim,status:'sent'}})}catch{}
   return json({sent:true});
