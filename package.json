@@ -11,7 +11,8 @@
     "test:database": "node scripts/check-pilot-database.mjs && node scripts/check-admin-households.mjs && node scripts/check-self-service-deletion.mjs && node scripts/check-household-reminder-jobs.mjs && node scripts/check-calendar-copy-database.mjs && node scripts/check-household-transition.mjs && node scripts/check-native-cutover.mjs && node scripts/check-google-import-database.mjs && node scripts/check-grocery-staples-database.mjs && node scripts/check-family-notes-database.mjs && node scripts/check-meal-planner-database.mjs && node scripts/check-household-activity.mjs && node scripts/check-event-countdowns.mjs && node scripts/check-grocery-details.mjs && node scripts/check-full-meal-planning.mjs && node scripts/check-meal-ingredient-quantities.mjs",
     "test:invitations": "node scripts/check-invitation-email.mjs",
     "test:recovery": "node scripts/check-password-recovery.mjs && node scripts/check-login-storage.mjs && node scripts/check-account-switch.mjs && node scripts/check-auth-resume.mjs && node scripts/check-household-navigation.mjs",
-    "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs && node scripts/check-notification-prompt.mjs && node scripts/check-getting-started.mjs"
+    "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs && node scripts/check-notification-prompt.mjs && node scripts/check-getting-started.mjs",
+    "test:feedback": "node scripts/check-feedback.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
