@@ -1,10 +1,11 @@
 import {validMailAddress} from './message.ts';
 type Connection={read:(buffer:Uint8Array)=>Promise<number|null>;write:(buffer:Uint8Array)=>Promise<number>;close:()=>void};
-type Mail={from:string;to:string;password:string;deliveryId:string;subject:string;text:string;html:string};
+type Mail={from:string;to:string;password:string;deliveryId:string;subject:string;text:string;html:string;replyTo?:string};
 const encoder=new TextEncoder();
 const base64=(value:string)=>btoa(Array.from(encoder.encode(value),b=>String.fromCharCode(b)).join(''));
 const folded=(value:string)=>base64(value).match(/.{1,76}/g)?.join('\r\n')||'';
 export async function sendGmail(mail:Mail,connect:()=>Promise<Connection>=()=>Deno.connectTls({hostname:'smtp.gmail.com',port:465}),timeoutMs=15000){
+ if(mail.replyTo!==undefined&&!validMailAddress(mail.replyTo))throw Error('Invalid reply address');
  if(!validMailAddress(mail.from)||!validMailAddress(mail.to)||!/^[a-f0-9-]{36}$/.test(mail.deliveryId)||/[\r\n]/.test(mail.subject)||!mail.password||/[\r\n\0]/.test(mail.password))throw Error('Invalid email settings');
  let connection:Connection|undefined,finished=false,timer:ReturnType<typeof setTimeout>|undefined;
  const run=async()=>{
@@ -18,7 +19,7 @@ export async function sendGmail(mail:Mail,connect:()=>Promise<Connection>=()=>De
   await command('AUTH PLAIN '+base64('\0'+mail.from+'\0'+mail.password),235);
   await command('MAIL FROM:<'+mail.from+'>',250);await command('RCPT TO:<'+mail.to+'>',250);await command('DATA',354);
   const boundary='hh-'+mail.deliveryId;
-  const data=[`From: HH Family <${mail.from}>`,`To: <${mail.to}>`,`Subject: ${mail.subject}`,`Date: ${new Date().toUTCString()}`,`Message-ID: <hh-invite-${mail.deliveryId}@${mail.from.split('@')[1]}>`,'MIME-Version: 1.0',`Content-Type: multipart/alternative; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',folded(mail.text),`--${boundary}`,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',folded(mail.html),`--${boundary}--`,''].join('\r\n');
+  const data=[`From: HH Family <${mail.from}>`,`To: <${mail.to}>`,...(mail.replyTo?[`Reply-To: <${mail.replyTo}>`]:[]),`Subject: ${mail.subject}`,`Date: ${new Date().toUTCString()}`,`Message-ID: <hh-invite-${mail.deliveryId}@${mail.from.split('@')[1]}>`,'MIME-Version: 1.0',`Content-Type: multipart/alternative; boundary="${boundary}"`,'',`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',folded(mail.text),`--${boundary}`,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',folded(mail.html),`--${boundary}--`,''].join('\r\n');
   await write(data.replace(/(^|\r\n)\./g,'$1..')+'\r\n.\r\n');await expect(250);
   // Once DATA is accepted, a QUIT failure must not turn success into a retry.
  };
