@@ -45,7 +45,7 @@ export type ActivityTarget=
  |{kind:'meal_recipe';value:SavedMeal}
  |{kind:'grocery'|'task';value:ReminderItem}
  |{kind:'staple'|'profile';value:{id:string}};
-export async function loadActivityTarget(hid:string,change:HouseholdChange):Promise<ActivityTarget|null>{
+export async function loadActivityTarget(hid:string,change:Pick<HouseholdChange,'household_id'|'entity_kind'|'entity_id'|'action'>):Promise<ActivityTarget|null>{
  if(change.household_id!==hid)throw Error('This update belongs to a different home.');
  if(change.action==='removed')return null;
  const tables:Record<ActivityKind,string>={grocery:'household_items',task:'household_items',event:'household_events',note:'household_notes',meal_plan:'household_meal_plans',meal_recipe:'household_meal_recipes',staple:'household_grocery_staples',profile:'household_people'};

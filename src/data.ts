@@ -9,7 +9,7 @@ export async function loadHousehold(id:string){
  const [items,home,members,people]=await Promise.all([supabase.from('household_items').select('*').eq('household_id',id).order('created_at'),supabase.from('households').select('calendar_id,name').eq('id',id).single(),supabase.from('household_members').select('*').eq('household_id',id).order('joined_at'),supabase.from('household_people').select('*').eq('household_id',id).order('created_at')]);
  if(items.error)throw items.error;if(home.error)throw home.error;if(members.error)throw members.error;if(people.error)throw people.error;
  const householdItems=transition?(await googleRequest('transition_items',{householdId:id})).items:items.data;
- return {items:householdItems.map((x:any)=>({...x,due:x.due||'',done:x.done?1:0,createdAt:x.created_at})),calendarId:home.data.calendar_id,householdName:home.data.name,people:people.data as HouseholdPerson[],members:members.data as Member[]};
+ return {transition,items:householdItems.map((x:any)=>({...x,due:x.due||'',done:x.done?1:0,createdAt:x.created_at})),calendarId:home.data.calendar_id,householdName:home.data.name,people:people.data as HouseholdPerson[],members:members.data as Member[]};
 }
 type Change={action:string;id?:string;value?:string;kind?:string;title?:string;category?:string;person?:string;due?:string;done?:boolean;version?:number;reminder?:ReminderDraft;current?:ReminderItem|null};
 export async function changeHousehold(id:string,body:unknown){
