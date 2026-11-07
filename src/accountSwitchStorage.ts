@@ -15,11 +15,11 @@ const parse=(value:string|null):unknown=>{try{return value?JSON.parse(value):nul
 
 // Only references live here. The SDK remains the sole owner of session tokens
 // at each canonical auth key, including refreshes from other tabs.
-export function createAccountSwitchStorage(login:LoginStorage,newGeneration=()=>crypto.randomUUID()){
+export function createAccountSwitchStorage(login:LoginStorage,newGeneration=()=>crypto.randomUUID(),namespace=''){
  function store(remember:boolean){return login.storageFor(remember)}
- function keyFor(email:SwitchEmail,remember:boolean){const id=SWITCH_ACCOUNTS.find(account=>account.email===email)!.id;return remember?'hh:account-auth:v1:'+id:login.optionsFor(false).storageKey+':account:'+id}
- function normalLoginKey(remember:boolean){return remember?'hh:other-auth:v1':login.optionsFor(false).storageKey+':other'}
- function entryKey(remember:boolean){return remember?'hh:account-entry:v1':login.optionsFor(false).storageKey+':entry'}
+ function keyFor(email:SwitchEmail,remember:boolean){const id=SWITCH_ACCOUNTS.find(account=>account.email===email)!.id;return remember?namespace+'hh:account-auth:v1:'+id:login.optionsFor(false).storageKey+':account:'+id}
+ function normalLoginKey(remember:boolean){return remember?namespace+'hh:other-auth:v1':login.optionsFor(false).storageKey+':other'}
+ function entryKey(remember:boolean){return remember?namespace+'hh:account-entry:v1':login.optionsFor(false).storageKey+':entry'}
  function validKey(key:unknown,remember:boolean){return typeof key==='string'&&(key===login.optionsFor(remember).storageKey||key===normalLoginKey(remember)||key===entryKey(remember)||SWITCH_ACCOUNTS.some(account=>key===keyFor(account.email,remember)))}
  function validChoice(value:unknown):Choice|null{
   if(!value||typeof value!=='object')return null;

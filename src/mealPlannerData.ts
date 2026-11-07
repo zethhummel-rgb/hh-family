@@ -121,7 +121,9 @@ export async function addMealIngredients(hid:string,selections:MealIngredientSel
  if(total>100)throw Error('Choose no more than 100 ingredients at a time.');
  const result=await supabase.rpc('add_meal_ingredients',{hid,selections:selected});
  if(result.error)throw failure(result.error);
- if(!result.data||!Number.isInteger(result.data.added)||!Number.isInteger(result.data.skipped)||result.data.added<0||result.data.skipped<0||result.data.added+result.data.skipped!==total)throw Error('Could not confirm the grocery update. Refresh the shopping list before trying again.');
+ // The server combines compatible ingredient lines, so the resulting grocery
+ // count can be smaller than the selection count, but must remain in range.
+ if(!result.data||!Number.isInteger(result.data.added)||!Number.isInteger(result.data.skipped)||result.data.added<0||result.data.skipped<0||result.data.added+result.data.skipped<1||result.data.added+result.data.skipped>total)throw Error('Could not confirm the grocery update. Refresh the shopping list before trying again.');
  return {added:result.data.added,skipped:result.data.skipped};
 }
 

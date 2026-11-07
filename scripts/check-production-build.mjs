@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const html=fs.readFileSync('dist/index.html','utf8');
+const script=html.match(/src="\.\/assets\/([^" ]+\.js)"/);
+assert(script,'Built application script missing');
+const js=fs.readFileSync('dist/assets/'+script[1],'utf8');
+assert(js.includes('https://njpdqiwrwgoothkstoql.supabase.co'),'Production backend missing');
+assert(js.includes('sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq'),'Production publishable key missing');
+assert(!js.includes('sb_publishable_jbLSo5LPkS9k06Fx1txlBQ_3rWWkWh_'),'TEST key in production bundle');
+assert(!js.includes('HH TEST APP'),'TEST banner in production bundle');
+assert(!/HH Test|Hummel Home/.test(html),'TEST branding in production HTML');
+for(const file of ['manifest.webmanifest','icon.svg','favicon.svg'])assert(fs.readFileSync('dist/'+file).equals(fs.readFileSync('public/'+file)),file+' changed during production build');
+assert(!fs.existsSync('dist/test-guide.html'),'TEST guide in production output');
+assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
+console.log('Production build verified: HH backend, branding, offline shell and no TEST key/banner/guide.');

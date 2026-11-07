@@ -188,6 +188,8 @@ try{
  calls.length=0;respond=()=>({data:{added:1,skipped:0},error:null});
  assert.deepEqual(await api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),{added:1,skipped:0});
  assert.deepEqual(calls[0],{rpc:'add_meal_ingredients',args:{hid:a,selections:[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]}},'Grocery RPC sends stored IDs/version only');
+ assert.deepEqual(await api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id,crypto.randomUUID()]}]),{added:1,skipped:0},'Combined ingredients can produce fewer grocery lines than selected ingredients');
+ respond=()=>({data:{added:0,skipped:0},error:null});await assert.rejects(api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),/confirm/);
  respond=()=>({data:null,error:{code:'P0001',message:'Meal plan changed. Refresh and choose ingredients again'}});await assert.rejects(api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),api.MealConflictError);
  respond=()=>({data:{added:2,skipped:0},error:null});await assert.rejects(api.addMealIngredients(a,[{meal_id:stale.id,version:4,ingredient_ids:[rice.id]}]),/confirm/);
  assert.equal(api.validMealDate('2024-02-29'),true);assert.equal(api.validMealDate('2026-02-29'),false);

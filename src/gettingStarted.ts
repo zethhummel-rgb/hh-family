@@ -1,11 +1,11 @@
 type Store=Pick<Storage,'getItem'|'setItem'>;
-type Progress={dismissed:boolean;eventAdded:boolean};
+type Progress={dismissed:boolean;eventAdded:boolean;seen?:boolean};
 const key=(userId:string,householdId:string)=>`hh:getting-started:v1:${userId}:${householdId}`;
 const fallback=new Map<string,Progress>();
 export function gettingStartedProgress(userId:string,householdId:string,storage?:Store):Progress{
  const id=key(userId,householdId);
  if(fallback.has(id))return fallback.get(id)!;
- try{const value=JSON.parse((storage??localStorage).getItem(id)||'{}');return {dismissed:value?.dismissed===true,eventAdded:value?.eventAdded===true}}
+ try{const value=JSON.parse((storage??localStorage).getItem(id)||'{}');return {dismissed:value?.dismissed===true,eventAdded:value?.eventAdded===true,...(value?.seen===true?{seen:true}:{})}}
  catch{return fallback.get(id)||{dismissed:false,eventAdded:false}}
 }
 export function saveGettingStarted(userId:string,householdId:string,patch:Partial<Progress>,storage?:Store){

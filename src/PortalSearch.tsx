@@ -61,7 +61,7 @@ export default function PortalSearch({householdId,groceries,online,opener,onClos
         {!query.trim()?<p className="portal-search-help">Search items, plans, notes, meals, or people. Results are grouped by page.</p>:<>
           <p className="portal-search-count" role="status">{matches.length} {matches.length===1?'match':'matches'}{loading?' so far':''} · Choose a page below</p>
           {!matches.length&&!loading&&!error&&<p className="portal-search-help">No matches. Try another word.</p>}
-          {(Object.keys(searchPages) as SearchPage[]).map(page=>{const items=matches.filter(row=>row.page===page);return items.length?<SearchGroup key={page+':'+query} page={page} items={items} disabled={opening} onOpen={open}/>:null;})}
+          {(Object.keys(searchPages) as SearchPage[]).map(page=>{const items=matches.filter(row=>row.page===page);return items.length?<SearchGroup key={page} page={page} items={items} disabled={opening} onOpen={open}/>:null;})}
         </>}
       </div>
     </section>

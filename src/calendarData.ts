@@ -92,3 +92,8 @@ export async function getEventSeries(hid:string,event:FamilyEvent):Promise<Famil
  if(event.source==='home'){const r=await supabase.from('household_events').select('*').eq('household_id',hid).eq('id',event.series_id||event.id).single();if(r.error)throw r.error;return {...r.data,source:'home',recurring:!!r.data.recurrence?.length}}
  const data=await googleRequest('series',{householdId:hid,id:event.id});return data.event;
 }
+
+// Keep the actual elapsed duration when a timed plan moves, including across midnight/DST.
+export function movedEventEnd(start:string,startTime:string,end:string,endTime:string,nextStart:string,nextTime:string){
+ try{const duration=Date.parse(zonedISO(end,endTime))-Date.parse(zonedISO(start,startTime));if(duration<=0)return null;const moved=new Date(Date.parse(zonedISO(nextStart,nextTime))+duration);return {date:dayKey(moved),time:timePart(moved.toISOString())}}catch{return null}
+}

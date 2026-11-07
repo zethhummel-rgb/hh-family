@@ -26,10 +26,12 @@ jobs:
       - run: npm run test:recovery
       - run: npm run test:welcome
       - run: npm run test:feedback
+      - run: npm run test:polish
       - run: node scripts/check-offline-shopping.mjs
       - run: node scripts/check-portal-search.mjs
       - run: npm run build
         env:
+          VITE_APP_ENV: production
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/upload-pages-artifact@v3

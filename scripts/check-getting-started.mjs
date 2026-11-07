@@ -20,4 +20,5 @@ assert.equal(gettingStartedProgress('full-device','home',full).dismissed,true,'A
 for(const value of ['null','invalid','{"dismissed":"false","eventAdded":1}']){
  assert.deepEqual(gettingStartedProgress('new','home',{getItem:()=>value,setItem(){}}),{dismissed:false,eventAdded:false});
 }
+saveGettingStarted('returning','home',{seen:true},store);assert.equal(gettingStartedProgress('returning','home',store).seen,true);assert.equal(gettingStartedProgress('different-user','home',store).seen,undefined);
 console.log('Getting-started progress passed: account/home isolation, saved completion, dismissal and replay, invalid storage, and session fallback. No backend writes.');
