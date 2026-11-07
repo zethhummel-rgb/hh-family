@@ -24,16 +24,17 @@ export function safeStorage(open:()=>Store,onChange=()=>{}){
  };
 }
 
-export function createLoginStorage(local:()=>Store,tab:()=>Store,newId:()=>string,onChange=()=>{}){
- const saved=safeStorage(local,onChange),visit=safeStorage(tab,onChange);
+export function createLoginStorage(local:()=>Store,tab:()=>Store,newId:()=>string,onChange=()=>{},namespace=''){
+ const scoped=(open:()=>Store)=>()=>{const s=open();return {getItem:(key:string)=>s.getItem(namespace+key),setItem:(key:string,value:string)=>s.setItem(namespace+key,value),removeItem:(key:string)=>s.removeItem(namespace+key)}};
+ const saved=safeStorage(scoped(local),onChange),visit=safeStorage(scoped(tab),onChange);
  const tabChoice=visit.getItem(tabPreferenceKey);
  let remember=tabChoice?tabChoice==='keep':saved.getItem(preferenceKey)!=='no';
  let visitId=visit.getItem(visitIdKey);
  function optionsFor(value:boolean){
-  if(value)return {storage:saved,storageKey:rememberedAuthKey};
+  if(value)return {storage:saved,storageKey:namespace+rememberedAuthKey};
   if(!visitId){visitId=newId();visit.setItem(visitIdKey,visitId)}
   // A separate channel/key keeps a shared-device login out of other tabs.
-  return {storage:visit,storageKey:'hh:visit-auth:v1:'+visitId};
+  return {storage:visit,storageKey:namespace+'hh:visit-auth:v1:'+visitId};
  }
  return {
   visit,

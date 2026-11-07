@@ -1,4 +1,4 @@
-import {useEffect,useId,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {Bell,CalendarPlus,Check,ChevronDown,ChevronRight,Smartphone,X} from 'lucide-react';
 import {gettingStartedProgress,saveGettingStarted} from './gettingStarted';
 import {installedApp,needsHomeScreen,preparePush,pushRequest,pushSupported} from './push';
@@ -9,7 +9,10 @@ export default function GettingStarted({userId,householdId,active,hasEvent,notif
  onAddEvent:()=>void;onInstall:()=>void;onNotifications:()=>void;
 }){
  const [progress,setProgress]=useState(()=>gettingStartedProgress(userId,householdId));
- const [installed,setInstalled]=useState(installedApp),[expanded,setExpanded]=useState(()=>expandedByDefault||!installedApp()),[enabled,setEnabled]=useState(false);
+ const [installed,setInstalled]=useState(installedApp),[expanded,setExpanded]=useState(()=>expandedByDefault||(!installedApp()&&!hasEvent&&!progress.eventAdded&&!progress.seen)),[enabled,setEnabled]=useState(false);
+ const touched=useRef(false);
+ useEffect(()=>{if(active&&!progress.seen)setProgress(saveGettingStarted(userId,householdId,{seen:true}))},[active,progress.seen,userId,householdId]);
+ useEffect(()=>{if(hasEvent&&!expandedByDefault&&!touched.current)setExpanded(false)},[hasEvent,expandedByDefault]);
  const bodyId=useId(),headingId=useId();
  useEffect(()=>{if(hasEvent&&!progress.eventAdded)setProgress(saveGettingStarted(userId,householdId,{eventAdded:true}))},[hasEvent,progress.eventAdded,userId,householdId]);
  useEffect(()=>{
@@ -36,7 +39,7 @@ export default function GettingStarted({userId,householdId,active,hasEvent,notif
   {title:enabled?'Notifications are on':'Choose your notifications',copy:enabled?'Reminders are enabled on this device.':needsHomeScreen()?'Open the HH icon first, then enable reminders.':'Choose whether this device receives reminders.',done:enabled,icon:Bell,action:onNotifications}
  ];
  return <section className="getting-started" aria-labelledby={headingId}>
-  <div className="getting-started-header"><button type="button" className="getting-started-toggle" aria-expanded={expanded} aria-controls={bodyId} onClick={()=>setExpanded(value=>!value)}><span><span id={headingId} className="getting-started-title">{complete===3?'You’re all set.':'Getting started'}</span><small>{complete} of 3 · Optional, at your pace</small></span><ChevronDown size={18} className={expanded?'expanded':''}/></button><button type="button" className="icon-button" aria-label="Hide getting-started checklist" onClick={()=>setProgress(saveGettingStarted(userId,householdId,{dismissed:true}))}><X size={18}/></button></div>
+  <div className="getting-started-header"><button type="button" className="getting-started-toggle" aria-expanded={expanded} aria-controls={bodyId} onClick={()=>{touched.current=true;setExpanded(value=>!value)}}><span><span id={headingId} className="getting-started-title">{complete===3?'You’re all set.':'Getting started'}</span><small>{complete} of 3 · Optional, at your pace</small></span><ChevronDown size={18} className={expanded?'expanded':''}/></button><button type="button" className="icon-button" aria-label="Hide getting-started checklist" onClick={()=>setProgress(saveGettingStarted(userId,householdId,{dismissed:true}))}><X size={18}/></button></div>
   <div id={bodyId} hidden={!expanded}><ol>{rows.map(({title,copy,done,icon:Icon,action},index)=><li key={index}><button type="button" className={done?'getting-started-step complete':'getting-started-step'} onClick={action}><span className="getting-started-icon" aria-hidden="true">{done?<Check size={18}/>:<Icon size={18}/>}</span><span className="getting-started-copy"><b>{title}</b><small>{copy}</small></span><ChevronRight size={16} aria-hidden="true"/></button></li>)}</ol><p>Skip any step. Find this again in Settings → Help &amp; tutorials.</p></div>
  </section>;
 }

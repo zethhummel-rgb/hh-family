@@ -319,3 +319,5 @@ input::placeholder,textarea::placeholder{color:var(--theme-subtle,#a48a96)}
 @media(max-width:359px){.home-encouragement{font-size:10px}}
 
 @media(max-width:600px){body>.mobile-nav{position:fixed;inset:auto 0 var(--hh-navigation-bottom,0px);transform:none;backface-visibility:visible;isolation:isolate;z-index:40;flex-shrink:0}}
+
+.test-environment-banner{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 16px;padding:10px 16px;background:#ffedb5;color:#443207;font:500 12px/1.4 system-ui;border-bottom:1px solid #d8b654}.test-environment-banner strong{letter-spacing:.08em}.test-environment-banner a{color:inherit;text-decoration:underline}

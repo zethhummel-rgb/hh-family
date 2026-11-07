@@ -11,6 +11,7 @@ export function useOfflineGroceries(user:string,home:string,name:string,items:Re
   const [available,setAvailable]=useState(false);
   const [syncing,setSyncing]=useState(false);
   const [problem,setProblem]=useState('');
+  const [cacheProblem,setCacheProblem]=useState('');
   const running=useRef(false);
   const alive=useRef(false);
   const connected=useRef(onConnected);connected.current=onConnected;
@@ -21,7 +22,7 @@ export function useOfflineGroceries(user:string,home:string,name:string,items:Re
     try {
       const verified=await syncTrip(current);
       if(alive.current){setProblem('');if(verified)connected.current?.();}
-    } catch {if(alive.current)setProblem('Could not sync yet. Your changes are saved on this device. Reconnect and retry.');}
+    } catch {if(alive.current)setProblem('Could not sync yet. Your changes are saved on this device.');}
     finally{running.current=false;if(alive.current)setSyncing(false);}
   },[user,home]);
   useEffect(()=>{
@@ -41,8 +42,8 @@ export function useOfflineGroceries(user:string,home:string,name:string,items:Re
     if(!ready)return;
     let current=true;
     Promise.all([saveGroceries(user,home,name,items),prepareShoppingShell()]).then(()=>{
-      if(current){setAvailable(true);setProblem('');}
-    }).catch(()=>{if(current){setAvailable(false);setProblem('This browser could not save the list for offline use.');}});
+      if(current){setAvailable(true);setCacheProblem('');}
+    }).catch(()=>{if(current){setAvailable(false);setCacheProblem('This browser could not save the list for offline use.');}});
     return()=>{current=false;};
   },[user,home,name,items,ready]);
   async function toggle(item:ReminderItem) {
@@ -57,13 +58,17 @@ export function useOfflineGroceries(user:string,home:string,name:string,items:Re
     await queueGrocery(current,draft,item,id,addBack);void sync();
   }
   async function resolve(id:string,keep:boolean) {if(trip){await resolveGrocery(trip,id,keep);void sync();}}
-  return {trip,items:trip?groceryItems(trip):null,online,available,syncing,problem,toggle,dismiss,sync,save,resolve,
+  async function retry(){
+    if(cacheProblem&&ready){try{await saveGroceries(user,home,name,items);await prepareShoppingShell();setAvailable(true);setCacheProblem('')}catch{setCacheProblem('This browser could not save the list for offline use.');return}}
+    await sync();
+  }
+  return {trip,items:trip?groceryItems(trip):null,online,available,syncing,problem:problem||cacheProblem,toggle,dismiss,sync,retry,save,resolve,
     pending:Object.keys(trip?.picks||{}).length};
 }
 export function GroceryConnection({state}:{state:ReturnType<typeof useOfflineGroceries>}) {
   const [error,setError]=useState('');
   return <>
-    {(error||(state.online&&state.problem))&&<p className="grocery-connection" role="alert">{error||state.problem}</p>}
+    {error&&<p className="grocery-connection" role="alert">{error}</p>}
     {Object.entries(state.trip?.picks||{}).filter(([,pick])=>pick.conflict).map(([id,pick])=>{
       const shared=pick.conflict!.server;
       return <div className="grocery-connection" role="status" key={id}>
@@ -81,4 +86,13 @@ export function GroceryConnection({state}:{state:ReturnType<typeof useOfflineGro
       <button className="text-button" onClick={()=>void state.dismiss().catch(()=>setError('Could not dismiss this notice.'))}>Dismiss</button>
     </div>}
   </>;
+}
+
+export function PortalSyncStatus({state,onReview}:{state:ReturnType<typeof useOfflineGroceries>;onReview:()=>void}){
+ const conflicts=Object.values(state.trip?.picks||{}).some(pick=>!!pick.conflict);
+ if(!state.online)return <div className="portal-offline-banner" role="status">Offline · Syncing when back online</div>;
+ if(conflicts)return <div className="portal-sync-banner" role="status">Grocery changes need your review.<button type="button" className="text-button" onClick={onReview}>Review changes</button></div>;
+ if(state.problem)return <div className="portal-sync-banner" role="alert"><span>{state.problem}</span><button type="button" className="text-button" disabled={state.syncing} onClick={()=>void state.retry()}>{state.syncing?'Retrying…':'Retry sync'}</button></div>;
+ if(state.pending)return <div className="portal-sync-banner" role="status">Syncing {state.pending} {state.pending===1?'change':'changes'}… Saved on this device until shared.</div>;
+ return null;
 }

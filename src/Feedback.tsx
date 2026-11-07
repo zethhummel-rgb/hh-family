@@ -4,8 +4,9 @@ import {feedbackAreas,feedbackLimit,feedbackRecipient} from '../shared/feedback'
 import {feedbackAvailability,sendFeedback} from './feedbackData';
 import './feedback.css';
 
-export default function Feedback({userId,householdId,email,onBusy}:{userId:string;householdId:string;email:string;onBusy:(busy:boolean)=>void}){
+export default function Feedback({userId,householdId,email,onBusy,onDirty}:{userId:string;householdId:string;email:string;onBusy:(busy:boolean)=>void;onDirty:(dirty:boolean)=>void}){
  const [area,setArea]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[sent,setSent]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{onDirty(!!(area||message.trim())&&!sent)},[area,message,sent,onDirty]);
  const inFlight=useRef(false),request=useRef<{content:string;id:string}|null>(null);
  const [available,setAvailable]=useState<boolean|null>(null);
  useEffect(()=>{let active=true;void feedbackAvailability().then(value=>{if(active)setAvailable(value)});return()=>{active=false}},[]);

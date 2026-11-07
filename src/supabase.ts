@@ -1,14 +1,14 @@
 import {createClient} from '@supabase/supabase-js';
 import type {AuthError,Session,SupabaseClient} from '@supabase/supabase-js';
-import {publicConfig} from './config';
+import {publicConfig,authNamespace} from './config';
 import {createLoginStorage} from './loginStorage';
 import {createAccountSwitchStorage,switchEmail,type AccountReference} from './accountSwitchStorage';
 
 const listeners=new Set<()=>void>();
 const notify=()=>listeners.forEach(listener=>listener());
 let localSignOutWarning='';
-const loginStorage=createLoginStorage(()=>localStorage,()=>sessionStorage,()=>crypto.randomUUID(),notify);
-export const accountStorage=createAccountSwitchStorage(loginStorage);
+const loginStorage=createLoginStorage(()=>localStorage,()=>sessionStorage,()=>crypto.randomUUID(),notify,authNamespace);
+export const accountStorage=createAccountSwitchStorage(loginStorage,()=>crypto.randomUUID(),authNamespace);
 const authUrl=new URL(location.href),authFragment=new URLSearchParams(authUrl.hash.slice(1));
 export const recoveryEntry=authUrl.searchParams.has('code')||authUrl.searchParams.get('type')==='recovery'||authFragment.get('type')==='recovery';
 export const accountAuthReturn=authUrl.searchParams.has('code')||authFragment.has('access_token')||authFragment.has('refresh_token')||authFragment.get('type')==='recovery';

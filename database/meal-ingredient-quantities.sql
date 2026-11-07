@@ -74,7 +74,15 @@ begin
  end loop;
  if found_plans<>cardinality(plan_ids) then raise exception 'Meal plan changed. Refresh and choose ingredients again';end if;
 
- for ingredient in select * from jsonb_array_elements(resolved) loop
+ -- Sum compatible quantities across the selected plans. Unknown quantities and
+ -- different units stay separate. The same exact resulting line remains idempotent.
+ for ingredient in
+  select jsonb_build_object('title',min(btrim(value->>'title')),'category',min(value->>'category'),
+   'quantity',sum((value->>'quantity')::numeric),'unit',min(nullif(btrim(value->>'unit'),'')))
+  from jsonb_array_elements(resolved)
+  group by private.grocery_title_key(value->>'title'),lower(btrim(coalesce(value->>'unit',''))),(value->>'quantity' is null)
+ loop
+  if (ingredient->>'quantity')::numeric>9999 then raise exception 'A combined quantity is above 9999. Choose fewer meals';end if;
   if exists(select 1 from public.household_items where household_id=hid and kind='grocery' and not done and private.grocery_title_key(title)=private.grocery_title_key(ingredient->>'title') and grocery_quantity is not distinct from (ingredient->>'quantity')::numeric and lower(btrim(coalesce(grocery_unit,'')))=lower(btrim(coalesce(ingredient->>'unit','')))) then
    skipped:=skipped+1;
   else

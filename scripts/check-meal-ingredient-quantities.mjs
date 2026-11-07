@@ -62,6 +62,15 @@ await db.query("update public.household_meal_plans set title='Changed' where id=
 await as('other');const foreign=await make([carrots],b);await as('owner');await assert.rejects(shop([foreign]),/Meal plan changed/);
 await as('outsider');await assert.rejects(shop([same]),/membership/);
 assert.equal(await scalar("select prosecdef from pg_proc where oid='public.add_meal_ingredients(uuid,jsonb)'::regprocedure"),false);
+await as('owner');
+const combinedA=await make([{...ingredient('Sweetcorn','Produce'),quantity:2}]),combinedB=await make([{...ingredient('Sweetcorn','Produce'),quantity:2}]);
+assert.deepEqual(await shop([combinedA,combinedB]),{added:1,skipped:0});
+assert.equal(Number(await scalar("select grocery_quantity from public.household_items where household_id=$1 and title='Sweetcorn'",[a])),4);
+assert.deepEqual(await shop([combinedA,combinedB]),{added:0,skipped:1});
+const units=await make([{...ingredient('Flour'),quantity:.125,unit:'kg'},{...ingredient('flour'),quantity:.125,unit:'KG'},{...ingredient('Flour'),quantity:250,unit:'g'}]);
+assert.deepEqual(await shop([units]),{added:2,skipped:0});
+assert.equal(Number(await scalar("select grocery_quantity from public.household_items where lower(title)='flour' and lower(grocery_unit)='kg'")),.25);
+const huge=await make([{...ingredient('Rice'),quantity:6000},{...ingredient('rice'),quantity:6000}]);await assert.rejects(shop([huge]),/above 9999/);
 await db.close();
 console.log('Ingredient quantities passed: exact legacy preservation, strict validation, structured grocery quantities, amount-aware duplicate handling, stale selections, RLS and cross-household denial. Synthetic records only.');
 const calls=[];
