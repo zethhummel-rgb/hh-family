@@ -1,4 +1,6 @@
 import './googleImportReturn';
+import {savedTrip,forgetShopping,tripEvent} from './offlineShopping';
+import {accountSwitchBlocked} from './supabase';
 import PublicLinks from './PublicLinks';
 import SignupConfirmation from './SignupConfirmation';
 import PasswordReset from './PasswordReset';
@@ -18,6 +20,19 @@ import Setup from './Setup';
 import {initialAuthMode,invitationFrom,invitationRedirect,PILOT_INVITE_KEY,FAMILY_INVITE_KEY} from './pilot';
 function Brand(){return <div className="auth-brand"><img src="./icon.svg" alt=""/><span>HH</span></div>}
 async function leaveDevice(){await signOutAccounts()}
+function AppRouter(){
+ const [cached,setCached]=useState(()=>!accountSwitchBlocked&&!location.search&&!location.hash&&!!savedTrip()&&
+   (!navigator.onLine||document.documentElement.hasAttribute('data-offline')));
+ const [,setRevision]=useState(0);
+ useEffect(()=>{
+   const read=()=>{setRevision(value=>value+1);if(!savedTrip())setCached(false)};
+   window.addEventListener('storage',read);window.addEventListener(tripEvent,read);
+   return()=>{window.removeEventListener('storage',read);window.removeEventListener(tripEvent,read)};
+ },[]);
+ const trip=cached?savedTrip():null;
+ return trip?<Household key={trip.user+trip.home} userId={trip.user} householdId={trip.home} name="Shopper"
+   email="" members={[]} owner={false} offlineOnly onOfflineConnected={()=>setCached(false)} onSignOut={leaveDevice}/>:<App/>;
+}
 function App(){
  const [ready,setReady]=useState(false),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[leaving,setLeaving]=useState(false);
  useEffect(()=>{let current=true;setReady(false);setError('');verifySelectedAccount().then(()=>{if(current)setReady(true)}).catch(e=>{if(current)setError((e as Error).message||'Could not verify your saved sign-in. Please try again.')});return()=>{current=false}},[attempt]);
@@ -46,7 +61,8 @@ function HouseholdApp(){
   try{
    const {data,error}=await client.from('household_members').select('*').eq('user_id',s.user.id).maybeSingle();
    if(!current())return;if(error)throw error;
-   if(!data){verifiedMembership.current=null;setSelf(null);setMembers([]);return}
+   if(!data){forgetShopping();verifiedMembership.current=null;setSelf(null);setMembers([]);return}
+   if(savedTrip()&&savedTrip()?.home!==data.household_id)forgetShopping();
    if(data.user_id!==s.user.id)throw Error('Could not verify your household membership.');
    if(verifiedMembership.current&&verifiedMembership.current.householdId!==data.household_id){verifiedMembership.current=null;setReady(false);setSelf(null);setMembers([])}
    const result=await client.from('household_members').select('*').eq('household_id',data.household_id).order('joined_at');
@@ -54,7 +70,7 @@ function HouseholdApp(){
    const currentSelf=result.data?.find(member=>member.user_id===s.user.id&&member.household_id===data.household_id);
    if(!currentSelf){verifiedMembership.current=null;setSelf(null);setMembers([]);return}
    verifiedMembership.current={client,userId:s.user.id,householdId:data.household_id};setSelf(currentSelf);setMembers(result.data||[]);
-  }catch(e){if(current()){verifiedMembership.current=null;setSelf(null);setMembers([]);setError(e instanceof Error?e.message:(e as {message?:string}).message||'Could not load your household.')}}
+  }catch(e){if(current()){if(keepHome&&typeof navigator!=='undefined'&&navigator.onLine===false&&(e as {status?:number}).status!==401&&(e as {status?:number}).status!==403)return;verifiedMembership.current=null;setSelf(null);setMembers([]);setError(e instanceof Error?e.message:(e as {message?:string}).message||'Could not load your household.')}}
   finally{if(current())setReady(true)}
  }
  useEffect(()=>{
@@ -97,4 +113,4 @@ function HouseholdApp(){
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="eyebrow">A LITTLE MORE TOGETHER.</span><h1>Less keeping track.<br/>More being home.</h1><p>Family plans, shared groceries, and the little things that make a house a home.</p><div className="auth-illustration"><House size={120} strokeWidth={1}/><Heart size={33}/></div></div><small>Made for your everyday.</small></div><main className="auth-main"><div className="auth-mobile"><Brand/></div><section className="auth-card">{!ready?<><h2>Getting things ready…</h2><p>Opening your household.</p></>:!session&&confirmationEmail?<SignupConfirmation invited={!!(invite||pilot)} email={confirmationEmail} joining={!!invite} onSignIn={()=>{setConfirmationEmail('');setMode('login');setError('');setMessage('')}}/>:!session||mode==='recover'?<><span className="round-icon sage">{mode==='forgot'||mode==='recover'?<KeyRound/>:<Heart/>}</span><h2>{mode==='signup'?'Create your account.':mode==='forgot'?'Forgot your password?':mode==='recover'?'A fresh start.':'Welcome home.'}</h2><p>{mode==='signup'?(invite?'Confirm your email, then join your family’s home.':pilot?'Confirm your email, then create your private home.':'Your own account. One shared household.'):mode==='forgot'?'We’ll email you a link to reset it.':mode==='recover'?'Choose a new password for your account.':'Sign in to your family’s everyday.'}</p>{(invite||pilot)&&<div className="setup-note">{invite?'You’re invited to join a household.':'You’re invited to create your own private household.'} Use the email address the invitation was created for.</div>}
  <form onSubmit={auth}>{mode==='signup'&&<label>Your name<input required maxLength={60} autoComplete="given-name" value={name} onChange={e=>setName(e.target.value)}/></label>}{mode!=='recover'&&<label>Email address<input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></label>}{mode!=='forgot'&&<label>Password<input type="password" required minLength={mode==='login'?1:12} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/>{mode!=='login'&&<small>Use at least 12 characters.</small>}</label>}{(mode==='signup'||mode==='recover')&&<label>Confirm password<input type="password" required minLength={12} autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>}{(mode==='login'||mode==='signup')&&<div className="login-persistence"><label><input type="checkbox" checked={remember} disabled={busy} aria-describedby="login-persistence-help" onChange={e=>setRemember(e.target.checked)}/><span>Stay signed in on this device</span></label><p id="login-persistence-help">{remember?'Use this on your own device. HH will remember your login when you reopen it.':'Your login will last for this tab’s browsing session.'}</p></div>}{mode==='login'&&<button type="button" className="text-button" onClick={()=>{setMode('reset');setError('');setMessage('');setPassword('');setConfirm('')}}>Forgot password?</button>}<button className="button primary wide" disabled={busy}>{busy?'One moment…':mode==='signup'?'Create my account':mode==='forgot'?'Send reset link':mode==='recover'?'Save new password':'Sign in'}<ArrowRight size={17}/></button></form><div className="auth-switch">{mode==='signup'?'Already have an account?':mode==='login'?'New to HH?':''}<button onClick={()=>{setMode(mode==='login'?'signup':'login');setError('');setMessage('');setPassword('');setConfirm('')}}>{mode==='login'?'Create account':mode==='signup'?'Sign in':'Back to sign in'}</button></div></>:<><span className="round-icon sage"><House/></span><h2>{invite?'Join your family.':pilot||host?'Make a home of your own.':'An invitation opens the door.'}</h2><p>Signed in as {session.user.email}</p><label>Your name<input maxLength={60} value={name||session.user.user_metadata.display_name||''} onChange={e=>setName(e.target.value)}/></label>{invite?<><p className="field-help">Your invitation is ready. Join to share your family’s calendar, groceries and to-dos.</p><details className="picked"><summary>Use a different invitation code</summary><label>Invitation code<input value={invite} onChange={e=>setInvite(e.target.value)}/></label></details><button className="button primary wide" disabled={busy} onClick={()=>onboard(true)}>Join household<ArrowRight size={17}/></button><button className="text-button auth-secondary-action" onClick={()=>{setInvite('');visitStorage.removeItem(FAMILY_INVITE_KEY);history.replaceState(null,'',location.pathname)}}>Create a different household instead</button></>:<>{pilot||host?<><label>Household name<input required maxLength={80} placeholder="e.g. The Wilson home" value={homeName} onChange={e=>setHomeName(e.target.value)}/></label><p className="field-help">Next, we’ll help you invite your family, add profiles without email and choose your colour palette.</p><button className="button primary wide" disabled={busy||!homeName.trim()} onClick={()=>onboard(false)}>Create my household<ArrowRight size={17}/></button></>:<><p className="setup-note">HH is invitation-only while we try it with a few families. Open your invitation link, or paste your new-household code below.</p><label>New-household invitation code<input value={pilot} onChange={e=>setPilot(e.target.value.trim())} autoComplete="off"/></label></>}<details className="picked"><summary>Have an invitation code?</summary><label>Paste your code<input onChange={e=>setInvite(e.target.value)} value={invite}/></label></details></>}<button className="text-button auth-secondary-action" onClick={async()=>{setBusy(true);setError('');try{await leaveDevice()}catch(e){setError((e as Error).message||'Could not sign out.');setBusy(false)}}} disabled={busy}><LogOut size={15}/>Sign out</button></>}{storageWarning&&<p className="login-storage-notice" role="status">{storageWarning}</p>}{error&&<div className="error" role="alert">{error}{session&&!self&&<button onClick={()=>membership(session)}>Retry</button>}</div>}{message&&<div className="success-message" role="status"><Mail size={17}/>{message}</div>}<div className="auth-footnote">Your own login. Your family’s private space.<PublicLinks/></div></section></main></div>
 }
-createRoot(document.getElementById('root')!).render(<React.StrictMode>{backendConfigured?<App/>:<Setup/>}</React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode>{backendConfigured?<AppRouter/>:<Setup/>}</React.StrictMode>);

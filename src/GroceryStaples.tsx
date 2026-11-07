@@ -1,13 +1,14 @@
+import type {ReactNode} from 'react';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Check,ChevronDown,Pencil,Plus,ShoppingBasket,Star,Trash2} from 'lucide-react';
 import {addGroceryStaples,deleteGroceryStaple,groceryCategories,loadGroceryStaples,normalizeGroceryTitle,saveGroceryStaple,type GroceryStaple} from './groceryStaplesData';
 import './grocery-staples.css';
 
 type Grocery={id:string;title:string;category:string;done:number|boolean};
-type Props={openItemId?:string;householdId:string;groceries:Grocery[];itemsLoading:boolean;itemsError:string;onListChanged:()=>Promise<void>};
+type Props={tools?:ReactNode;disabled?:boolean;openItemId?:string;householdId:string;groceries:Grocery[];itemsLoading:boolean;itemsError:string;onListChanged:()=>Promise<void>};
 const errorMessage=(error:unknown)=>error instanceof Error?error.message:(error as {message?:string})?.message||'Please try again.';
 
-export default function GroceryStaples({openItemId,householdId,groceries,itemsLoading,itemsError,onListChanged}:Props){
+export default function GroceryStaples({tools,disabled=false,openItemId,householdId,groceries,itemsLoading,itemsError,onListChanged}:Props){
  const [open,setOpen]=useState(false),[staples,setStaples]=useState<GroceryStaple[]>([]),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
  const [selected,setSelected]=useState<string[]>([]),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[notice,setNotice]=useState('');
  const [editor,setEditor]=useState<{item:GroceryStaple|null}|null>(null),[title,setTitle]=useState(''),[category,setCategory]=useState('Other'),[removeConfirm,setRemoveConfirm]=useState(false);
@@ -52,8 +53,8 @@ export default function GroceryStaples({openItemId,householdId,groceries,itemsLo
  })}
  function toggle(id:string){setSelected(old=>old.includes(id)?old.filter(value=>value!==id):old.length<100?[...old,id]:old)}
  return <section className={'grocery-staples'+(open?' is-open':'')} aria-label="Grocery staples">
-  <button type="button" className="staples-toggle" aria-expanded={open} aria-controls="staples-content" onClick={()=>setOpen(value=>!value)}><span className="staples-symbol"><Star size={19}/></span><span><b>Our staples</b><small>{loaded&&!loadError&&staples.length?`${staples.length} saved ${staples.length===1?'item':'items'} · Add what you need`:'Save your usual groceries for next time'}</small></span><ChevronDown size={18}/></button>
-  {open&&<div className="staples-content" id="staples-content">
+  <div className="staples-header"><button type="button" disabled={disabled} className="staples-toggle" aria-expanded={open} aria-controls="staples-content" onClick={()=>setOpen(value=>!value)}><span className="staples-symbol"><Star size={19}/></span><span><b>Staples</b><small>{loaded&&!loadError?staples.length:''}</small></span><ChevronDown size={18}/></button>{tools}</div>
+  {open&&<div className="staples-content" id="staples-content" inert={disabled}>
    <p className="staples-intro">Keep the things you buy often here. Choose what you need, then add it to the shared shopping list.</p>
    {loadError&&<div className="staples-error" role="alert"><p>We couldn’t load your staples. {loadError}</p><button type="button" className="text-button" disabled={loading||busy} onClick={()=>void load()}>Try again</button></div>}
    {!loaded&&loading&&<p className="quiet" role="status">Loading your staples…</p>}

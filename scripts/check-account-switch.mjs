@@ -105,4 +105,10 @@ for(const failure of ['throw','silent']){
  f.local.setItem('hh:account-links:v1',JSON.stringify({[admin]:{...b,key:f.accounts.keyFor(family,true)}}));assert.equal(f.accounts.readRegistry(true)[admin],undefined,'A dedicated key belongs only to its declared account');
 }
 
+{
+ const f=setup(),a=reference(f.accounts,family,familyId,true,rememberedAuthKey);
+ for(const version of ['v1','v2'])f.accounts.store(true).setItem('shopping:'+version+':'+a.key,'synthetic grocery cache');
+ f.accounts.blockAndRemove(a);
+ for(const version of ['v1','v2'])assert.equal(f.accounts.store(true).getItem('shopping:'+version+':'+a.key),null,'Sign-out removes both grocery cache versions');
+}
 console.log('Account-switch storage checks passed: reference-only metadata, exact eligibility, source preservation, per-tab choice and cold start, refresh rotation, partial-write rollback, cross-tab late-write/removal fencing, failed-removal detection, visit isolation, callback bypass, safe sign-in entry and bounded keys. Synthetic data only.');

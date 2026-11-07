@@ -2,11 +2,11 @@ import QuantityFields from './QuantityFields';
 import {useEffect,useRef,useState} from 'react';
 import {Check,ShoppingCart,X} from 'lucide-react';
 import {groceryCategories} from './groceryStaplesData';
-import {saveGrocery} from './groceryData';
+import {saveGrocery,type GroceryDraft} from './groceryData';
 import type {ReminderItem} from './taskReminders';
 import './grocery-details.css';
 
-export default function GroceryEditor({householdId,item,stores,opener,onClose,onSaved}:{householdId:string;item:ReminderItem|null;stores:string[];opener:HTMLElement|null;onClose:()=>void;onSaved:()=>Promise<void>}){
+export default function GroceryEditor({householdId,item,stores,opener,onClose,onSaved,onSave}:{householdId:string;item:ReminderItem|null;stores:string[];opener:HTMLElement|null;onClose:()=>void;onSaved:()=>Promise<void>;onSave?:(draft:GroceryDraft,item:ReminderItem|null,id:string,addBack:boolean)=>Promise<void>}){
  const [title,setTitle]=useState(item?.title||''),[category,setCategory]=useState(item?.category||'Produce'),[quantity,setQuantity]=useState(item?.grocery_quantity==null?'':String(item.grocery_quantity)),[unit,setUnit]=useState(item?.grocery_unit||''),[store,setStore]=useState(item?.grocery_store||''),[addBack,setAddBack]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const modal=useRef<HTMLElement>(null),pending=useRef(false),requestId=useRef(crypto.randomUUID()),close=useRef(onClose);close.current=onClose;
  useEffect(()=>{
@@ -16,7 +16,7 @@ export default function GroceryEditor({householdId,item,stores,opener,onClose,on
  },[opener]);
  async function submit(event:React.FormEvent){
   event.preventDefault();if(pending.current)return;pending.current=true;setBusy(true);setError('');
-  try{await saveGrocery(householdId,{title,category,grocery_quantity:quantity===''?null:Number(quantity),grocery_unit:quantity===''?null:unit||null,grocery_store:store||null},item,requestId.current,addBack);await onSaved();onClose()}catch(error){setError((error as Error).message||'Could not save this grocery item.')}finally{pending.current=false;setBusy(false)}
+  try{const draft={title,category,grocery_quantity:quantity===''?null:Number(quantity),grocery_unit:quantity===''?null:unit||null,grocery_store:store||null};if(onSave)await onSave(draft,item,requestId.current,addBack);else await saveGrocery(householdId,draft,item,requestId.current,addBack);await onSaved();onClose()}catch(error){setError((error as Error).message||'Could not save this grocery item.')}finally{pending.current=false;setBusy(false)}
  }
 
  return <div className="modal-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!busy)onClose()}}><section className="modal grocery-editor" role="dialog" aria-modal="true" aria-labelledby="grocery-editor-title" ref={modal}>

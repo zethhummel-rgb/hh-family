@@ -1,0 +1,6 @@
+/* Use the existing space above the heading, without changing page padding. */
+.home-family-strip{display:flex;flex-wrap:wrap;align-items:center;align-content:center;gap:2px 14px;min-height:33px;margin:-37px 0 4px;color:var(--muted);font-size:11px;line-height:13px}
+.home-family-name{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;max-width:100%;overflow-wrap:anywhere}
+.home-family-name .person-dot{width:6px;height:6px;border:0}
+@media(max-width:1100px){.home-family-strip{min-height:24px;margin:-26px 0 2px;row-gap:1px;font-size:10px;line-height:11px}}
+@media(max-width:600px){.home-family-strip{min-height:23px;margin:-25px 0 2px;column-gap:12px}}

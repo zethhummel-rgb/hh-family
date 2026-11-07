@@ -1,5 +1,7 @@
 // Only the new pilot project is allowed. Production Hummel Home is explicitly denied.
 const env=import.meta.env as Record<string,string|undefined>;
+// Preserve HH's existing storage keys; the test app uses a separate namespace.
+export const authNamespace='';
 const url=env.VITE_SUPABASE_URL||'https://njpdqiwrwgoothkstoql.supabase.co';
 const key=env.VITE_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq';
 if(url.includes('ybizqfghnplcxlmlhvyn'))throw Error('The pilot must use its own Supabase project.');

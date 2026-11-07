@@ -9,6 +9,7 @@ const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES
 const user=id=>({user:{id,email:id+'@resume.invalid',user_metadata:{display_name:id}},access_token:'synthetic'});
 const member=(id,home='home-'+id)=>({user_id:id,household_id:home,display_name:id,role:'member'});
 function harness(){
+ const network={onLine:true};
  const slots=[],effects=[],timers=[],requests=[],listeners=new Map();let index=0,dirty=true,view,renderCount=0,homeUnmounts=0,lastHome=null,storageCurrent=true;
  const Household=()=>null;
  function client(name){
@@ -31,6 +32,7 @@ function harness(){
   if(name==='react')return react;
   if(name==='react/jsx-runtime')return require(name);
   if(name==='./supabase')return supabaseModule;
+  if(name==='./offlineShopping')return {savedTrip:()=>null,forgetShopping:()=>{}};
   if(name==='./Household')return {default:Household};
   if(name==='./pilot')return {invitationFrom:()=>({pilot:'',family:''}),initialAuthMode:()=> 'login'};
   if(name==='lucide-react')return new Proxy({},{get:(_o,key)=>key});
@@ -38,7 +40,7 @@ function harness(){
   return {default:()=>null};
  };
  const win={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name)}};
- new Function('require','module','exports','location','window','document','setTimeout',code)(imports,module,module.exports,{search:'',pathname:'/',origin:'https://hh.invalid'},win,{hidden:false},fn=>timers.push(fn));
+ new Function('require','module','exports','location','window','document','setTimeout','navigator',code)(imports,module,module.exports,{search:'',pathname:'/',origin:'https://hh.invalid'},win,{hidden:false},fn=>timers.push(fn),network);
  function findHome(node){if(!node||typeof node!=='object')return null;if(node.type===Household)return node;const children=node.props?.children;for(const child of Array.isArray(children)?children:[children]){const match=findHome(child);if(match)return match}return null}
  function render(){index=0;dirty=false;view=module.exports.HouseholdApp();const next=findHome(view);if(lastHome&&(!next||next.key!==lastHome.key))homeUnmounts++;lastHome=next;renderCount++;for(const effect of effects.splice(0))effect()}
  async function settle(){for(let i=0;i<12;i++){await Promise.resolve();if(dirty)render()}}
@@ -46,7 +48,7 @@ function harness(){
  async function reply(kind,data,error=null){const at=requests.findIndex(r=>r.kind===kind);assert.notEqual(at,-1,'Expected '+kind+' request');const request=requests.splice(at,1)[0];request.resolve({data,error});await settle();return request}
  async function open(){await settle();await reply('self',member('alex'));await reply('members',[member('alex')]);assert.equal(lastHome?.props.userId,'alex');homeUnmounts=0}
  async function emit(event,session=selected.session){selected.session=session;selected.callback(event,session);await settle();await runTimers()}
- return {open,emit,reply,settle,runTimers,requests,timers,member,client,get home(){return lastHome},get unmounts(){return homeUnmounts},get renders(){return renderCount},get selected(){return selected},set selected(value){selected=value;dirty=true},set storageCurrent(value){storageCurrent=value},fire:name=>listeners.get(name)?.()};
+ return {set online(value){network.onLine=value},open,emit,reply,settle,runTimers,requests,timers,member,client,get home(){return lastHome},get unmounts(){return homeUnmounts},get renders(){return renderCount},get selected(){return selected},set selected(value){selected=value;dirty=true},set storageCurrent(value){storageCurrent=value},fire:name=>listeners.get(name)?.()};
 }
 {
  const h=harness();await h.open();const key=h.home.key;
@@ -96,3 +98,10 @@ function harness(){
  assert.equal(h.home,null,'Removal between self and members reads cannot re-establish old membership');
 }
 console.log('Auth resume checks passed: same-user wake retains the mounted household; token/focus continuity, membership removal, logout, user/client/home switch, recovery, failed checks, revoked storage and stale/queued responses remain isolated. Mocked auth and membership reads only.');
+
+{
+ const h=harness();await h.open();h.online=false;await h.emit('SIGNED_IN');await h.reply('self',null,{message:'Failed to fetch',status:0});
+ assert.equal(h.home.props.userId,'alex','Losing the network keeps the already verified household mounted');
+ await h.emit('SIGNED_IN');await h.reply('self',null,{message:'Forbidden',status:403});
+ assert.equal(h.home,null,'Explicit access denial still clears the household while offline');
+}

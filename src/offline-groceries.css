@@ -1,0 +1,3 @@
+.grocery-connection{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0;padding:10px 12px;background:var(--sage);border-radius:10px}.grocery-connection p{margin:0 0 8px}.grocery-connection button{min-height:44px}
+
+.grocery-conflict-actions{display:flex;flex-wrap:wrap;gap:8px 20px}

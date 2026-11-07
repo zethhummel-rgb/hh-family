@@ -26,6 +26,8 @@ jobs:
       - run: npm run test:recovery
       - run: npm run test:welcome
       - run: npm run test:feedback
+      - run: node scripts/check-offline-shopping.mjs
+      - run: node scripts/check-portal-search.mjs
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}

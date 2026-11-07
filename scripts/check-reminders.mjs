@@ -67,12 +67,12 @@ for(const connected of[false,true])for(const stale of[false,true]){f=fixture({co
 for(const config of[{removed:true},{stale:true},{cancelled:true},{connected:true,stale:true},{connected:true,cancelled:true}]){f=fixture(config);await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0)}
 for(const connected of[false,true]){f=fixture({connected,reminder30:false,minutesBefore:29});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,0,'Turning off the switch suppresses the automatic alert');f=fixture({connected,reminder30:false});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.pushes,1,'An additional reminder still sends with the switch off')}
 f=fixture({expired:true});await f.request({action:'dispatch'},{'x-hummel-cron':'scheduler-only'});assert.equal(f.retired,true);
-// Service worker does not cache pages. It always displays push and constrains click navigation.
+// The service worker also handles offline shopping. It always displays push and constrains click navigation.
 const sw=fs.readFileSync(new URL('../public/sw.js',import.meta.url),'utf8'),handlers={};let shown,opened;
 const scope='https://hh-pilot.example.test/';
 vm.runInNewContext(sw,{URL,self:{registration:{scope,showNotification:async(title,options)=>shown={title,...options}},location:{origin:new URL(scope).origin},clients:{claim:async()=>{},matchAll:async()=>[],openWindow:async url=>opened=url},skipWaiting:async()=>{},addEventListener:(name,handler)=>handlers[name]=handler}});
 let work;handlers.push({data:{json:()=>({title:'Hockey',body:'Soon',date:'2026-10-21',eventId:'hockey'})},waitUntil:p=>work=p});await work;assert.equal(shown.title,'Hockey');assert.equal(new URL(shown.data.url).searchParams.get('reminder_event'),'hockey');
-handlers.notificationclick({notification:{...shown,close:()=>{}},waitUntil:p=>work=p});await work;assert.ok(opened.startsWith(scope));assert.equal(handlers.fetch,undefined);
+handlers.notificationclick({notification:{...shown,close:()=>{}},waitUntil:p=>work=p});await work;assert.ok(opened.startsWith(scope));assert.equal(typeof handlers.fetch,'function');
 console.log('Reminder checks passed: Eastern/DST and all-day timing, tagged recipients, household recipient routing, native/Google delivery, cancelled/disabled/removed-member guards, deduplication, expired-device cleanup, authenticated APIs, scheduler credential, endpoint allowlist, encrypted push contract, and safe notification clicks.');
 
 // Device registration is account-bound and refreshes an expired session only once.
