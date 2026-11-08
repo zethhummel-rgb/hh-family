@@ -7,7 +7,7 @@ const homeOrder=['className="home-encouragement"','<HomeCountdowns householdId',
 let homeIndex=-1;for(const section of homeOrder){const position=homeMarkup.indexOf(section,homeIndex+1);assert.ok(position>homeIndex,`Home dashboard order changed near ${section}`);homeIndex=position;}
 assert.ok(read('src/polish.css').includes('.home-page .page-heading{'),'The requested compact Home heading must be applied');
 const eventMarkup=read('src/EventEditor.tsx');
-assert.ok(eventMarkup.indexOf('className="event-tag-picker"')<eventMarkup.indexOf('className="event-options"'),'Family selections remain outside More options');
+assert.ok(!eventMarkup.includes('className="event-options"'),'Compact event editor exposes settings directly');
 assert.ok(eventMarkup.includes('className="event-save-bar"'),'Save remains reachable');
 const buttonCss=read('src/polish.css');
 const reminderTarget=buttonCss.match(/\.reminder-row > \.checkbox\{([^}]*)\}/)?.[1]||'';
