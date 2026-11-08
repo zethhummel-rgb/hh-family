@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {entryNavigation,isHouseholdTab,loadNavigation,saveNavigation,type HouseholdNavigation} from './householdNavigation';
+import {entryNavigation,isHouseholdTab,isCalendarView,type CalendarView,loadNavigation,saveNavigation,type HouseholdNavigation} from './householdNavigation';
 
 export function useHouseholdNavigation(userId:string,householdId:string,groceryReady:boolean,blocked:boolean){
  const [view,setView]=useState(()=>entryNavigation(loadNavigation(userId,householdId),new URLSearchParams(location.search)));
@@ -16,6 +16,7 @@ export function useHouseholdNavigation(userId:string,householdId:string,groceryR
   capture();pendingScroll.current=tab==='Groceries'&&!resetScroll;
   update({...current.current,tab,...(resetScroll?{grocery:{...current.current.grocery,scrollY:0}}:{})});
  },[capture,update]);
+ const setCalendarView=useCallback((calendarView:CalendarView)=>{if(isCalendarView(calendarView))update({...current.current,calendarView})},[update]);
  const setQuery=useCallback((search:string)=>{pendingScroll.current=false;update({...current.current,grocery:{...current.current.grocery,search:search.slice(0,160)}})},[update]);
  const setStoreFilter=useCallback((store:string)=>{pendingScroll.current=false;update({...current.current,grocery:{...current.current.grocery,store}})},[update]);
 
@@ -46,5 +47,5 @@ export function useHouseholdNavigation(userId:string,householdId:string,groceryR
   })});
   return()=>{cancelAnimationFrame(first);cancelAnimationFrame(second)};
  },[view.tab,groceryReady,blocked,capture]);
- return {tab:view.tab,query:view.grocery.search,storeFilter:view.grocery.store,setTab,setQuery,setStoreFilter,capture};
+ return {tab:view.tab,calendarView:view.calendarView,setCalendarView,query:view.grocery.search,storeFilter:view.grocery.store,setTab,setQuery,setStoreFilter,capture};
 }

@@ -36,6 +36,7 @@ jobs:
       - run: npm run build
       - name: Run all 36 configurations and focused checks
         run: |
+          node scripts/polish-browser/calendar-views.cjs
           node scripts/polish-browser/journeys.cjs
           node scripts/polish-browser/focused.cjs
           node scripts/polish-browser/signup.cjs
