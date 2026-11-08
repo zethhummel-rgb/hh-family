@@ -12,6 +12,8 @@ const note={id:'55555555-5555-4555-8555-555555555555',household_id:home,title:'P
 const meal={id:'66666666-6666-4666-8666-666666666666',household_id:home,title:'Camp chili',instructions:'Simmer the beans.',ingredients:[],source_url:'',version:1,meal_date:'2026-09-01',meal_type:'supper',created_at:'2026-01-01',updated_at:'2026-01-01'};
 const event={id:'77777777-7777-4777-8777-777777777777',household_id:home,title:'Camp registration',description:'Family day',location:'Cornwall',person:'Everyone',starts_at:'2026-12-01T15:00:00Z',ends_at:'2026-12-01T16:00:00Z',all_day:false,start_date:null,end_date:null,recurrence:[],exceptions:{},version:1};
 
+const agendaToday=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const agendaShift=(day,offset)=>{const d=new Date(day+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)};
 const calendarEvents=[
  {...event,id:'10000000-0000-4000-8000-000000000001',title:'Midnight finish',starts_at:'2026-12-01T03:07:00Z',ends_at:'2026-12-01T05:00:00Z'},
  {...event,id:'10000000-0000-4000-8000-000000000002',title:'Overnight trip',starts_at:'2026-12-01T04:00:00Z',ends_at:'2026-12-01T07:00:00Z'},
@@ -19,6 +21,10 @@ const calendarEvents=[
  {...event,id:'10000000-0000-4000-8000-000000000004',title:'Riley football practice and team celebration with a very long descriptive title',person:'Riley Morgan',person_ids:['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'],starts_at:'2026-12-01T22:00:00Z',ends_at:'2026-12-01T23:00:00Z',location:'Riverside community sports field with a long entrance description'},
  {...event,id:'10000000-0000-4000-8000-000000000005',title:'Weekly piano',person:'Casey Morgan',person_ids:['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'],starts_at:'2026-11-30T21:00:00Z',ends_at:'2026-11-30T22:00:00Z',recurrence:['RRULE:FREQ=WEEKLY;COUNT=5']}
 ];
+for(const [index,title,offset] of [[6,'Past agenda fixture',-2],[7,'Upcoming agenda fixture',2],[8,'Later agenda fixture',8]]){
+ const day=agendaShift(agendaToday,offset),end=agendaShift(day,1);
+ calendarEvents.push({...event,id:'10000000-0000-4000-8000-00000000000'+index,title,all_day:true,start_date:day,end_date:end,starts_at:day+'T05:00:00Z',ends_at:end+'T05:00:00Z'});
+}
 const staple={id:'88888888-8888-4888-8888-888888888888',household_id:home,title:'Camp coffee',category:'Pantry',created_at:'2026-01-01'};
 const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
@@ -125,6 +131,10 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  await view.getByRole('button',{name:'Month',exact:true}).click();await page.getByRole('button',{name:'Next month',exact:true}).click();
  await page.locator('.month-grid').getByRole('button',{name:/Thursday, December 31,/}).click();await page.getByRole('button',{name:'Close day plans'}).click();
  await view.getByRole('button',{name:'3 Day',exact:true}).click();assert.deepEqual(await days.evaluateAll(es=>es.map(e=>e.dataset.date)),['2026-12-31','2027-01-01','2027-01-02']);pass('A selected month day anchors three day view across New Year');
+ await view.getByRole('button',{name:'Agenda',exact:true}).click();assert.match(await page.locator('.month-move h3').innerText(),/Dec 31, 2026.*Jan 6, 2027/);
+ await page.getByRole('button',{name:'Next week',exact:true}).click();await page.getByRole('button',{name:'Add event',exact:true}).click();assert.equal(await page.getByLabel('Starts',{exact:true}).inputValue(),'2027-01-07');await page.getByRole('button',{name:'Close event editor'}).click();
+ await page.getByRole('button',{name:'Previous week',exact:true}).click();assert.match(await page.locator('.month-move h3').innerText(),/Dec 31, 2026.*Jan 6, 2027/);pass('Agenda advances and returns by seven days across New Year');
+ await view.getByRole('button',{name:'3 Day',exact:true}).click();
  await page.getByRole('button',{name:'Today',exact:true}).click();
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  assert.equal(await days.first().getAttribute('data-date'),today);pass('Today resets three day view to the current Eastern date');
@@ -140,5 +150,18 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
   assert.equal(await view.getByRole('button',{name:chosen,exact:true}).getAttribute('aria-pressed'),'true');
   await page.waitForLoadState('networkidle');await page.waitForFunction(()=>!document.querySelector('.native-calendar .spin')&&!document.querySelector('.native-calendar .error'));reloading=false;
  }pass('Month, Agenda and 3 Day each persist across navigation, refresh, notification entry and reopening the app');
+ await view.getByRole('button',{name:'Agenda',exact:true}).click();
+ const agenda=page.getByLabel('Agenda calendar',{exact:true}),agendaRows=agenda.locator('.agenda-day');
+ await agenda.getByRole('button',{name:/Upcoming agenda fixture/}).waitFor();
+ assert.equal(await agenda.getByRole('button',{name:/Past agenda fixture/}).count(),0);
+ assert.equal(await agenda.getByRole('button',{name:/Later agenda fixture/}).count(),0);
+ assert((await agendaRows.evaluateAll(es=>es.map(e=>e.dataset.date))).every(day=>day>=agendaToday&&day<agendaShift(agendaToday,7)));
+ await page.getByRole('button',{name:'Previous week',exact:true}).click();await agenda.getByRole('button',{name:/Past agenda fixture/}).waitFor();
+ assert((await agendaRows.evaluateAll(es=>es.map(e=>e.dataset.date))).every(day=>day<agendaToday));
+ await page.getByRole('button',{name:'Next week',exact:true}).click();await agenda.getByRole('button',{name:/Upcoming agenda fixture/}).waitFor();
+ await page.getByRole('button',{name:'Next week',exact:true}).click();await agenda.getByRole('button',{name:/Later agenda fixture/}).waitFor();
+ await page.getByRole('button',{name:'Today',exact:true}).click();await agenda.getByRole('button',{name:/Upcoming agenda fixture/}).waitFor();
+ assert.equal(await agenda.getByRole('button',{name:/Past agenda fixture/}).count(),0);assert.equal(await agendaRows.first().getAttribute('data-date'),agendaToday);
+ pass('Agenda opens from today; past days require Previous week, Next week browses forward, and Today restores upcoming plans');
  assert.deepEqual(errors,[]);pass('No browser runtime exceptions');
 })().catch(async e=>{console.error(e);if(page){fs.writeFileSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','calendar-views-failure.txt'),await page.locator('body').innerText().catch(()=>''));await page.screenshot({path:path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','calendar-views-failure.png')}).catch(()=>{})}process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
