@@ -1,9 +1,10 @@
+import InputCardHandle,{submitInputCard} from './InputCardHandle';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import QuantityFields from './QuantityFields';
 import ChoiceDialog from './ChoiceDialog';
 import {matchingGroceries,groceryNameKey} from './groceryDuplicates';
 import {useEffect,useRef,useState} from 'react';
-import {Check,ShoppingCart,X} from 'lucide-react';
+import {Check,X} from 'lucide-react';
 import {groceryCategories} from './groceryStaplesData';
 import {saveGrocery,validateGrocery,groceryDetails,type GroceryDraft} from './groceryData';
 import type {ReminderItem} from './taskReminders';
@@ -17,7 +18,7 @@ export default function GroceryEditor({householdId,item,stores,groceries,opener,
  useEffect(()=>{
   modal.current?.querySelector('input')?.focus();
   const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!pending.current)close.current();if(event.key==='Tab'){const fields=Array.from(modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)')||[]);if(event.shiftKey&&document.activeElement===fields[0]){event.preventDefault();fields.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===fields.at(-1)){event.preventDefault();fields[0]?.focus()}}};
-  document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);if(opener?.isConnected)opener.focus()};
+  document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);if(opener?.isConnected)opener.focus({preventScroll:true})};
  },[opener]);
  async function save(allowDuplicate=false){
   if(pending.current)return;setError('');
@@ -32,16 +33,15 @@ export default function GroceryEditor({householdId,item,stores,groceries,opener,
  function submit(event:React.FormEvent){event.preventDefault();void save()}
 
 
- return <div className="modal-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!busy)guard.requestClose()}}><section className="modal grocery-editor" role="dialog" aria-modal="true" aria-labelledby="grocery-editor-title" ref={modal}>
-  <button type="button" className="modal-close icon-button" aria-label="Close grocery editor" disabled={busy} onClick={()=>guard.requestClose()}><X/></button><span className="round-icon sage"><ShoppingCart/></span><h2 id="grocery-editor-title">{item?'Edit grocery item.':'Add grocery item'}</h2><p className="modal-intro">Shared with your household.</p>
+ return <div className="modal-backdrop quick-form-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!busy)guard.requestClose()}}><section className="modal grocery-editor quick-form" role="dialog" aria-modal="true" aria-labelledby="grocery-editor-title" ref={modal}>
+  <InputCardHandle modal={modal} dirty={snapshot!==baseline.current} busy={busy} onClose={onClose} onSave={()=>submitInputCard(modal.current)}/><header className="quick-form-heading"><button type="button" className="modal-close icon-button" aria-label="Close grocery editor" disabled={busy} onClick={()=>guard.requestClose()}><X/></button><h2 id="grocery-editor-title">{item?'Edit grocery item':'Add grocery item'}</h2></header>
   <form onSubmit={submit}><fieldset disabled={busy} className="grocery-fields">
    <label>Item<input required maxLength={160} value={title} onChange={event=>setTitle(event.target.value)} placeholder="e.g. Kidney beans"/></label>
-   <label>Category<select aria-label="Category" value={category} onChange={event=>setCategory(event.target.value)}>{groceryCategories.map(value=><option key={value}>{value}</option>)}</select></label>
    <QuantityFields quantity={quantity} unit={unit} onQuantity={value=>{setQuantity(value);if(!value)setUnit('')}} onUnit={setUnit}/>
 
-   <label>Store (optional)<input value={store} maxLength={80} onChange={event=>setStore(event.target.value)} placeholder="e.g. Costco" list="grocery-store-options"/></label><datalist id="grocery-store-options">{stores.map(value=><option key={value} value={value}/>)}</datalist>
-   {item?.done?<label className="grocery-reuse"><input type="checkbox" checked={addBack} onChange={event=>setAddBack(event.target.checked)}/>Add back to the shopping list</label>:<p className="field-help">Leave quantity and store empty whenever you don’t need them.</p>}
-   {error&&<p className="error" role="alert">{error}</p>}<button className="button primary wide" disabled={busy||!title.trim()}>{busy?'Saving…':item?'Save changes':'Add item'}<Check size={17}/></button>
+   <div className="quick-form-pair"><label>Category<select aria-label="Category" value={category} onChange={event=>setCategory(event.target.value)}>{groceryCategories.map(value=><option key={value}>{value}</option>)}</select></label><label>Store (optional)<input value={store} maxLength={80} onChange={event=>setStore(event.target.value)} placeholder="e.g. Costco" list="grocery-store-options"/></label></div><datalist id="grocery-store-options">{stores.map(value=><option key={value} value={value}/>)}</datalist>
+   {item?.done?<label className="grocery-reuse"><input type="checkbox" checked={addBack} onChange={event=>setAddBack(event.target.checked)}/>Add back to the shopping list</label>:<p className="field-help">Quantity, unit and store are optional.</p>}
+   {error&&<p className="error" role="alert">{error}</p>}<div className="quick-form-footer"><button className="button primary wide" disabled={busy||!title.trim()}>{busy?'Saving…':item?'Save changes':'Add item'}<Check size={17}/></button></div>
   </fieldset></form>
  {guard.confirmation}{duplicates&&<ChoiceDialog title="Already on your grocery list" onCancel={()=>setDuplicates(null)} actions={[{label:item?'Save anyway':'Keep both',primary:true,run:()=>void save(true)},{label:item?'Discard this change':'Discard new item',run:onClose},{label:'Back to editing',run:()=>setDuplicates(null)}]}><p>{title.trim()} is already on your list. Keep another entry or discard this {item?'change':'new item'}?</p><ul>{duplicates.map(existing=><li key={existing.id}>{existing.title}{groceryDetails(existing)?' — '+groceryDetails(existing):''}</li>)}</ul><p>Your existing items will stay as they are.</p></ChoiceDialog>}</section></div>;
 }
