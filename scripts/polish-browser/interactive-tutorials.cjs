@@ -79,7 +79,36 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
   if(await node.isDisabled()){await page.getByRole('button',{name:'Skip unavailable option',exact:true}).click();return}
   if(step.action==='read'){await continueButton().click();return}
   if(step.action==='save'){await node.click();await page.getByRole('heading',{name:'You did it.',exact:true}).waitFor();return}
-  if(step.action==='input'){await node.click();const entered=await inputValue(node,guide,index);await node.fill(entered);assert.equal(await node.evaluate(el=>new Promise(resolve=>requestAnimationFrame(()=>resolve(el.value)))),entered,'Practice typing is preserved');if(guide.id==='calendar'&&index===6){await node.evaluate(el=>el.closest('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.match(await page.locator('.tutorial-help').innerText(),/Finish the highlighted step/);assert.equal(mutations.length,0)}await continueButton().click();return}
+  if(step.action==='input'){
+   await node.click();const entered=await inputValue(node,guide,index);
+   await node.fill(entered);
+   assert.equal(await node.evaluate(el=>new Promise(resolve=>requestAnimationFrame(()=>resolve(el.value)))),entered,'Practice typing is preserved');
+   if(guide.id==='calendar'&&index===6){await node.evaluate(el=>el.closest('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.match(await page.locator('.tutorial-help').innerText(),/Finish the highlighted step/);assert.equal(mutations.length,0)}
+   const notesWithKeyboard=guide.id==='event-options'&&step.target.includes('Notes (optional)');
+   if(notesWithKeyboard){
+    // Model the iPhone keyboard: only the visual viewport shrinks.
+    await page.evaluate(()=>{
+     const vv=window.visualViewport;if(!vv)throw Error('VisualViewport unavailable');
+     Object.defineProperty(vv,'height',{configurable:true,value:360});
+     vv.dispatchEvent(new Event('resize'));
+    });
+    try{
+     await page.waitForFunction(()=>{
+      const coach=document.querySelector('.tutorial-coach'),next=coach?.querySelector('.tutorial-coach-actions .button'),vv=window.visualViewport;
+      if(!coach||!next||!vv||coach.dataset.keyboardVisible!=='true')return false;
+      const b=coach.getBoundingClientRect(),a=next.getBoundingClientRect(),top=vv.offsetTop,bottom=top+vv.height;
+      return b.top>=top-1&&b.bottom<=bottom+1&&a.top>=top-1&&a.bottom<=bottom+1;
+     },null,{timeout:4000});
+     assert(await node.evaluate(el=>document.activeElement===el),'Notes field stays focused with keyboard visible');
+     assert.equal(await page.locator('.tutorial-coach').getAttribute('data-keyboard-visible'),'true');
+     await continueButton().click(); // Advance while the simulated keyboard is visible.
+    }finally{
+     await page.evaluate(()=>{delete window.visualViewport.height;window.visualViewport.dispatchEvent(new Event('resize'))});
+    }
+    return;
+   }
+   await continueButton().click();return
+  }
   if(step.action==='change'){
    if(await node.evaluate(el=>el.tagName==='SELECT')){
     const choices=await node.locator('option').evaluateAll(options=>options.map(o=>o.value));const label=await node.getAttribute('aria-label');let value=choices[0];
@@ -100,6 +129,10 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
   for(let index=0;index<guide.steps.length;index++){
    await page.waitForFunction(({number,total})=>document.querySelector('.tutorial-counter')?.textContent===`Step ${number} of ${total}`,{number:index+1,total:guide.steps.length});
    const step=guide.steps[index];await target(step.target);await page.waitForFunction(selector=>Array.from(document.querySelectorAll(selector)).some(el=>el.hasAttribute('data-tutorial-highlight')),step.target);if(step.action!=='read'&&step.action!=='save')assert(await page.locator('.tutorial-coach-actions .button').isDisabled(),'Cannot advance before interacting: '+guide.id+' '+index);
+   if(guide.id==='event-options'&&index===0){
+    const glow=await page.locator('.tutorial-spotlight').evaluate(el=>getComputedStyle(el).boxShadow);
+    assert(!/9999px/.test(glow),'Spotlight must not dim or pulse the entire page');
+   }
    // Highlight and coach positioning settle on successive animation frames.
    await page.waitForFunction(()=>{
     const coach=document.querySelector('.tutorial-coach');if(!coach)return false;
@@ -115,7 +148,7 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
   assert.equal(await page.locator('.quick-form,.event-modal,.settings-dialog').count(),0,'Finish cleans practice forms');
   if(guide.id==='calendar')assert.equal(await page.locator('[data-tour="view-Agenda"]').getAttribute('aria-pressed'),'true','Practice restores preferred calendar view');
   assert.equal(JSON.stringify(tables),initial);assert.equal(JSON.stringify(products),initialProducts);assert.equal(JSON.stringify(member),initialMember);assert.equal(JSON.stringify(await page.evaluate(()=>Object.values(localStorage))).includes('HH practice'),false,'Practice field values are not persisted');
-  record(guide.id,[guide.steps.length+' required steps completed','no server writes or email','practice forms cleared']);
+  record(guide.id,[guide.steps.length+' required steps completed','no server writes or email','practice forms cleared',...(guide.id==='event-options'?['focused spotlight and keyboard-visible Next']:[])]);
  }
  await openHelp();await page.locator('[data-tutorial-id="calendar"]').click();await page.getByRole('button',{name:'Start practice',exact:true}).click();await (await target('[data-tour="nav-Calendar"]')).click();await (await target('[data-tour="calendar-today"]')).click();await page.keyboard.press('Escape');await page.getByRole('alertdialog',{name:'Exit practice?'}).waitFor();await page.getByRole('button',{name:'Keep practising',exact:true}).click();assert(await page.locator('.tutorial-coach').isVisible());await page.keyboard.press('Escape');await page.getByRole('button',{name:'Exit practice',exact:true}).click();assert.equal(await page.locator('.tutorial-coach').count(),0);record('exit',['Escape offers explicit exit','Keep practising retains position','Exit releases tutorial']);
  // Restart and exit must clean up only the practice form, including a typed draft.
