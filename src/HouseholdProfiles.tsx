@@ -1,8 +1,10 @@
+import {useTutorialPractice} from './InteractiveTutorial';
 import {useEffect,useState,useRef} from 'react';
 import {Plus,Pencil,Check} from 'lucide-react';
 import {supabase} from './supabase';
 import type {HouseholdPerson,Member} from './data';
 export default function HouseholdProfiles({people,members,householdId,onSaved,addRequest,onBusyChange,onDraftChange}:{onDraftChange?:(draft:boolean)=>void;onBusyChange?:(busy:boolean)=>void;addRequest?:number;people:HouseholdPerson[];members:Member[];householdId:string;onSaved:()=>unknown}){
+ const tutorial=useTutorialPractice();
  const [editing,setEditing]=useState<HouseholdPerson|null>(null),[adding,setAdding]=useState(false),[name,setName]=useState(''),[color,setColor]=useState('#E78725'),[linked,setLinked]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const nameInput=useRef<HTMLInputElement>(null);
  useEffect(()=>{onBusyChange?.(busy)},[busy,onBusyChange]);

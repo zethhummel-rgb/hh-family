@@ -1,3 +1,4 @@
+import {useTutorialPractice} from './InteractiveTutorial';
 import InputCardHandle,{submitInputCard} from './InputCardHandle';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import QuantityFields from './QuantityFields';
@@ -20,10 +21,12 @@ export default function GroceryEditor({householdId,item,stores,groceries,opener,
   const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!pending.current)close.current();if(event.key==='Tab'){const fields=Array.from(modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)')||[]);if(event.shiftKey&&document.activeElement===fields[0]){event.preventDefault();fields.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===fields.at(-1)){event.preventDefault();fields[0]?.focus()}}};
   document.addEventListener('keydown',key);return()=>{document.removeEventListener('keydown',key);if(opener?.isConnected)opener.focus({preventScroll:true})};
  },[opener]);
+ const tutorial=useTutorialPractice();
  async function save(allowDuplicate=false){
   if(pending.current)return;setError('');
   const draft={title,category,grocery_quantity:quantity===''?null:Number(quantity),grocery_unit:quantity===''?null:unit||null,grocery_store:store||null};
   try{validateGrocery(draft)}catch(e){setError((e as Error).message);return}
+  if(tutorial.intercept('grocery'))return;
   const adding=!item||addBack||groceryNameKey(item.title)!==groceryNameKey(title);
   const matches=adding?matchingGroceries(groceries,title,[item?.id||'',requestId.current]):[];
   if(!allowDuplicate&&matches.length){setDuplicates(matches);return}

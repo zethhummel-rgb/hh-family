@@ -1,3 +1,4 @@
+import {useTutorialPractice} from './InteractiveTutorial';
 import InputCardHandle,{submitInputCard} from './InputCardHandle';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import {reminderLabel} from '../supabase/functions/google-calendar/reminders';
@@ -39,6 +40,7 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
  function changeScope(next:'occurrence'|'series'){guard.requestClose(()=>void loadScope(next))}
  function moveStartDate(next:string){if(allDay){const days=(Date.parse(end)-Date.parse(start))/86400000;if(next&&Number.isFinite(days)&&days>=0)setEnd(shiftDay(next,days))}else{const moved=movedEventEnd(start,startTime,end,endTime,next,startTime);if(moved){setEnd(moved.date);setEndTime(moved.time)}}setStart(next)}
  function changeRepeat(update:Partial<RepeatOptions>){setRepeat(old=>({...old,...update}));setRepeatDirty(true)}
+ const tutorial=useTutorialPractice();
  async function submit(e:React.FormEvent){
   e.preventDefault();setBusy(true);setError('');
   try{
@@ -51,6 +53,7 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
     if(frequency==='existing'&&current?.all_day!==allDay)throw Error('Choose a new repeat pattern before changing this series between all-day and timed.');
     if(!current||repeatDirty)draft.recurrence=frequency==='none'?[]:frequency==='existing'?undefined:buildRecurrence({...repeat,frequency},start,allDay);
    }
+   if(tutorial.intercept('event'))return;
    await onSave(draft,current,requestId.current);onClose();
   }catch(e){setError(errorText(e))}finally{setBusy(false)}
  }
@@ -75,7 +78,7 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
     {occurrenceOnly?<p className="field-help">Choose “The whole series” above to change how it repeats.</p>:repeatEnabled&&<>
      <div className="repeat-interval"><label>Repeat every<input type="number" required min="1" max="999" step="1" inputMode="numeric" value={Number.isNaN(repeat.interval)?'':repeat.interval} onChange={e=>changeRepeat({interval:e.target.valueAsNumber})}/></label><span>{{DAILY:'day(s)',WEEKLY:'week(s)',MONTHLY:'month(s)',YEARLY:'year(s)'}[frequency]}</span></div>
      <p className="field-help">{frequency==='WEEKLY'?`On ${new Date(start+'T12:00:00Z').toLocaleDateString('en-CA',{timeZone:'UTC',weekday:'long'})}. Use 2 weeks for biweekly.`:frequency==='MONTHLY'?'On this day of the month. Months without that date are skipped.':frequency==='YEARLY'?'On this date each year. February 29 repeats in leap years.':'Counted in calendar days, keeping the same Eastern time.'}</p>
-     <label>Repeat ends<select value={repeat.ending} onChange={e=>changeRepeat({ending:e.target.value as RepeatOptions['ending']})}><option value="never">Never</option><option value="on">On a date</option><option value="after">After a number of occurrences</option></select></label>
+     <label>Repeat ends<select className="repeat-end-select" value={repeat.ending} onChange={e=>changeRepeat({ending:e.target.value as RepeatOptions['ending']})}><option value="never">Never</option><option value="on">On a date</option><option value="after">After a number of occurrences</option></select></label>
      {repeat.ending==='on'&&<label>Last repeat date<input type="date" required min={start} value={repeat.until} onChange={e=>changeRepeat({until:e.target.value})}/></label>}
      {repeat.ending==='after'&&<label>Number of occurrences<input type="number" min="1" max="9999" step="1" required value={Number.isNaN(repeat.count)?'':repeat.count} onChange={e=>changeRepeat({count:e.target.valueAsNumber})}/><span className="field-help">Includes the first event.</span></label>}
      {Number.isInteger(repeat.interval)&&repeat.interval>0&&<p className="repeat-summary">{repeatDescription({...repeat,frequency:frequency as RepeatFrequency})}</p>}

@@ -1,3 +1,5 @@
+import {useTutorialPractice} from './InteractiveTutorial';
+import {useTutorialPractice} from './InteractiveTutorial';
 import InputCardHandle,{submitInputCard} from './InputCardHandle';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import {useEffect,useRef,useState} from 'react';
@@ -5,6 +7,7 @@ import {Check,X} from 'lucide-react';
 import {dayKey,zonedISO} from './calendarData';
 import {taskRepeatLabel,type ReminderDraft,type ReminderItem,type RepeatUnit} from './taskReminders';
 export default function ReminderEditor({item,people,onClose,onSave}:{item:ReminderItem|null;people:string[];onClose:()=>void;onSave:(draft:ReminderDraft,current:ReminderItem|null)=>Promise<void>}){
+ const tutorial=useTutorialPractice();
  const [title,setTitle]=useState(item?.title||''),[person,setPerson]=useState(item?.person||'Everyone'),[due,setDue]=useState(item?.due||''),[notify,setNotify]=useState(!!item?.reminder_time),[time,setTime]=useState(item?.reminder_time?.slice(0,5)||'09:00'),[unit,setUnit]=useState<RepeatUnit>(item?.repeat_unit||'none'),[every,setEvery]=useState(item?.repeat_every||1),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const snapshot=JSON.stringify([title,person,due,notify,time,unit,every]);const baseline=useRef(snapshot);const guard=useUnsavedChanges(snapshot!==baseline.current,busy,onClose);useModalScrollLock();
  const modal=useRef<HTMLElement>(null),close=useRef(onClose),busyRef=useRef(busy);close.current=guard.requestClose;busyRef.current=busy;

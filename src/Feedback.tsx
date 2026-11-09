@@ -1,3 +1,4 @@
+import {useTutorialPractice} from './InteractiveTutorial';
 import {useEffect,useRef,useState} from 'react';
 import {CheckCircle2,MessageSquare,Send} from 'lucide-react';
 import {feedbackAreas,feedbackLimit,feedbackRecipient} from '../shared/feedback';
@@ -5,6 +6,7 @@ import {feedbackAvailability,sendFeedback} from './feedbackData';
 import './feedback.css';
 
 export default function Feedback({userId,householdId,email,onBusy,onDirty}:{userId:string;householdId:string;email:string;onBusy:(busy:boolean)=>void;onDirty:(dirty:boolean)=>void}){
+ const tutorial=useTutorialPractice();
  const [area,setArea]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[sent,setSent]=useState(false),[error,setError]=useState('');
  useEffect(()=>{onDirty(!!(area||message.trim())&&!sent)},[area,message,sent,onDirty]);
  const inFlight=useRef(false),request=useRef<{content:string;id:string}|null>(null);

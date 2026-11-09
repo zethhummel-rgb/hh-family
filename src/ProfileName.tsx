@@ -1,6 +1,8 @@
+import {useTutorialPractice} from './InteractiveTutorial';
 import {useEffect,useRef,useState} from 'react';
 import {supabase} from './supabase';
 export default function ProfileName({name,userId,householdId,onSaved,onDirty,onBusy}:{name:string;userId:string;householdId:string;onSaved:()=>unknown;onDirty:(dirty:boolean)=>void;onBusy:(busy:boolean)=>void}){
+ const tutorial=useTutorialPractice();
  const [editing,setEditing]=useState(false),[draft,setDraft]=useState(name),[saved,setSaved]=useState(name),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');const pending=useRef(false);
  useEffect(()=>{setSaved(name);if(!editing)setDraft(name)},[name]);
  useEffect(()=>{onDirty(editing&&draft.trim()!==saved)},[editing,draft,saved,onDirty]);

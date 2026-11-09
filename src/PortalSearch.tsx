@@ -52,7 +52,7 @@ export default function PortalSearch({householdId,groceries,online,opener,onClos
   }
   return <div className="portal-search-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!opening)onClose();}}>
     <section className="portal-search-dialog" role="dialog" aria-modal="true" aria-labelledby="portal-search-title" ref={modal}>
-      <div className="portal-search-heading"><h2 id="portal-search-title">Search HH</h2><button type="button" aria-label="Close portal search" disabled={opening} onClick={onClose}><X size={20}/></button></div>
+      <div className="portal-search-heading"><h2 id="portal-search-title">Search HH</h2><button type="button" data-tour="search-close" aria-label="Close portal search" disabled={opening} onClick={onClose}><X size={20}/></button></div>
       <label className="portal-search-input"><Search size={19}/><input type="search" aria-label="Search all HH" placeholder="What are you looking for?" maxLength={160} value={query} onChange={event=>setQuery(event.target.value)}/></label>
       <div className="portal-search-results" aria-busy={loading||opening}>
         {!online&&<p className="portal-search-help" role="status">Searching your saved grocery list. Reopen search once connected to search all pages.</p>}

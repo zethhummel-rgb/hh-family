@@ -9,6 +9,7 @@ type Props={tools?:ReactNode;disabled?:boolean;openItemId?:string;householdId:st
 const errorMessage=(error:unknown)=>error instanceof Error?error.message:(error as {message?:string})?.message||'Please try again.';
 
 export default function GroceryStaples({tools,disabled=false,openItemId,householdId,groceries,itemsLoading,itemsError,onListChanged}:Props){
+ const tutorial=useTutorialPractice();
  const [open,setOpen]=useState(false),[staples,setStaples]=useState<GroceryStaple[]>([]),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState('');
  const [selected,setSelected]=useState<string[]>([]),[busy,setBusy]=useState(false),[actionError,setActionError]=useState(''),[notice,setNotice]=useState('');
  const [editor,setEditor]=useState<{item:GroceryStaple|null}|null>(null),[title,setTitle]=useState(''),[category,setCategory]=useState('Other'),[removeConfirm,setRemoveConfirm]=useState(false);
@@ -75,7 +76,7 @@ export default function GroceryStaples({tools,disabled=false,openItemId,househol
     <h3 id="staple-editor-title">{editor.item?'Edit staple':'Save a staple'}</h3>
     {!editor.item&&suggestions.length>0&&canUseList&&<label>Use an item from your list<select defaultValue="" disabled={busy} onChange={event=>{const item=suggestions.find(row=>row.id===event.target.value);if(item){setTitle(item.title);setCategory(item.category);titleInput.current?.focus()}}}><option value="">Choose an item (optional)</option>{suggestions.map(item=><option value={item.id} key={item.id}>{item.title}{item.done?' · picked up':''}</option>)}</select></label>}
     <label>Item name<input ref={titleInput} required maxLength={160} value={title} disabled={busy} onChange={event=>setTitle(event.target.value)} placeholder="e.g. Milk, 2 litres" autoComplete="off"/></label>
-    <label>Category<select value={category} disabled={busy} onChange={event=>setCategory(event.target.value)}>{groceryCategories.map(value=><option key={value}>{value}</option>)}</select></label>
+    <label>Category<select data-tour="staple-category" value={category} disabled={busy} onChange={event=>setCategory(event.target.value)}>{groceryCategories.map(value=><option key={value}>{value}</option>)}</select></label>
     <p className="staples-list-help">Shared with your household. Saving a staple doesn’t add it to today’s shopping list.</p>
     <div className="staple-editor-actions"><button type="button" className="text-button" disabled={busy} onClick={closeEditor}>Cancel</button><button type="submit" className="button primary" disabled={busy||!normalizeGroceryTitle(title)}>{busy?'Saving…':editor.item?'Save changes':'Save staple'}</button></div>
     {editor.item&&<div className="staple-remove">{removeConfirm?<><p>Remove “{editor.item.title}” from staples? Items already on your shopping list will stay there.</p><div><button type="button" className="text-button" disabled={busy} onClick={()=>setRemoveConfirm(false)}>Keep staple</button><button type="button" className="text-button" disabled={busy} onClick={()=>void remove()}><Trash2 size={15}/>Remove staple</button></div></>:<button type="button" className="text-button" disabled={busy} onClick={()=>setRemoveConfirm(true)}><Trash2 size={15}/>Remove from staples</button>}</div>}
