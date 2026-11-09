@@ -70,7 +70,7 @@ export function InteractiveTutorialProvider({userId,householdId,children}:{userI
 }
 
 function TutorialCoach({guide,step,session,acted,notice,onStart,onNext,onBack,onRestart,onExit,onFinish,hidden}:{guide:TutorialGuide;step:TutorialStep;session:Session;acted:boolean;notice:string;onStart:()=>void;onNext:()=>void;onBack:()=>void;onRestart:()=>void;onExit:()=>void;onFinish:()=>void;hidden:boolean}){
- const id=useId(),panel=useRef<HTMLElement>(null),[target,setTarget]=useState<HTMLElement|null>(null),[layout,setLayout]=useState({left:12,top:12,width:320,height:0,x:0,y:0,w:0,h:0}),[disabled,setDisabled]=useState(false),[resolving,setResolving]=useState(true),dialogs=useRef(new Map<HTMLElement,string|null>());
+ const id=useId(),panel=useRef<HTMLElement>(null),[target,setTarget]=useState<HTMLElement|null>(null),[layout,setLayout]=useState({left:12,top:12,width:320,height:0,x:0,y:0,w:0,h:0,keyboard:false}),[disabled,setDisabled]=useState(false),[resolving,setResolving]=useState(true),dialogs=useRef(new Map<HTMLElement,string|null>());
  const lastStep=useRef('');
  useLayoutEffect(()=>{
   let frame=0,alive=true;setTarget(null);setResolving(true);const missingTimer=setTimeout(()=>setResolving(false),600);
@@ -81,13 +81,17 @@ function TutorialCoach({guide,step,session,acted,notice,onStart,onNext,onBack,on
    const vv=window.visualViewport,vx=Math.max(0,vv?.offsetLeft||0),vy=Math.max(0,vv?.offsetTop||0);
    const right=Math.min(innerWidth,vx+(vv?.width||innerWidth)),bottom=Math.min(innerHeight,vy+(vv?.height||innerHeight));
    const vw=Math.max(1,right-vx),vh=Math.max(1,bottom-vy);
-   const rect=el?.getBoundingClientRect(),width=Math.max(1,Math.min(356,vw-24)),height=Math.max(1,Math.min(280,vh*.44,vh-24));
+   // A phone keyboard shrinks visualViewport without necessarily resizing innerHeight.
+   // Reserve more room for the coach while keeping it completely above the keyboard.
+   const keyboard=!!vv&&innerHeight-(vy+(vv.height||innerHeight))>130;
+   const heightCap=keyboard?Math.min(224,Math.max(146,vh*.58)):Math.min(280,vh*.44);
+   const rect=el?.getBoundingClientRect(),width=Math.max(1,Math.min(356,vw-24)),height=Math.max(1,Math.min(heightCap,vh-24));
    const x=Math.max(vx+4,rect?.left||0),y=Math.max(vy+4,rect?.top||0),w=Math.max(0,Math.min(rect?.right||0,right-4)-x),h=Math.max(0,Math.min(rect?.bottom||0,bottom-4)-y);
    const below=y+h+14,above=y-height-14;
    const proposedTop=rect?(below+height<=bottom-12?below:above>=vy+12?above:bottom-height-12):vy+Math.max(12,(vh-height)/2);
    const top=Math.max(vy+4,Math.min(proposedTop,bottom-height-4));
    const left=Math.max(vx+4,Math.min(vx+Math.max(12,(vw-width)/2),right-width-4));
-   const next={left,top,width,height,x,y,w,h};setLayout(old=>JSON.stringify(old)===JSON.stringify(next)?old:next);
+   const next={left,top,width,height,x,y,w,h,keyboard};setLayout(old=>JSON.stringify(old)===JSON.stringify(next)?old:next);
    const stepId=guide.id+':'+session.index+':'+session.started;
    if(el&&lastStep.current!==stepId){lastStep.current=stepId;el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});schedule()}
   })};
@@ -99,20 +103,20 @@ function TutorialCoach({guide,step,session,acted,notice,onStart,onNext,onBack,on
  useEffect(()=>{if(!target)return;const previous=target.getAttribute('aria-describedby');target.setAttribute('aria-describedby',`${previous||''} ${id}-copy`.trim());target.setAttribute('data-tutorial-highlight','true');return()=>{if(previous===null)target.removeAttribute('aria-describedby');else target.setAttribute('aria-describedby',previous);target.removeAttribute('data-tutorial-highlight')}},[target,id]);
  useEffect(()=>{const modal=target?.closest<HTMLElement>('[role="dialog"],[role="alertdialog"]');if(modal&&!dialogs.current.has(modal)){dialogs.current.set(modal,modal.getAttribute('aria-modal'));modal.setAttribute('aria-modal','false')}},[target]);
  useEffect(()=>()=>{for(const [modal,value] of dialogs.current){if(value===null)modal.removeAttribute('aria-modal');else modal.setAttribute('aria-modal',value)}},[]);
- useEffect(()=>{if(panel.current)panel.current.scrollTop=0;panel.current?.querySelector<HTMLElement>('h2')?.focus({preventScroll:true})},[guide.id,session.started,session.index,session.complete]);
+ useEffect(()=>{const content=panel.current?.querySelector<HTMLElement>('.tutorial-coach-content');if(content)content.scrollTop=0;panel.current?.querySelector<HTMLElement>('h2')?.focus({preventScroll:true})},[guide.id,session.started,session.index,session.complete]);
  if(hidden)return null;
  const missing=session.started&&!session.complete&&!target&&!resolving;
  const mayContinue=step.action==='read'||acted;
  return createPortal(<div data-tutorial-overlay="true" className="tutorial-layer">
   {target&&!session.complete&&layout.w>0&&layout.h>0&&<div className="tutorial-spotlight" aria-hidden="true" style={{left:layout.x-4,top:layout.y-4,width:layout.w+8,height:layout.h+8}}/>}
-  <section ref={panel} className="tutorial-coach" role="region" aria-labelledby={id+'-title'} onMouseDown={e=>{if((e.target as Element).closest('button'))e.preventDefault()}} onPointerDown={e=>{const button=(e.target as Element).closest('button');if(button)try{button.setPointerCapture(e.pointerId)}catch{}}} style={{left:layout.left,top:layout.top,width:layout.width,maxHeight:layout.height||280}}>
+  <section ref={panel} className="tutorial-coach" role="region" aria-labelledby={id+'-title'} data-keyboard-visible={layout.keyboard?'true':'false'} onMouseDown={e=>{if((e.target as Element).closest('button'))e.preventDefault()}} onPointerDown={e=>{const button=(e.target as Element).closest('button');if(button)try{button.setPointerCapture(e.pointerId)}catch{}}} style={{left:layout.left,top:layout.top,width:layout.width,maxHeight:layout.height||280}}>
    <div className="tutorial-coach-top"><span><CircleHelp size={15}/>PRACTICE TUTORIAL</span><button type="button" aria-label="Exit practice tutorial" onClick={onExit}><X size={19}/></button></div>
-   <p className="tutorial-counter" role="status">{session.complete?'Complete':session.started?`Step ${session.index+1} of ${guide.steps.length}`:'Learn by doing'}</p>
+   <div className="tutorial-coach-content"><p className="tutorial-counter" role="status">{session.complete?'Complete':session.started?`Step ${session.index+1} of ${guide.steps.length}`:'Learn by doing'}</p>
    <h2 id={id+'-title'} tabIndex={-1}>{session.complete?'You did it.':session.started?step.title:guide.title}</h2>
    <p id={id+'-copy'}>{session.complete?'Your practice entries were not saved or sent. Use the same controls when you are ready to make your own.':session.started?step.copy:'Follow the highlighted controls on the real pages. You must try each action to continue. Practice entries will not be added or emailed.'}</p>
    {missing&&<p className="tutorial-help" role="status">This control is not on the current screen. Restart the lesson to return to its beginning.</p>}
    {disabled&&<p className="tutorial-help">This option is unavailable here. You can skip this step.</p>}
-   {notice&&<p className="tutorial-help" role="status">{notice}</p>}
+   {notice&&<p className="tutorial-help" role="status">{notice}</p>}</div>
    <div className="tutorial-coach-actions">{session.complete?<button type="button" className="button primary" onClick={onFinish}>Finish practice<Check size={16}/></button>:!session.started?<button type="button" className="button primary" onClick={onStart}>Start practice</button>:<><button type="button" className="text-button" disabled={session.index===0} onClick={onBack}><ArrowLeft size={15}/>Back</button>{missing?<button type="button" className="button soft" onClick={onRestart}><RotateCcw size={15}/>Restart lesson</button>:disabled?<button type="button" className="button soft" onClick={onNext}>Skip unavailable option</button>:<button type="button" className="button primary" disabled={!mayContinue||step.action==='save'} onClick={onNext}>{step.action==='read'?'Continue':acted?'Continue':'Try the highlighted control'}</button>}</>}</div>
   </section>
  </div>,document.body);
