@@ -57,7 +57,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  const out=path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish');fs.mkdirSync(out,{recursive:true});const checks=[],errors=[];page.on('pageerror',e=>errors.push(e.message));
  function pass(name){checks.push(name);fs.writeFileSync(path.join(out,'scroll-lock.json'),JSON.stringify({checks,errors},null,2));console.log('PASS '+name)}
  async function nav(name){await page.locator('.mobile-nav').getByRole('button',{name,exact:true}).click()}
- async function protect(close,field,value){await close();await page.getByRole('alertdialog').waitFor();await page.getByRole('button',{name:'Keep editing',exact:true}).click();assert.equal(await field.inputValue(),value);await close();await page.getByRole('button',{name:'Discard changes',exact:true}).click()}
+ async function protect(close,field,value){await close();await page.getByRole('alertdialog').waitFor();await page.getByRole('button',{name:'Keep editing',exact:true}).click();assert.equal(await field.inputValue(),value);await close();await page.getByRole('button',{name:'Discard',exact:true}).click()}
 
  await page.goto(url);await page.locator('.home-family-name').first().waitFor();
  async function prepare(){
@@ -98,7 +98,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  await page.getByLabel('Item',{exact:true}).fill('Milk');await page.getByRole('dialog').getByRole('button',{name:'Add item',exact:true}).click();await page.getByRole('alertdialog').waitFor();
  await stationary(before);await page.getByRole('button',{name:'Back to editing',exact:true}).click();
  await stationary(before);await page.getByRole('button',{name:'Close grocery editor'}).click();await page.getByRole('button',{name:'Keep editing',exact:true}).click();await stationary(before);
- await page.getByRole('button',{name:'Close grocery editor'}).click();await page.getByRole('button',{name:'Discard changes',exact:true}).click();await restored(before);
+ await page.getByRole('button',{name:'Close grocery editor'}).click();await page.getByRole('button',{name:'Discard',exact:true}).click();await restored(before);
  pass('Closing duplicate and discard confirmations keeps the parent editor locked');
  before=await open(page.getByRole('button',{name:'Add item',exact:true}));await page.getByLabel('Item',{exact:true}).fill('Milk');await page.getByRole('dialog').getByRole('button',{name:'Add item',exact:true}).click();await page.getByRole('button',{name:'Discard new item',exact:true}).click();await restored(before);assert.equal(await page.locator('.mobile-nav').evaluate(el=>el.inert),false,'Closing both dialogs releases the navigation');
  pass('Closing stacked grocery dialogs together restores scrolling once');
@@ -118,7 +118,8 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  for(let i=0;i<5;i++)await page.getByRole('button',{name:'Add ingredient',exact:true}).click();
  const modal=page.locator('.meal-dialog');await modal.evaluate(el=>el.scrollTop=0);const mr=await modal.boundingBox();await page.mouse.move(mr.x+mr.width/2,mr.y+mr.height/2);await page.mouse.wheel(0,400);await page.waitForTimeout(100);assert(await modal.evaluate(el=>el.scrollTop)>0,'Long meal sheet still scrolls');
  await modal.evaluate(el=>el.scrollTop=el.scrollHeight);await page.mouse.wheel(0,700);await stationary(before);
- await page.getByRole('button',{name:'Close meal',exact:true}).click();await page.getByRole('button',{name:'Keep editing',exact:true}).click();await stationary(before);await page.getByRole('button',{name:'Close meal',exact:true}).click();await page.getByRole('button',{name:'Discard changes',exact:true}).click();await restored(before);
+ await page.getByRole('button',{name:'Close meal',exact:true}).click();await page.getByRole('button',{name:'Keep editing',exact:true}).click();await stationary(before);await page.getByRole('button',{name:'Close meal',exact:true}).click();await page.getByRole('button',{name:'Discard',exact:true}).click();await restored(before);
  pass('Long meal sheets, their scroll boundaries and saved-meal picker keep the website fixed');
  assert.deepEqual(errors,[]);pass('No runtime exceptions during scroll-lock journeys');
 })().catch(async e=>{console.error(e);if(page){fs.writeFileSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','scroll-lock-failure.txt'),await page.locator('body').innerText().catch(()=>''));await page.screenshot({path:path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','focused-failure.png')}).catch(()=>{})}process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
+
