@@ -22,6 +22,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run test:calendar
       - run: npm run test:database
+      - run: node scripts/check-invitation-reissue.mjs
       - run: npm run test:invitations
       - run: npm run test:recovery
       - run: npm run test:welcome

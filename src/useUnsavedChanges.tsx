@@ -1,24 +1,23 @@
-import {useCallback,useEffect,useLayoutEffect,useId,useRef,useState} from 'react';
+import ChoiceDialog from './ChoiceDialog';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 
-export function useUnsavedChanges(dirty:boolean,busy:boolean,onClose:()=>void){
- const [confirm,setConfirm]=useState(false),latest=useRef({dirty,busy,onClose}),action=useRef<()=>void>(onClose);
- latest.current={dirty,busy,onClose};
+export function useUnsavedChanges(dirty:boolean,busy:boolean,onClose:()=>void,onSave?:()=>Promise<boolean>|boolean|void){
+ const [confirm,setConfirm]=useState(false),latest=useRef({dirty,busy,onClose,onSave}),action=useRef<()=>void>(onClose),saving=useRef(false);
+ latest.current={dirty,busy,onClose,onSave};
  const requestClose=useCallback((next?:()=>void)=>{
-  if(latest.current.busy)return;
+  if(latest.current.busy||saving.current)return;
   const run=next||latest.current.onClose;
   if(latest.current.dirty){action.current=run;setConfirm(true)}else run();
  },[]);
  useEffect(()=>{if(!dirty)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=''};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn)},[dirty]);
- return {requestClose,confirmation:confirm?<DiscardPrompt onKeep={()=>setConfirm(false)} onDiscard={()=>{if(latest.current.busy)return;setConfirm(false);action.current()}}/>:null};
-}
-function DiscardPrompt({onKeep,onDiscard}:{onKeep:()=>void;onDiscard:()=>void}){
- useModalScrollLock();
- const root=useRef<HTMLDivElement>(null),id=useId();
- useEffect(()=>{const previous=document.activeElement as HTMLElement|null;root.current?.querySelector('button')?.focus();const key=(e:KeyboardEvent)=>{
-  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();onKeep()}
-  if(e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();const buttons=Array.from(root.current?.querySelectorAll('button')||[]);buttons[document.activeElement===buttons[0]?1:0]?.focus()}
- };document.addEventListener('keydown',key,true);return()=>{document.removeEventListener('keydown',key,true);if(previous?.isConnected)previous.focus({preventScroll:true})}},[onKeep]);
- return <div className="discard-backdrop" onClick={e=>{e.stopPropagation();if(e.target===e.currentTarget)onKeep()}}><div ref={root} className="discard-prompt" role="alertdialog" aria-modal="true" aria-labelledby={id}><h2 id={id}>Discard your changes?</h2><p>Your unfinished changes have not been saved.</p><div><button type="button" className="button primary" onClick={onKeep}>Keep editing</button><button type="button" className="button soft" onClick={onDiscard}>Discard changes</button></div></div></div>;
+ async function save(){
+  if(latest.current.busy||saving.current)return;
+  saving.current=true;setConfirm(false);
+  // First release the confirmation's inert state so native validation can focus.
+  await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+  try{if(await latest.current.onSave?.()===true)action.current()}finally{saving.current=false}
+ }
+ return {requestClose,confirmation:confirm?<ChoiceDialog title="Save your changes?" onCancel={()=>setConfirm(false)} actions={[...(onSave?[{label:'Save',primary:true,run:()=>void save()}]:[]),{label:'Discard',run:()=>{if(latest.current.busy||saving.current)return;setConfirm(false);action.current()}},{label:'Keep editing',run:()=>setConfirm(false)}]}><p>You have unsaved changes.</p></ChoiceDialog>:null};
 }
 // One shared lock for stacked editors and confirmation dialogs.
 // Fixing the body also holds the page on mobile Safari, where overflow alone
@@ -55,3 +54,4 @@ function holdPage(){
  return()=>{if(released)return;released=true;if(--scrollLocks===0){releasePage?.();releasePage=null}};
 }
 export function useModalScrollLock(){useLayoutEffect(holdPage,[])}
+

@@ -18,3 +18,23 @@ export async function createEmailInvitation(kind:InviteKind,email:string):Promis
  if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token))throw Error('Could not create an invitation.');
  return deliverInvitation({kind,token,email:recipient,url:invitationLink(kind,token),sent:false,error:''});
 }
+
+export type ReissueAttempt={identity:string;id:string;token:string};
+export function normalInvitationEmail(value:string){
+ const email=value.trim().toLowerCase();
+ if(email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw Error('Enter a complete email address, such as name@icloud.com.');
+ return email;
+}
+export function emailSuggestion(value:string){
+ const email=value.trim().toLowerCase(),at=email.lastIndexOf('@');if(at<1)return '';
+ const domains:Record<string,string>={'icolud.com':'icloud.com','icould.com':'icloud.com','icloud.con':'icloud.com','gmial.com':'gmail.com','gamil.com':'gmail.com','gmail.con':'gmail.com','hotmial.com':'hotmail.com','hotmail.con':'hotmail.com','outlook.con':'outlook.com'};
+ return domains[email.slice(at+1)]?email.slice(0,at+1)+domains[email.slice(at+1)]:'';
+}
+export async function reissueFamilyInvitation(source:{id:string;email:string},email:string,attempt:ReissueAttempt):Promise<EmailInvitation>{
+ const recipient=normalInvitationEmail(email);
+ const r=await supabase.rpc('reissue_household_invite',{source_invitation_id:source.id,expected_email:source.email,recipient_email:recipient,replacement_id:attempt.id,replacement_token:attempt.token});
+ if(r.error)throw r.error;
+ if(r.data!==attempt.token)throw Error('Could not confirm this invitation. Keep this page open and retry.');
+ return deliverInvitation({kind:'family',token:attempt.token,email:recipient,url:invitationLink('family',attempt.token),sent:false,error:''});
+}
+

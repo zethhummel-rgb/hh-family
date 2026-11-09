@@ -115,3 +115,4 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
  await swipe();await confirm();await page.getByRole('button',{name:'Discard',exact:true}).click();await closed();pass('Long cards stay centered and scroll internally at short phone, phone and desktop sizes');
  assert.deepEqual(errors,[]);pass('No runtime errors');
 })().catch(async e=>{console.error(e);if(page){fs.writeFileSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','input-cards-failure.txt'),await page.locator('body').innerText().catch(()=>''));await page.screenshot({path:path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','input-cards-failure.png')}).catch(()=>{})}process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
+

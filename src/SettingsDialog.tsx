@@ -1,5 +1,6 @@
+import {DraftScope,useDraftGroup} from './draftGroup';
 import ProfileName from './ProfileName';
-import {useUnsavedChanges} from './useUnsavedChanges';
+import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import {useCallback,useEffect,useRef,useState,type ReactNode} from 'react';
 import {Bell,BookOpen,CalendarDays,Check,ChevronLeft,ChevronRight,House,LogOut,MailPlus,MessageSquare,Palette,UserRound,Users} from 'lucide-react';
 import type {Member,HouseholdPerson} from './data';
@@ -32,13 +33,15 @@ type Props={
 function Row({icon,title,detail,onClick}:{icon:ReactNode;title:string;detail?:string;onClick:()=>void}){
  return <button type="button" className="settings-row" data-tour={title==='Your profile'?'settings-profile':title==='Your household'?'settings-household':undefined} onClick={onClick}><span className="settings-row-icon" aria-hidden="true">{icon}</span><span className="settings-row-copy"><b>{title}</b>{detail&&<small>{detail}</small>}</span><ChevronRight size={17} aria-hidden="true"/></button>;
 }
-export default function SettingsDialog(props:Props){
- const {initialPage='main',importError,onCalendarImported,initialGuide,onGettingStarted,name,email,userId,householdId,householdName,owner,members,people,paletteId,paletteMessage,onPaletteChange,onColorSaved,onHouseholdSaved,calendarConnected,calendarLegacy,calendarTransition=false,calendarCopyMessage,calendarConfigured,onOpenCalendar,onConnectGoogle,onWelcome,onClose,onSignOut}=props;
+export default function SettingsDialog(props:Props){return <DraftScope><SettingsDialogBody {...props}/></DraftScope>}
+function SettingsDialogBody(props:Props){
+ const drafts=useDraftGroup()!;useModalScrollLock();
+ const {initialPage='main',onInteractiveStart,importError,onCalendarImported,initialGuide,onGettingStarted,name,email,userId,householdId,householdName,owner,members,people,paletteId,paletteMessage,onPaletteChange,onColorSaved,onHouseholdSaved,calendarConnected,calendarLegacy,calendarTransition=false,calendarCopyMessage,calendarConfigured,onOpenCalendar,onConnectGoogle,onWelcome,onClose,onSignOut}=props;
  const [history,setHistory]=useState<Page[]>(()=>initialPage==='main'?['main']:initialPage==='googleImport'?['main','calendar','googleImport']:['main',initialPage]),[visited,setVisited]=useState<Page[]>(()=>initialPage==='main'?['main']:initialPage==='googleImport'?['main','calendar','googleImport']:['main',initialPage]),[host,setHost]=useState(false),[leaving,setLeaving]=useState(false),[error,setError]=useState('');
  const [profileDirty,setProfileDirty]=useState(false);
  const [feedbackDirty,setFeedbackDirty]=useState(false),[draftRevision,setDraftRevision]=useState(0);
- const guard=useUnsavedChanges(feedbackDirty||profileDirty,leaving,onClose);
- const clearDrafts=useCallback(()=>{if(!feedbackDirty&&!profileDirty)return;setFeedbackDirty(false);setProfileDirty(false);setDraftRevision(v=>v+1)},[feedbackDirty,profileDirty]);
+ const guard=useUnsavedChanges(feedbackDirty||profileDirty||drafts.dirty,leaving||drafts.busy,onClose,drafts.saveAll);
+ const clearDrafts=useCallback(()=>{drafts.discardAll();setFeedbackDirty(false);setProfileDirty(false);setDraftRevision(v=>v+1)},[feedbackDirty,profileDirty,drafts.discardAll]);
  const closeSettings=()=>guard.requestClose(()=>{clearDrafts();onClose()});
  const page=history.at(-1)!,dialog=useRef<HTMLElement>(null),heading=useRef<HTMLHeadingElement>(null),content=useRef<HTMLDivElement>(null);
  const pageRef=useRef(page),closeRef=useRef(onClose),leavingRef=useRef(leaving);pageRef.current=page;closeRef.current=closeSettings;leavingRef.current=leaving;
@@ -47,13 +50,12 @@ export default function SettingsDialog(props:Props){
  const peopleCount=members.length+people.filter(p=>!p.linked_user_id).length;
  const canSwitchAccounts=accountSwitchEligible(email);
  const [pairedAccount,setPairedAccount]=useState(()=>canSwitchAccounts&&hasSavedSwitchAccount(userId,email));
- function open(next:Page){if(leaving)return;setVisited(old=>old.includes(next)?old:[...old,next]);setHistory(old=>old.at(-1)===next?old:[...old,next])}
+ function open(next:Page){if(leaving||drafts.busy)return;guard.requestClose(()=>{clearDrafts();setVisited(old=>old.includes(next)?old:[...old,next]);setHistory(old=>old.at(-1)===next?old:[...old,next])})}
  function back(){guard.requestClose(()=>{clearDrafts();setHistory(old=>old.length>1?old.slice(0,-1):old)})}
  const backRef=useRef(back);backRef.current=back;
  useEffect(()=>{let active=true;supabase.rpc('pilot_status').then(({data})=>{if(active)setHost(!!data?.is_host)});return()=>{active=false}},[]);
  useEffect(()=>{
-  const previous=document.activeElement instanceof HTMLElement?document.activeElement:null,overflow=document.body.style.overflow;
-  document.body.style.overflow='hidden';
+  const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
   const keys=(e:KeyboardEvent)=>{
    if(e.key==='Escape'){e.preventDefault();if(leavingRef.current)return;if(pageRef.current==='main')closeRef.current();else backRef.current();return}
    if(e.key!=='Tab')return;
@@ -63,13 +65,13 @@ export default function SettingsDialog(props:Props){
    else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===heading.current)){e.preventDefault();first?.focus()}
   };
   document.addEventListener('keydown',keys);
-  return()=>{document.removeEventListener('keydown',keys);document.body.style.overflow=overflow;if(previous?.isConnected)previous.focus()};
+  return()=>{document.removeEventListener('keydown',keys);if(previous?.isConnected)previous.focus({preventScroll:true})};
  },[]);
  useEffect(()=>{content.current?.scrollTo({top:0});heading.current?.focus();if(page==='help'&&initialGuide==='install'){const timer=setTimeout(()=>content.current?.querySelector('[data-install-guide]')?.scrollIntoView({block:'start'}),0);return()=>clearTimeout(timer)}},[page,initialGuide]);
  const screen=(id:Page,children:ReactNode)=>visited.includes(id)?<div key={id+draftRevision} className={'settings-page settings-page-'+id} hidden={page!==id} inert={page!==id}>{children}</div>:null;
  return <div className="settings-backdrop" onClick={e=>{if(e.target===e.currentTarget&&!leaving)closeSettings()}}><section className="settings-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-title">
-  <header className="settings-toolbar"><div>{page==='main'?<img src="./icon.svg" alt="HH"/>:<button type="button" className="settings-back" disabled={leaving} onClick={back} aria-label={`Back to ${titles[history.at(-2)||'main']}`}><ChevronLeft size={21}/>Back</button>}</div><h2 ref={heading} tabIndex={-1} id="settings-title">{titles[page]}</h2><button type="button" className="settings-toolbar-done" disabled={leaving} onClick={closeSettings}>Done</button></header>
-  <div className="settings-content" ref={content}>
+  <header className="settings-toolbar"><div>{page==='main'?<img src="./icon.svg" alt="HH"/>:<button type="button" className="settings-back" disabled={leaving||drafts.busy} onClick={back} aria-label={`Back to ${titles[history.at(-2)||'main']}`}><ChevronLeft size={21}/>Back</button>}</div><h2 ref={heading} tabIndex={-1} id="settings-title">{titles[page]}</h2><button type="button" className="settings-toolbar-done" disabled={leaving||drafts.busy} onClick={closeSettings}>Done</button></header>
+  <div className="settings-content" ref={content} inert={leaving||drafts.busy} aria-busy={leaving||drafts.busy}>
    {screen('main',<>
     <p className="settings-intro">A little more at home.</p>
     <button type="button" data-tour={canSwitchAccounts?undefined:'settings-profile'} className="settings-account-card" onClick={()=>open(canSwitchAccounts?'accounts':'profile')}><span className="settings-person-avatar">{initials}</span><span><b>{name}</b><small>{email}</small><em>{canSwitchAccounts?'Switch account · Your profile':'Your profile & calendar colour'}</em></span><ChevronRight size={18}/></button>
@@ -78,7 +80,7 @@ export default function SettingsDialog(props:Props){
     {host&&email.toLowerCase()==='hummelhomeapp@gmail.com'&&<section className="settings-group"><h3>Admin</h3><div className="settings-group-rows"><Row icon={<Users size={19}/>} title="Manage households" detail="Review and delete pilot households" onClick={()=>open('admin')}/></div></section>}<section className="settings-group" aria-labelledby="settings-help"><h3 id="settings-help">A helping hand</h3><div className="settings-group-rows"><Row icon={<BookOpen size={19}/>} title="Help & tutorials" detail="Phone guides & the quick tour" onClick={()=>open('help')}/><Row icon={<MessageSquare size={19}/>} title="Send Feedback" detail="Share a comment or suggest a new feature" onClick={()=>open('feedback')}/></div></section>
     <div className="settings-account-footer"><small>Signed in as {email}</small><button type="button" disabled={leaving} onClick={async()=>{if(leavingRef.current)return;leavingRef.current=true;setLeaving(true);setError('');try{try{await stopDevicePush(householdId)}catch{}const result=await onSignOut();if(result&&typeof result==='object'&&'error' in result&&result.error)throw result.error}catch(e){setError((e as {message?:string}).message||'Could not sign out. Please try again.');leavingRef.current=false;setLeaving(false)}}}><LogOut size={15}/>{leaving?'Signing out…':pairedAccount?'Sign out of both accounts':'Sign out'}</button>{pairedAccount&&<small>{staySignedIn()?'Removes both saved sign-ins from this device.':'Removes both sign-ins from this tab.'}</small>}</div>
     {error&&<p className="error" role="alert">{error}</p>}
-    <button type="button" className="button primary wide settings-finish" disabled={leaving} onClick={closeSettings}>Done<Check size={17}/></button>
+    <button type="button" className="button primary wide settings-finish" disabled={leaving||drafts.busy} onClick={closeSettings}>Done<Check size={17}/></button>
    </>)}
    {canSwitchAccounts&&page==='accounts'&&<AccountSwitcher key={userId} userId={userId} email={email} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}} onProfile={()=>open('profile')} onSavedState={setPairedAccount}/>}
    {screen('profile',<><div className="settings-page-intro"><UserRound size={25}/><p>Your own account, with one shared home.</p></div><dl className="settings-profile-details"><div><dt>Name</dt><dd>{name}</dd></div><div><dt>Email</dt><dd>{email}</dd></div><div><dt>Role</dt><dd>{owner?'Household owner':'Family member'}</dd></div></dl><ProfileName name={name} userId={userId} householdId={householdId} onSaved={onHouseholdSaved} onDirty={setProfileDirty} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}}/><div className="settings-detail-card"><MyCalendarColor member={member} householdId={householdId} userId={userId} onSaved={onColorSaved}/></div>{owner?<p className="settings-caption">To delete your account and entire home, open <button type="button" className="text-button" onClick={()=>open('household')}>Your household</button>.</p>:<DeletionSettings owner={false} email={email} householdId={householdId} householdName={householdName} protectedAccount={host} onBusy={busy=>{leavingRef.current=busy;setLeaving(busy)}}/>}</>)}

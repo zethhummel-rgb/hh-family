@@ -1,3 +1,4 @@
+import PasswordField from './PasswordField';
 import {useEffect,useRef,useState} from 'react';
 import {createClient} from '@supabase/supabase-js';
 import {ArrowRight,Check,KeyRound,Mail} from 'lucide-react';

@@ -1,16 +1,16 @@
-import {useEffect,useRef,useState,type RefObject,type PointerEvent} from 'react';
-import ChoiceDialog from './ChoiceDialog';
+import {useEffect,useRef,type RefObject,type PointerEvent} from 'react';
 
-type Props={modal:RefObject<HTMLElement|null>;dirty:boolean;busy:boolean;onClose:()=>void;onSave:()=>void};
+
+type Props={modal:RefObject<HTMLElement|null>;dirty:boolean;busy:boolean;onClose:()=>void;onSave:()=>void;onRequestClose?:()=>void};
 // Use the form's normal submit path, including native required/URL validation.
 export function submitInputCard(modal:HTMLElement|null){modal?.querySelector('form')?.requestSubmit()}
-export default function InputCardHandle({modal,dirty,busy,onClose,onSave}:Props){
- const [confirm,setConfirm]=useState(false);
+export default function InputCardHandle({modal,dirty,busy,onClose,onRequestClose}:Props){
+
  const drag=useRef<{id:number;x:number;y:number;distance:number;cancelled:boolean}|null>(null);
  const suppressClick=useRef(false),frame=useRef<number|null>(null);
  function reset(){if(modal.current)modal.current.style.removeProperty('translate');drag.current=null}
  useEffect(()=>()=>{if(frame.current!==null)cancelAnimationFrame(frame.current)},[]);
- function close(){if(busy)return;if(dirty)setConfirm(true);else onClose()}
+ function close(){if(busy)return;if(onRequestClose)onRequestClose();else if(!dirty)onClose()}
  function start(e:PointerEvent<HTMLButtonElement>){
   if(busy||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
   suppressClick.current=false;drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,distance:0,cancelled:false};
@@ -30,12 +30,6 @@ export default function InputCardHandle({modal,dirty,busy,onClose,onSave}:Props)
   reset();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   if(dismiss)close();
  }
- function save(){
-  if(busy)return;
-  setConfirm(false);
-  // Remove the confirmation's inert state before validation focuses a field.
-  frame.current=requestAnimationFrame(()=>{frame.current=null;onSave()});
- }
  return <><button type="button" className="input-card-handle" aria-label="Close input card" title="Swipe down to close" disabled={busy} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={()=>{suppressClick.current=true;reset()}} onLostPointerCapture={reset} onClick={e=>{e.stopPropagation();if(suppressClick.current){suppressClick.current=false;return}close()}}><span aria-hidden="true"/></button>
- {confirm&&<ChoiceDialog title="Save your changes?" onCancel={()=>setConfirm(false)} actions={[{label:'Save',primary:true,run:save},{label:'Discard',run:()=>{if(!busy)onClose()}},{label:'Keep editing',run:()=>setConfirm(false)}]}><p>You have unsaved changes.</p></ChoiceDialog>}</>;
+ </>;
 }
