@@ -63,6 +63,26 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
   if(kind==='pilot')await page.getByLabel('Family or household name',{exact:true}).fill('Fixture Home');
   await page.getByRole('button',{name:kind==='family'?'Join household':'Create my household',exact:true}).click();
   await page.waitForURL(url);await page.locator('.mobile-nav').waitFor({state:'attached'});assert(joined);const acceptance=requests.findLast(x=>x.path.endsWith(kind==='family'?'/accept_household_invite':'/create_pilot_household'));assert.equal(acceptance.body[kind==='family'?'invite_token':'pilot_token'],code);pass(kind+': household acceptance uses the original code and clears the invitation URL');
+  const welcome=page.locator('.welcome-tour');
+  if(kind==='family')await page.evaluate(()=>Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone'}));
+  await welcome.getByRole('button',{name:/Show slide .*Keep HH close/}).click();
+  await welcome.getByRole('button',{name:kind==='family'?'Turn on notifications':'Add HH to your Home Screen',exact:true}).click();
+  const settings=page.locator('.settings-dialog');
+  const safari=settings.getByRole('region',{name:'Safari Home Screen tutorial'});
+  await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
+  await settings.getByRole('button',{name:'Done',exact:true}).click();
+  const checklist=page.locator('.getting-started');
+  await checklist.getByRole('button',{name:/^Add HH to your Home Screen/}).click();
+  await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
+  await settings.getByRole('button',{name:'Done',exact:true}).click();
+  await checklist.getByRole('button',{name:/^Turn on notifications/}).click();
+  if(kind==='family'){
+   await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
+   await page.evaluate(()=>Reflect.deleteProperty(navigator,'userAgent'));
+  }else await settings.getByRole('heading',{name:'Notifications',exact:true,level:2}).waitFor();
+  assert.equal(requests.some(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe'),false);
+  await settings.getByRole('button',{name:'Done',exact:true}).click();
+  pass(kind+': welcome and Home offer device setup, including the install-first route on iPhone');
  }
  await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()});joined=false;scenario='existing';await page.goto(url+'?invite='+code);await page.getByText(/You already started an account/).waitFor();assert.equal(await page.getByLabel(/^Confirm password/).count(),0);await fillAccount();await page.getByRole('button',{name:'Continue to household',exact:true}).click();await page.getByRole('heading',{name:'Join your family.',exact:true}).waitFor();pass('Previously started accounts use the existing password without a duplicate signup');
  await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()});await page.goto(url+'?invite='+expired);await page.getByRole('alert').waitFor();assert.match(await page.getByRole('alert').innerText(),/already used/);assert.equal(await page.getByLabel(/^Password/).count(),0);pass('Expired, cancelled or used invitation shows recovery guidance before requesting a password');
