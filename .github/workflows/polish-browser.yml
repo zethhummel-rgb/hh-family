@@ -44,6 +44,7 @@ jobs:
           node scripts/polish-browser/journeys.cjs
           node scripts/polish-browser/focused.cjs
           node scripts/polish-browser/signup.cjs
+          node scripts/polish-browser/invitation-signup.cjs
           node scripts/polish-browser/meals.cjs
           node scripts/polish-browser/household-name.cjs
           node scripts/polish-browser/edge-cases.cjs

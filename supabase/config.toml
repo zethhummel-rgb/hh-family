@@ -15,3 +15,7 @@ verify_jwt = false
 
 [functions.self-service-deletion]
 verify_jwt = false
+
+# Signup is authenticated by the email-bound invitation code.
+[functions.invitation-registration]
+verify_jwt = false
