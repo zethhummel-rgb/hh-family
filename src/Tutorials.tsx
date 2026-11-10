@@ -4,6 +4,7 @@ import {useState} from 'react';
 import {BookOpen,Mail,Users,CalendarDays,ArrowUpRight,Check,Smartphone,Copy,Palette,ShoppingCart,NotebookPen,Utensils} from 'lucide-react';
 import './tutorials.css';
 import HomeScreenPictures from './HomeScreenPictures';
+import SafariInstallTutorial from './SafariInstallTutorial';
 
 function Steps({children}:{children:React.ReactNode}){return <ol className="tutorial-steps">{children}</ol>}
 export default function Tutorials({owner,onSettings,onCalendar,onWelcome,onGettingStarted,onInteractive,initialGuide}:{onInteractive?:(id:string)=>void;initialGuide?:'install';onGettingStarted:()=>void;owner:boolean;onWelcome:()=>void;onSettings:(page:'household'|'profile'|'notifications'|'appearance'|'calendar')=>void;onCalendar:()=>void}){
@@ -12,6 +13,7 @@ export default function Tutorials({owner,onSettings,onCalendar,onWelcome,onGetti
  const appAddress=new URL('.',location.href).href;
  return <section className="tutorials" aria-label="HH tutorials">
   <div className="tutorial-welcome"><BookOpen size={24}/><div><h2>Learn by trying</h2><p>Follow a highlight on the real pages. Tap each button and fill in the fields yourself, one step at a time.</p><p><strong>Practice entries are never added or emailed.</strong> Stop or replay a lesson anytime.</p></div></div>
+  <SafariInstallTutorial initialOpen={initialGuide==='install'}/>
   <div className="interactive-lessons" aria-label="Interactive practice tutorials">{tutorialGuides.map(guide=><button type="button" key={guide.id} data-tutorial-id={guide.id} className="interactive-lesson" disabled={!onInteractive||!!guide.owner&&!owner} aria-label={'Start interactive tutorial: '+guide.title} onClick={()=>onInteractive?.(guide.id)}><span><b>{guide.title}</b><small>{guide.owner&&!owner?'Your household owner manages this feature.':guide.description}</small>{tutorial.completed.includes(guide.id)&&<small>Completed · Replay anytime</small>}</span>{tutorial.completed.includes(guide.id)?<Check size={21}/>:<ArrowUpRight size={21}/>}</button>)}</div>
   <details className="tutorial-guide tutorial-written-reference" open={initialGuide==='install'}><summary><span><h2>Written guides &amp; phone setup</h2><p>Installation, notifications, Google setup and quick references.</p></span><span className="tutorial-expand" aria-hidden="true">+</span></summary><div className="tutorial-body">
   <button type="button" className="button soft tutorial-replay" onClick={onGettingStarted}><Check size={17}/>Show getting-started checklist</button>
