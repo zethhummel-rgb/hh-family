@@ -19,5 +19,5 @@ export function eventGuestMessage(app:string, token:string, sender:string, event
   (event.location?'<p>'+escape(event.location)+'</p>':'')+(message?'<p style="white-space:pre-wrap">'+escape(message)+'</p>':'')+
   (Object.keys(links) as Reply[]).map(reply=>'<p><a style="display:inline-block;background:#85485f;color:#fff;padding:12px 18px;border-radius:12px;text-decoration:none" href="'+escape(links[reply])+'">'+escape(replyLabels[reply])+'</a></p>').join('')+
   '<p>Open your invitation to confirm your reply. You can respond without an HH account.</p></td></tr></table></td></tr></table></body></html>';
- return {subject:'You’re invited to an event on HH',text,html,links};
+ return {subject:"You're invited to an event on HH",text,html,links};
 }

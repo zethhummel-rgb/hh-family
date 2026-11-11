@@ -49,6 +49,7 @@ try{
  assert.equal((await live.request(invite,host)).status,200);
  assert.equal(live.sent.length,1);
  assert.equal(live.sent[0].to,invite.email);
+ assert.equal(live.sent[0].subject,"You're invited to an event on HH");
  assert.ok(live.sent[0].html.includes('&lt;b&gt;something&lt;/b&gt;'));
  assert.ok(live.sent[0].html.includes('/hh-family/#event-invite='));
  assert.ok(!live.sent[0].text.includes('Private note'));
