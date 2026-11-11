@@ -45,10 +45,22 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
   if(u.pathname.includes('/auth/')&&!u.pathname.endsWith('/logout'))throw Error('Unexpected auth email request: '+u.pathname);
   if(u.pathname.endsWith('/accept_household_invite')||u.pathname.endsWith('/create_pilot_household')){joined=true;return route.fulfill({json:home})}
   if(u.pathname.endsWith('/pilot_status'))return route.fulfill({json:{is_host:false}});
+  if(u.pathname.endsWith('/event-reminders'))return route.fulfill({json:{publicKey:'AQID',enabled:!!body.endpoint}});
   if(u.pathname.endsWith('/household_members'))return route.fulfill({json:joined?[member]:[]});
   return route.fulfill({json:[]});
  });
  page=await context.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>errors.push(e.message));
+ // Keep the signup test independent of native permission dialogs and service worker updates.
+ await page.addInitScript(()=>{
+  let subscription=null;
+  const registration={pushManager:{
+   getSubscription:async()=>subscription,
+   subscribe:async()=>subscription={endpoint:'https://push.example.invalid/hh',toJSON(){return {endpoint:this.endpoint}}}
+  }};
+  Object.defineProperty(navigator,'serviceWorker',{value:{register:async()=>registration,ready:Promise.resolve(registration),addEventListener(){},removeEventListener(){}}});
+  Object.defineProperty(window,'PushManager',{value:function PushManager(){}});
+  Object.defineProperty(window,'Notification',{value:{get permission(){return subscription?'granted':'default'}}});
+ });
  await page.goto(url);await page.getByRole('button',{name:'Create account',exact:true}).click();await page.getByRole('button',{name:'Create my account',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(requests.length,0);pass('Missing invitation cannot create an account');
  await page.getByLabel('Invitation code',{exact:true}).fill(code);await page.getByLabel('Email address',{exact:true}).waitFor();assert.equal(await page.getByLabel('Email address',{exact:true}).inputValue(),user.email);assert(await page.getByLabel('Email address',{exact:true}).getAttribute('readonly')!==null);for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Long email overflow at '+width)}await page.setViewportSize({width:390,height:844});pass('Manual code resolves and locks the invited address; long emails fit at 320/390/1280');
  async function fillAccount(){await page.getByLabel('Your name',{exact:true}).fill('Invited Person');await page.getByLabel(/^Password/).fill('Fixture-password-123');if(await page.getByLabel(/^Confirm password/).count())await page.getByLabel(/^Confirm password/).fill('Fixture-password-123')}
@@ -64,7 +76,10 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
   await page.getByRole('button',{name:kind==='family'?'Join household':'Create my household',exact:true}).click();
   await page.waitForURL(url);await page.locator('.mobile-nav').waitFor({state:'attached'});assert(joined);const acceptance=requests.findLast(x=>x.path.endsWith(kind==='family'?'/accept_household_invite':'/create_pilot_household'));assert.equal(acceptance.body[kind==='family'?'invite_token':'pilot_token'],code);pass(kind+': household acceptance uses the original code and clears the invitation URL');
   const welcome=page.locator('.welcome-tour');
-  if(kind==='family')await page.evaluate(()=>Object.defineProperty(navigator,'userAgent',{configurable:true,value:'iPhone'}));
+  await page.evaluate(appleMobile=>{
+   Object.defineProperty(navigator,'userAgent',{configurable:true,value:appleMobile?'iPhone':'HH desktop browser fixture'});
+   Object.defineProperty(navigator,'maxTouchPoints',{configurable:true,value:appleMobile?5:0});
+  },kind==='family');
   await welcome.getByRole('button',{name:/Show slide .*Keep HH close/}).click();
   await welcome.getByRole('button',{name:kind==='family'?'Turn on notifications':'Add HH to your Home Screen',exact:true}).click();
   const settings=page.locator('.settings-dialog');
@@ -78,9 +93,13 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
   await checklist.getByRole('button',{name:/^Turn on notifications/}).click();
   if(kind==='family'){
    await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
-   await page.evaluate(()=>Reflect.deleteProperty(navigator,'userAgent'));
   }else await settings.getByRole('heading',{name:'Notifications',exact:true,level:2}).waitFor();
   assert.equal(requests.some(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe'),false);
+  if(kind==='pilot'){
+   await settings.getByRole('button',{name:'Enable notifications',exact:true}).click();
+   await settings.getByText('Enabled on this device',{exact:true}).waitFor();
+   assert.equal(requests.filter(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe').length,1);
+  }
   await settings.getByRole('button',{name:'Done',exact:true}).click();
   pass(kind+': welcome and Home offer device setup, including the install-first route on iPhone');
  }
@@ -89,4 +108,4 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  scenario='failure';await page.goto(url+'?invite='+code);await page.getByLabel('Email address',{exact:true}).waitFor();await fillAccount();await page.getByRole('button',{name:'Create my account',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(await page.getByLabel('Your name',{exact:true}).inputValue(),'Invited Person');assert.equal(await page.getByLabel(/^Password/).inputValue(),'Fixture-password-123');pass('Service failure preserves entries for retry');
  await page.screenshot({path:path.join(out,'one-email-invitation.png'),fullPage:true});
  assert.deepEqual(errors,[]);pass('No runtime exceptions; all account and email requests intercepted');
-})().catch(async e=>{console.error(e);if(page)fs.writeFileSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','invitation-signup-failure.txt'),await page.locator('body').innerText().catch(()=>''));process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
+})().catch(async e=>{console.error(e);if(page){const out=path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish');fs.writeFileSync(path.join(out,'invitation-signup-failure.txt'),await page.locator('body').innerText().catch(()=>''));await page.screenshot({path:path.join(out,'invitation-signup-failure.png')}).catch(()=>{})}process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
