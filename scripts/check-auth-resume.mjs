@@ -40,7 +40,7 @@ function harness(){
   return {default:()=>null};
  };
  const win={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name)}};
- new Function('require','module','exports','location','window','document','setTimeout','navigator',code)(imports,module,module.exports,{search:'',pathname:'/',origin:'https://hh.invalid'},win,{hidden:false},fn=>timers.push(fn),network);
+ new Function('require','module','exports','location','window','document','setTimeout','navigator',code)(imports,module,module.exports,{search:'',hash:'',pathname:'/',origin:'https://hh.invalid'},win,{hidden:false},fn=>timers.push(fn),network);
  function findHome(node){if(!node||typeof node!=='object')return null;if(node.type===Household)return node;const children=node.props?.children;for(const child of Array.isArray(children)?children:[children]){const match=findHome(child);if(match)return match}return null}
  function render(){index=0;dirty=false;view=module.exports.HouseholdApp();const next=findHome(view);if(lastHome&&(!next||next.key!==lastHome.key))homeUnmounts++;lastHome=next;renderCount++;for(const effect of effects.splice(0))effect()}
  async function settle(){for(let i=0;i<12;i++){await Promise.resolve();if(dirty)render()}}

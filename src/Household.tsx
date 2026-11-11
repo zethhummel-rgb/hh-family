@@ -46,6 +46,7 @@ import {familyProfiles,matchesPerson} from './people';
 import PersonFilter from './PersonFilter';
 import CalendarScreen,{EventEditor,EventCard} from './Calendar';
 import EventDetails from './EventDetails';
+import {EventGuestContext} from './EventGuests';
 import {useFamilyCalendar} from './useFamilyCalendar';
 import {calendarCopyNotice,dayKey,eventEndDate,shiftDay,zonedISO,type FamilyEvent} from './calendarData';
 import {loadHousehold,changeHousehold,type Member,type HouseholdPerson} from './data';
@@ -55,7 +56,7 @@ type Item=ReminderItem;
 const categories=groceryCategories;
 
 const tabs=[{name:'Home',icon:Home},{name:'Calendar',icon:CalendarDays},{name:'Groceries',icon:ShoppingCart},{name:'Reminders',label:'To Do',icon:ListChecks},{name:'More',icon:Ellipsis}];
-export default function Household(props:Parameters<typeof HouseholdBody>[0]){return <InteractiveTutorialProvider key={props.userId+props.householdId} userId={props.userId} householdId={props.householdId}><DraftScope><HouseholdBody {...props}/></DraftScope></InteractiveTutorialProvider>}
+export default function Household(props:Parameters<typeof HouseholdBody>[0]){return <InteractiveTutorialProvider key={props.userId+props.householdId} userId={props.userId} householdId={props.householdId}><EventGuestContext.Provider value={!props.offlineOnly}><DraftScope><HouseholdBody {...props}/></DraftScope></EventGuestContext.Provider></InteractiveTutorialProvider>}
 function HouseholdBody({email,name,householdId,members,owner,onSignOut,userId,offlineOnly=false,onOfflineConnected}:{email:string;name:string;householdId:string;userId:string;members:Member[];owner:boolean;onSignOut:()=>unknown;offlineOnly?:boolean;onOfflineConnected?:()=>void}){
  useBottomNavigation();useTextScale();
  const tutorial=useInteractiveTutorial();

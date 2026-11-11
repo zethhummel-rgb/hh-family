@@ -19,3 +19,7 @@ verify_jwt = false
 # Signup is authenticated by the email-bound invitation code.
 [functions.invitation-registration]
 verify_jwt = false
+
+# Signed-in hosts use a session. Guests use the private invitation link.
+[functions.event-guests]
+verify_jwt = false
