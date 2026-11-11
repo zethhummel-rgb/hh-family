@@ -42,7 +42,7 @@ export function guestSignInLink(token:string,reply:Reply|null){
  return url.href;
 }
 
-export function returnToGuestInvitation(){
+export function guestReturnDestination(){
  const current=new URL(location.href);
  if(!current.searchParams.has('event-sign-in'))return;
  const fragment=new URLSearchParams(current.hash.slice(1)),token=fragment.get('event-return');
@@ -50,5 +50,5 @@ export function returnToGuestInvitation(){
  fragment.delete('event-return');fragment.set('event-invite',token);
  const destination=new URL('.',current);
  destination.hash=fragment.toString();
- location.replace(destination.href);
+ return destination.href;
 }

@@ -40,7 +40,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   if(table==='token')data=guestSession;
   else if(target.pathname.startsWith('/auth/'))data=asGuest?guestUser:user;
   else if(table==='household_members')data=asGuest?[{...member,user_id:guestId,household_id:guestHome,display_name:'Guest'}]:[member];
-  else if(table==='households')data={name:'Example Home',calendar_id:''};
+  else if(table==='households')data={name:asGuest?'Guest Home':'Example Home',calendar_id:''};
   else if(table==='household_events')data=asGuest?(await service.db.query('select * from public.household_events where household_id=$1',[guestHome])).rows:[event];
   else if(table==='household_calendar_source')data='hh';
   else if(table==='google-calendar')data={configured:false,connected:false,nativeReady:true};
@@ -113,6 +113,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   await view.waitFor();
   await view.click();
   await guest.getByRole('dialog',{name:'Family dinner'}).waitFor();
+  await guest.locator('.mobile-household-name').filter({hasText:'Guest Home'}).waitFor({state:'attached'});
   const yes=new URL(await hostPage.getByRole('link',{name:'Yes · Add to calendar',exact:true}).getAttribute('href'));
   await guest.goto(url+yes.hash);
   await view.waitFor();
