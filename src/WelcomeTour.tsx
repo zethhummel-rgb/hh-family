@@ -1,26 +1,29 @@
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeft,ArrowRight,ArrowUpRight,BookOpen,CalendarDays,Check,House,ListChecks,Mail,Palette,Plus,RefreshCw,ShoppingCart,Smartphone,Users,X} from 'lucide-react';
+import {ArrowLeft,ArrowRight,ArrowUpRight,Bell,BookOpen,CalendarDays,Check,House,ListChecks,Mail,Palette,Plus,RefreshCw,ShoppingCart,Smartphone,Users,X} from 'lucide-react';
 import PaletteSettings from './PaletteSettings';
+import {needsHomeScreen} from './push';
 import './welcome-tour.css';
 
+const deviceStep={scene:'install',title:'Keep HH close.',icon:Smartphone,copy:'Add HH to your Home Screen and choose whether to receive reminders on this device.',detail:'Both options are also in the Getting started checklist on Home.'};
 const ownerSteps=[
  {scene:'home',title:'Your home starts here.',icon:House,copy:'A quick look around HH. Your family shares plans, groceries and reminders, with a separate login for each person.',detail:'Home starts with Today & coming up, including today’s meals. Your next 7 days are just below. Tap More along the bottom for Meal planner and Family notes. Tap your initials for Settings: Your profile, Appearance, Notifications and Help & tutorials.'},
  {scene:'family',title:'Bring the family in.',icon:Users,copy:'Open Settings → Your household → Family profiles for two clear ways to add people.',detail:'Invite by email sends an invitation. Add without email creates a profile you can tag in plans.'},
  {scene:'calendar',title:'A calendar for everyone.',icon:CalendarDays,copy:'Tap Calendar along the bottom, then Add event. Choose the people involved and set a reminder if you need one.',detail:'Your shared calendar, repeats and reminders work right here. Settings → Calendar lets you import selected Google plans once. Your owner can also enable an optional Google copy. Make changes here in HH.'},
  {scene:'lists',title:'Less to keep in your head.',icon:ListChecks,copy:'Share your shopping list in Groceries, with optional quantities and stores. To Do keeps tasks and reminders, including things that repeat.',detail:'In Groceries, Staples saves your usual items for next time. More → Family notes keeps useful information together; pin important notes so they’re easy to find. Tap a reminder to edit it; tick it when it’s done.'},
- {scene:'install',title:'Keep HH close.',icon:Smartphone,copy:'On iPhone, open HH in Safari. Tap Share, then Add to Home Screen. Open the new icon to use HH like an app. After the tour, Home’s Getting started checklist helps with your first plan, installation and notifications.',detail:'The checklist is optional. Hide it anytime and reopen it in Settings → Help & tutorials. From the installed icon, Home also offers to enable reminders on this device. For the full guides or this tour again, open Settings → Help & tutorials.'}
+ deviceStep
 ];
 const memberSteps=[
  {scene:'home',title:'You’re part of the home.',icon:House,copy:'Your own login opens your family’s shared calendar, groceries and to-dos. The home is ready for you to use.',detail:'Home starts with Today & coming up, including today’s meals. Your next 7 days are just below. Tap More along the bottom for Meal planner and Family notes. Tap your initials for Settings, then Your profile for your calendar colour or Appearance for your look.'},
  {scene:'calendar',title:'Share the family plans.',icon:CalendarDays,copy:'Tap Calendar, then Add event. Pick the people involved, or choose Everyone. Tap an event to see its details.',detail:'Use Edit to change a plan. Settings → Calendar lets you import selected Google plans once. Everyone in your home can see imported plans. Your owner handles the optional Google copy.'},
  {scene:'lists',title:'Lists you share.',icon:ListChecks,copy:'Add what you need to Groceries. Use To Do for tasks and reminders. Your family sees the same lists.',detail:'Staples saves your usual groceries for another trip. More → Family notes holds useful information everyone can read and edit. Pin important notes, or search to find one again.'},
  {scene:'appearance',title:'A look that feels like you.',icon:Palette,copy:'Pick a colour palette to see HH change. Or keep this look and tap Next.',detail:'Change it anytime in Settings → Appearance. Your calendar colour is separate, under Your profile.'},
- {scene:'install',title:'Keep HH close.',icon:Smartphone,copy:'Home’s Getting started checklist has picture guides for adding HH to your Home Screen. Open the new icon, then choose whether to enable notifications.',detail:'Each phone needs its own permission. Skip any step, and find this tour again in Settings → Help & tutorials.'}
+ deviceStep
 ];
-export default function WelcomeTour({initials,owner,paletteId,paletteMessage,onPaletteChange,onFinish,onInteractive}:{initials:string;owner:boolean;paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onFinish:()=>void;onInteractive?:()=>void}){
+export default function WelcomeTour({initials,owner,paletteId,paletteMessage,onPaletteChange,onFinish,onInteractive,onInstall,onNotifications}:{initials:string;owner:boolean;paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onFinish:()=>void;onInteractive?:()=>void;onInstall:()=>void;onNotifications:()=>void}){
  const steps=owner?ownerSteps:memberSteps;
  const [index,setIndex]=useState(0),dialog=useRef<HTMLElement>(null),heading=useRef<HTMLHeadingElement>(null);
  const step=steps[index],Icon=step.icon,last=index===steps.length-1;
+ const installFirst=needsHomeScreen();
  useEffect(()=>{
   const previous=document.activeElement instanceof HTMLElement?document.activeElement:null,overflow=document.body.style.overflow;
   document.body.style.overflow='hidden';
@@ -46,6 +49,11 @@ export default function WelcomeTour({initials,owner,paletteId,paletteMessage,onP
   </div>}
   <div className="welcome-content"><span className="welcome-step" role="status" aria-live="polite">{index+1} of {steps.length}</span><div className="welcome-heading"><Icon size={23}/><h2 ref={heading} tabIndex={-1} id="welcome-title">{step.title}</h2></div><p id="welcome-copy">{step.copy}</p>
    {step.scene==='appearance'&&<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage}/>}
+   {step.scene==='install'&&<div className="welcome-device-actions">
+    <button type="button" className="button soft wide" onClick={onInstall}><Smartphone size={17}/>Add HH to your Home Screen</button>
+    <button type="button" className="button soft wide" onClick={installFirst?onInstall:onNotifications} aria-describedby={installFirst?'welcome-notification-help':undefined}><Bell size={17}/>Turn on notifications</button>
+    {installFirst&&<p className="field-help" id="welcome-notification-help">On iPhone or iPad, add HH to your Home Screen and open it first.</p>}
+   </div>}
    <p className="welcome-detail">{step.detail}</p>
   </div>
   <div className="welcome-footer"><div className="welcome-progress" aria-label="Walkthrough progress">{steps.map((s,i)=><button type="button" key={s.title} className={i===index?'current':''} aria-label={`Show slide ${i+1}: ${s.title}`} aria-current={i===index?'step':undefined} onClick={()=>setIndex(i)}><span/></button>)}</div><div className="welcome-controls"><button type="button" className="text-button" disabled={index===0} onClick={()=>setIndex(i=>i-1)}><ArrowLeft size={16}/>Back</button><button type="button" className="button primary" onClick={()=>last?onFinish():setIndex(i=>i+1)}>{last?'Let’s go':'Next'}{last?<Check size={17}/>:<ArrowRight size={17}/>}</button></div>{onInteractive&&<button type="button" className="button soft wide" onClick={onInteractive}>Try an interactive tutorial<BookOpen size={16}/></button>}<button type="button" className="welcome-skip" onClick={onFinish}>Skip for now · Find this in settings</button></div>
