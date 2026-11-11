@@ -3,7 +3,7 @@ const {setFixtureHandler,serveFixture,redirectFixtureAPI}=require('./fixture-api
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 
 (async()=>{
- const {fixture,home,host,eventId}=await import('../event-guest-fixture.mjs');
+ const {fixture,home,host,eventId,guestId,guestHome}=await import('../event-guest-fixture.mjs');
  const service=await fixture(),browser=await launchBrowser();
  const start=new Date(Date.now()+60*60*1000).toISOString(),end=new Date(Date.now()+3*60*60*1000).toISOString();
  await service.db.query('update public.household_events set starts_at=$1,ends_at=$2 where id=$3',[start,end,eventId]);
@@ -13,6 +13,8 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
  const exp=Math.floor(Date.now()/1000)+86400;
  const b64=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
  const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:host,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
+ const guestUser={...user,id:guestId,email:'guest@example.invalid'};
+ const guestSession={...session,user:guestUser,access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:guestId,aud:'authenticated',role:'authenticated',session_id:guestHome}),'fixture'].join('.')};
  const dir=path.resolve('dist'),calls=[];
  const server=http.createServer(async(req,res)=>{
   if(await serveFixture(req,res))return;
@@ -27,17 +29,19 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
  const url='http://127.0.0.1:'+server.address().port+'/hummel-home/';
  setFixtureHandler(async route=>{
   const req=route.request(),target=new URL(req.url()),table=target.pathname.split('/').pop();
+  const asGuest=req.headers().authorization==='Bearer '+guestSession.access_token;
   if(table==='event-guests'){
    const payload=req.postDataJSON(),signedIn=req.headers().authorization==='Bearer '+session.access_token;
-   calls.push({action:payload.action,signedIn});
-   const reply=await service.request(payload,{auth:signedIn?'host':''});
+   calls.push({action:payload.action,signedIn:signedIn||asGuest});
+   const reply=await service.request(payload,{auth:asGuest?'guest':signedIn?'host':''});
    return route.fulfill({status:reply.status,json:await reply.json()});
   }
   let data=[];
-  if(target.pathname.startsWith('/auth/'))data=user;
-  else if(table==='household_members')data=[member];
+  if(table==='token')data=guestSession;
+  else if(target.pathname.startsWith('/auth/'))data=asGuest?guestUser:user;
+  else if(table==='household_members')data=asGuest?[{...member,user_id:guestId,household_id:guestHome,display_name:'Guest'}]:[member];
   else if(table==='households')data={name:'Example Home',calendar_id:''};
-  else if(table==='household_events')data=[event];
+  else if(table==='household_events')data=asGuest?(await service.db.query('select * from public.household_events where household_id=$1',[guestHome])).rows:[event];
   else if(table==='household_calendar_source')data='hh';
   else if(table==='google-calendar')data={configured:false,connected:false,nativeReady:true};
   if(req.headers().accept?.includes('vnd.pgrst.object')&&Array.isArray(data))data=data[0]||null;
@@ -95,6 +99,23 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
    await hostPage.locator('.event-guest-responses li').getByText(status,{exact:true}).waitFor();
    await guest.getByRole('button',{name:'Change my reply'}).click();
   }
+  await guest.getByRole('button',{name:'Yes · Add to calendar',exact:true}).click();
+  await guest.getByRole('link',{name:'Sign in to add to HH'}).click();
+  await guest.getByLabel('Email address',{exact:true}).fill(guestUser.email);
+  await guest.getByLabel('Password',{exact:true}).fill('Synthetic-guest-password');
+  await guest.getByRole('button',{name:'Sign in',exact:true}).click();
+  await guest.getByRole('button',{name:'Add to HH Calendar',exact:true}).click();
+  const view=guest.getByRole('link',{name:'View in HH Calendar'});
+  const openURL=new URL(await view.getAttribute('href'),url);
+  assert.notEqual(openURL.searchParams.get('reminder_event'),eventId);
+  assert.equal((await service.db.query('select count(*)::int as copies from public.household_events where household_id=$1',[guestHome])).rows[0].copies,1);
+  await guest.reload();
+  await view.waitFor();
+  await view.click();
+  await guest.getByRole('dialog',{name:'Family dinner'}).waitFor();
+  const yes=new URL(await hostPage.getByRole('link',{name:'Yes · Add to calendar',exact:true}).getAttribute('href'));
+  await guest.goto(url+yes.hash);
+  await view.waitFor();
   for(const width of [320,390]){
    await guest.setViewportSize({width,height:600});
    assert(await guest.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
@@ -106,6 +127,6 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   assert(calls.filter(x=>['preview','respond'].includes(x.action)).every(x=>!x.signedIn));
   assert.equal(service.sent.length,0);
   assert.deepEqual(errors,[]);
-  console.log('PASS Event invitations: host review, private guest link, No without calendar, Maybe and Yes with calendar, refresh, cancellation, and mobile widths');
+  console.log('PASS Event invitations: private RSVP, browser calendar files, sign-in return, one HH copy, cancellation, and mobile widths');
  }finally{await browser.close();await service.db.close();server.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

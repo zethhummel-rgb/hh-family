@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {calendarFile,eventHelpers,eventId,fixture,googleCalendarLink,home} from './event-guest-fixture.mjs';
+import {calendarFile,eventHelpers,eventId,fixture,googleCalendarLink,home,guestHome} from './event-guest-fixture.mjs';
 
 const target={eventId,occurrence:''},invite={...target,action:'send',email:'guest@example.invalid',message:'Bring a snack & <b>something</b>',version:1};
 const host={auth:'host'};
@@ -41,6 +41,31 @@ try{
   assert.equal((await (await test.request({action:'respond',token,reply})).json()).reply,reply);
   assert.equal((await list())[0].reply,reply);
  }
+ assert.equal((await test.request({action:'add-hh',token},{auth:'guest'})).status,404);
+ await test.request({action:'respond',token,reply:'yes'});
+ async function hh(action,auth){
+  const response=await test.request({action,token},{auth});
+  assert.equal(response.status,200,await response.clone().text());
+  return response.json();
+ }
+ assert.equal((await hh('hh-status','')).state,'sign-in');
+ assert.equal((await hh('add-hh','outsider')).state,'wrong-account');
+ assert.equal((await hh('hh-status','guest')).state,'add');
+ const added=await hh('add-hh','guest');
+ assert.equal(added.state,'view');
+ assert.notEqual(added.eventId,eventId);
+ assert.equal((await hh('add-hh','guest')).eventId,added.eventId);
+ assert.equal((await hh('hh-status','guest')).eventId,added.eventId);
+ await test.db.exec('reset role');
+ const copies=(await test.db.query('select id,title,description,reminder_30_enabled from public.household_events where household_id=$1',[guestHome])).rows;
+ assert.deepEqual(copies,[{id:added.eventId,title:'Family dinner',description:'',reminder_30_enabled:false}]);
+ const sameHome=await (await test.request({...invite,email:'host@example.invalid'},host)).json();
+ const sameToken=new URLSearchParams(new URL(sameHome.preview.yes).hash.slice(1)).get('event-invite');
+ await test.request({action:'respond',token:sameToken,reply:'maybe'});
+ assert.equal((await (await test.request({action:'add-hh',token:sameToken},host)).json()).eventId,eventId);
+ const sameGuest=(await list()).find(i=>i.email==='host@example.invalid');
+ await test.request({...target,action:'revoke',id:sameGuest.id},host);
+ await test.db.exec('set role service_role');
  const revoke=await test.request({...target,action:'revoke',id},host);
  assert.equal((await revoke.json()).revoked,true);
  assert.equal((await test.request({action:'preview',token})).status,404);
@@ -53,6 +78,8 @@ try{
  assert.ok(live.sent[0].html.includes('&lt;b&gt;something&lt;/b&gt;'));
  assert.ok(live.sent[0].html.includes('/hh-family/#event-invite='));
  assert.ok(!live.sent[0].text.includes('Private note'));
+ assert.ok(live.sent[0].html.indexOf('Curious about HH?')>live.sent[0].html.indexOf('No · Decline'));
+ assert.ok(live.sent[0].text.includes('https://zethhummel-rgb.github.io/hh-family/about.html#start'));
  assert.equal((await (await failure.request(invite,host)).json()).delivery,'unknown');
  assert.equal((await failure.request(invite,host)).status,400);
  assert.equal(failure.sent.length,1);
