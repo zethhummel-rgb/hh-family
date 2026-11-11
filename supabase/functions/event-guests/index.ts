@@ -3,6 +3,7 @@ import {sendGmail} from '../invitation-email/smtp.ts';
 import {validMailAddress} from '../invitation-email/message.ts';
 import {guestEvent,isReply} from './event.ts';
 import {eventGuestMessage} from './message.ts';
+import {localDate} from '../google-calendar/native.ts';
 
 const backend=Deno.env.get('SUPABASE_URL')!;
 const test=backend==='https://ybizqfghnplcxlmlhvyn.supabase.co';
@@ -11,6 +12,7 @@ const live=backend==='https://njpdqiwrwgoothkstoql.supabase.co';
 const origin=new URL(app).origin;
 const from=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const password=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
+const publishableKey=Deno.env.get('SUPABASE_ANON_KEY')!;
 const admin=createClient(backend,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
 const cors={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
@@ -39,12 +41,25 @@ Deno.serve(async(req:Request)=>{
  try{body=JSON.parse(raw)}catch{return json({error:'Invalid request.'},400)}
  if(!body||typeof body!=='object')return json({error:'Invalid request.'},400);
  try{
-  if(body.action==='preview'||body.action==='respond'){
+  if(['preview','respond','hh-status','add-hh'].includes(body.action)){
    if(typeof body.token!=='string'||!tokenPattern.test(body.token))return unavailable();
    const tokenHash=await hash(body.token);
    const record=await service('preview',{hash:tokenHash});
    const event=record&&guestEvent(record.event,record.occurrence);
    if(!event||Date.parse(event.endsAt)<=Date.now())return unavailable();
+   if(body.action==='hh-status'||body.action==='add-hh'){
+    const bearer=req.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+    if(!bearer)return json({state:'sign-in'});
+    const user=await admin.auth.getUser(bearer);
+    if(user.error||!user.data.user)return json({state:'sign-in'});
+    const client=createClient(backend,publishableKey,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:'Bearer '+bearer}}});
+    const {data,error}=await client.rpc('event_guest_hh_calendar',{
+     action:body.action==='add-hh'?'add':'status',capability:tokenHash,shared_event:{...event,version:record.event.version}
+    });
+    if(error)return json({error:'Could not add this event to HH. Try again.'},400);
+    if(!data)return unavailable();
+    return json(data.state==='view'&&!data.date?{...data,date:event.startDate||localDate(event.startsAt)}:data);
+   }
    let reply=record.reply;
    if(body.action==='respond'){
     if(!isReply(body.reply))return json({error:'Choose Yes, Maybe, or No.'},400);
