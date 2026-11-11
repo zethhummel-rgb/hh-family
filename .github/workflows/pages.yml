@@ -24,6 +24,7 @@ jobs:
       - run: npm run test:database
       - run: node scripts/check-invitation-reissue.mjs
       - run: npm run test:invitations
+      - run: node scripts/check-event-guests.mjs
       - run: npm run test:recovery
       - run: npm run test:welcome
       - run: npm run test:feedback

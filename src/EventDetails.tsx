@@ -1,19 +1,22 @@
 import {reminderLabel} from '../supabase/functions/google-calendar/reminders';
 import PeopleDots from './PeopleDots';
 import type {PersonProfile} from './people';
-import {useEffect,useRef} from 'react';
+import {useContext,useEffect,useRef} from 'react';
+import EventGuests,{EventGuestContext} from './EventGuests';
+import {useInteractiveTutorial} from './InteractiveTutorial';
 import {CalendarDays,Bell,Clock,MapPin,Users,Pencil,X} from 'lucide-react';
 import {eventDateLabel,eventTime,TIME_ZONE,type FamilyEvent} from './calendarData';
 
 export default function EventDetails({event,onClose,onEdit,profiles}:{profiles:PersonProfile[];event:FamilyEvent;onClose:()=>void;onEdit:(event:FamilyEvent)=>void}){
  const modal=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
+ const guestInvites=useContext(EventGuestContext),tutorial=useInteractiveTutorial();
  useEffect(()=>{
   const previous=document.activeElement as HTMLElement;
   modal.current?.querySelector('button')?.focus();
   const key=(e:KeyboardEvent)=>{
    if(e.key==='Escape')close.current();
    if(e.key==='Tab'){
-    const buttons=Array.from(modal.current?.querySelectorAll<HTMLButtonElement>('button')||[]);
+    const buttons=Array.from(modal.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href]')||[]);
     if(e.shiftKey&&document.activeElement===buttons[0]){e.preventDefault();buttons.at(-1)?.focus()}
     else if(!e.shiftKey&&document.activeElement===buttons.at(-1)){e.preventDefault();buttons[0]?.focus()}
    }
@@ -38,6 +41,7 @@ export default function EventDetails({event,onClose,onEdit,profiles}:{profiles:P
    </dl>
    {event.description&&<div className="event-details-notes"><h3>Notes</h3><p>{event.description}</p></div>}
    {event.recurring&&<p className="event-details-recurring">Part of a repeating event. Edit to change one occurrence or the whole series.</p>}
+   {guestInvites&&!tutorial.active&&event.source==='home'&&(!event.recurring||event.original_date)&&<EventGuests key={event.id} event={event}/>}
    <div className="event-details-actions"><button type="button" className="button soft" onClick={onClose}>Close</button><button type="button" className="text-button details-edit" onClick={()=>onEdit(event)}><Pencil size={15}/>Edit</button></div>
   </section>
  </div>;

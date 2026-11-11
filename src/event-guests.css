@@ -1,0 +1,22 @@
+.event-guest-section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px;display:grid;gap:12px}
+.event-guest-section>.button{justify-self:start}
+.event-guest-section form,.event-guest-review,.event-guest-preview,.event-guest-responses{display:grid;gap:8px;min-width:0}
+.event-guest-section p,.event-guest-section h3{margin:0;overflow-wrap:anywhere}
+.event-guest-section textarea{resize:vertical}
+.event-guest-review,.event-guest-preview{border:1px solid var(--line);border-radius:12px;padding:12px}
+.event-guest-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.event-guest-responses ul{list-style:none;margin:0;padding:0}
+.event-guest-responses li{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 0}
+.event-guest-responses li>span{overflow-wrap:anywhere;min-width:0}
+.event-guest-responses li strong{display:block;font-size:.875em}
+.event-guest-preview a{color:var(--teal);text-decoration:underline}
+.guest-invitation-page{min-height:100dvh;display:grid;place-items:center;padding:20px;background:var(--bg)}
+.guest-invitation-card{width:100%;max-width:460px;padding:clamp(18px,6vw,34px);border:1px solid var(--line);border-radius:20px;background:var(--theme-surface,#fffafb);overflow-wrap:anywhere}
+.guest-invitation-card .auth-brand{margin-bottom:24px}
+.guest-invitation-card h1{font-family:Georgia,serif;font-size:clamp(26px,7vw,38px);line-height:1.16}
+.guest-invitation-card h2{font-size:1.15em}
+.guest-invitation-card p svg{vertical-align:middle}
+.guest-message{white-space:pre-wrap}
+.guest-rsvp-status{font-weight:600;color:var(--teal)}
+.guest-calendar-options,.guest-reply-actions{display:grid;gap:10px;margin-top:20px}
+.guest-calendar-options .button,.guest-reply-actions .button{min-height:44px;text-align:center}
