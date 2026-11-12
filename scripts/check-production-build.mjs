@@ -28,6 +28,6 @@ for (const file of ['home.html','about.html','request-invitation.html']) {
  assert(!/TEST preview|test-guide\.html|Family TEST|TEST%20invitation/.test(page),file+' includes TEST content');
 }
 const about=fs.readFileSync('dist/about.html','utf8');
-assert(/<header\b[^>]*\bid="start"/.test(about),'Event email fragment must land at the top of About HH');
+assert(/<header\b[^>]*\bid="start"/.test(about),'Keep the old event email fragment available when JavaScript is disabled');
 assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
 console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, original branding, offline shell and no TEST guide.');
