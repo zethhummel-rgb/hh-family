@@ -1,5 +1,7 @@
 .event-guest-section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px;display:grid;gap:12px}
 .event-guest-section>.button{justify-self:start}
+.compact-event-modal .event-guest-section{margin:0 0 12px;padding:0;border:0}
+.event-guest-prepare{display:grid;justify-items:start;gap:8px}
 .event-guest-section form,.event-guest-review,.event-guest-preview,.event-guest-responses{display:grid;gap:8px;min-width:0}
 .event-guest-section p,.event-guest-section h3{margin:0;overflow-wrap:anywhere}
 .event-guest-section textarea{resize:vertical}

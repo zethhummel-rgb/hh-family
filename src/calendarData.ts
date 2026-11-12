@@ -73,13 +73,20 @@ async function saveNativeException(hid:string,event:FamilyEvent,draft:EventDraft
  const r=await supabase.from('household_events').update({exceptions,version:(master.version||1)+1}).eq('household_id',hid).eq('id',master.id).eq('version',master.version||1).select('id').maybeSingle();
  if(r.error)throw r.error;if(!r.data)throw Error('This series changed on another device. Refresh before editing.');
 }
-export async function saveEvent(hid:string,draft:EventDraft,current:FamilyEvent|null,connected:boolean,requestId:string){
- if(connected){return googleRequest(current?'update':'create',{householdId:hid,event:draft,id:current?.id,etag:current?.etag,requestId:requestId.replaceAll('-','')})}
+export async function saveEvent(hid:string,draft:EventDraft,current:FamilyEvent|null,connected:boolean,requestId:string):Promise<FamilyEvent|undefined>{
+ if(connected){await googleRequest(current?'update':'create',{householdId:hid,event:draft,id:current?.id,etag:current?.etag,requestId:requestId.replaceAll('-','')});return}
  if(current?.source==='google')throw Error('Your calendar has moved to HH. Refresh before editing this plan.');
- if(current?.series_id){if(draft.countdown_enabled!==undefined)throw Error('Choose the whole series to change its countdown.');return saveNativeException(hid,current,draft)}
+ if(current?.series_id){
+  if(draft.countdown_enabled!==undefined)throw Error('Choose the whole series to change its countdown.');
+  await saveNativeException(hid,current,draft);
+  return {...current,...draft,version:(current.version||1)+1};
+ }
  const nativeDraft={...draft,...(draft.recurrence!==undefined?{recurrence:validateRecurrence(draft.recurrence,eventDate(draft as FamilyEvent),draft.all_day)}:{})};
- const r=current?await supabase.from('household_events').update({...nativeDraft,version:(current.version||1)+1}).eq('household_id',hid).eq('id',current.id).eq('version',current.version||1).select('id').maybeSingle():await supabase.from('household_events').insert({...nativeDraft,household_id:hid,id:requestId}).select('id').single();
+ const version=current?(current.version||1)+1:1;
+ const r=current?await supabase.from('household_events').update({...nativeDraft,version}).eq('household_id',hid).eq('id',current.id).eq('version',current.version||1).select('id').maybeSingle():await supabase.from('household_events').insert({...nativeDraft,household_id:hid,id:requestId}).select('id').single();
  if(r.error)throw r.error;if(!r.data)throw Error('This event changed on another device. Close this form and refresh before editing again.');
+ const recurrence=nativeDraft.recurrence??current?.recurrence;
+ return {...current,...nativeDraft,id:r.data.id,source:'home',version,recurrence,recurring:!!recurrence?.length};
 }
 export async function deleteEvent(hid:string,event:FamilyEvent,connected:boolean){
  if(connected)return googleRequest('delete',{householdId:hid,id:event.id,etag:event.etag});

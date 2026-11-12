@@ -1,13 +1,14 @@
 import {useTutorialPractice} from './InteractiveTutorial';
-import InputCardHandle,{submitInputCard} from './InputCardHandle';
+import InputCardHandle from './InputCardHandle';
+import EventGuests,{EventGuestContext} from './EventGuests';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import {reminderLabel} from '../supabase/functions/google-calendar/reminders';
 import {selectedPeople,personLabel,isUnassigned,type PersonProfile} from './people';
-import {useEffect,useId,useRef,useState} from 'react';
+import {useContext,useEffect,useId,useRef,useState} from 'react';
 import {Bell,BellPlus,Check,MapPin,Repeat2,Timer,Trash2} from 'lucide-react';
 import {type FamilyEvent,type EventDraft,movedEventEnd,dayKey,eventDate,eventEndDate,eventRequestId,shiftDay,timePart,zonedISO} from './calendarData';
 import {buildRecurrence,readRecurrence,repeatDescription,type RepeatFrequency,type RepeatOptions} from '../supabase/functions/google-calendar/recurrence';
-type Props={event:FamilyEvent|null;date:string;profiles:PersonProfile[];connected:boolean;onClose:()=>void;onSave:(draft:EventDraft,current:FamilyEvent|null,requestId:string)=>Promise<void>;onDelete:(event:FamilyEvent)=>Promise<void>;onLoadSeries:(event:FamilyEvent)=>Promise<FamilyEvent>};
+type Props={event:FamilyEvent|null;date:string;profiles:PersonProfile[];connected:boolean;onClose:()=>void;onSave:(draft:EventDraft,current:FamilyEvent|null,requestId:string)=>Promise<FamilyEvent|undefined>;onDelete:(event:FamilyEvent)=>Promise<void>;onLoadSeries:(event:FamilyEvent)=>Promise<FamilyEvent>};
 const defaults:RepeatOptions={frequency:'WEEKLY',interval:1,ending:'never',until:'',count:10};
 const errorText=(e:unknown)=>e instanceof Error?e.message:(e as {message?:string})?.message||'Could not save the event.';
 // A select makes quarter-hour choices consistent across desktop and iPhone pickers.
@@ -18,16 +19,22 @@ function EventTimeSelect({label,value,onChange}:{label:string;value:string;onCha
  return <select aria-label={label} required value={value} onChange={e=>onChange(e.target.value)}>{choices.map(time=>{const [hour,minute]=time.split(':'),h=Number(hour);return <option key={time} value={time}>{h%12||12}:{minute} {h<12?'AM':'PM'}</option>})}</select>;
 }
 export default function EventEditor({event,date,profiles,connected,onClose,onSave,onDelete,onLoadSeries}:Props){
+ const guestInvites=useContext(EventGuestContext),tutorial=useTutorialPractice();
+ const [saving,setBusy]=useState(false),[guestBusy,setGuestBusy]=useState(false);
+ const busy=saving||guestBusy;
  const [countdown,setCountdown]=useState(event?.countdown_enabled===true);
  const [reminder30,setReminder30]=useState(event?.reminder_30_enabled!==false);
  const [reminder,setReminder]=useState<number|null>(event?.reminder_minutes===30?null:event?.reminder_minutes??null);
  const [current,setCurrent]=useState(event),[scope,setScope]=useState<'occurrence'|'series'>('occurrence');
- const [title,setTitle]=useState(event?.title||''),[description,setDescription]=useState(event?.description||''),[location,setLocation]=useState(event?.location||''),[taggedIds,setTaggedIds]=useState<string[]>(()=>selectedPeople(event,profiles)),[tagsChanged,setTagsChanged]=useState(false),[unassigned,setUnassigned]=useState(()=>!!event&&isUnassigned(event)),[start,setStart]=useState(event?eventDate(event):date),[end,setEnd]=useState(event?(event.all_day?eventEndDate(event):dayKey(new Date(event.ends_at))):date),[startTime,setStartTime]=useState(event&&!event.all_day?timePart(event.starts_at):'09:00'),[endTime,setEndTime]=useState(event&&!event.all_day?timePart(event.ends_at):'09:30'),[allDay,setAllDay]=useState(event?.all_day||false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[confirmDelete,setConfirmDelete]=useState(false);
+ const [title,setTitle]=useState(event?.title||''),[description,setDescription]=useState(event?.description||''),[location,setLocation]=useState(event?.location||''),[taggedIds,setTaggedIds]=useState<string[]>(()=>selectedPeople(event,profiles)),[tagsChanged,setTagsChanged]=useState(false),[unassigned,setUnassigned]=useState(()=>!!event&&isUnassigned(event)),[start,setStart]=useState(event?eventDate(event):date),[end,setEnd]=useState(event?(event.all_day?eventEndDate(event):dayKey(new Date(event.ends_at))):date),[startTime,setStartTime]=useState(event&&!event.all_day?timePart(event.starts_at):'09:00'),[endTime,setEndTime]=useState(event&&!event.all_day?timePart(event.ends_at):'09:30'),[allDay,setAllDay]=useState(event?.all_day||false),[error,setError]=useState(''),[confirmDelete,setConfirmDelete]=useState(false);
  const initialRepeat=readRecurrence(event?.recurrence,event?.all_day||false);
  const [frequency,setFrequency]=useState<RepeatFrequency|'none'|'existing'>(initialRepeat?.frequency||(event?.recurrence?.length?'existing':'none')),[repeat,setRepeat]=useState<RepeatOptions>(initialRepeat||defaults),[repeatDirty,setRepeatDirty]=useState(false);
  const snapshot=JSON.stringify([title,description,location,taggedIds,tagsChanged,unassigned,start,end,startTime,endTime,allDay,frequency,repeat,countdown,reminder30,reminder]);
- const baseline=useRef(snapshot),resetBaseline=useRef(false);if(resetBaseline.current){baseline.current=snapshot;resetBaseline.current=false}const guard=useUnsavedChanges(snapshot!==baseline.current,busy,onClose,()=>{submitInputCard(modal.current);return false});useModalScrollLock();
- const formId=useId(),errorTarget=useRef<HTMLDivElement>(null);
+ const baseline=useRef(snapshot),resetBaseline=useRef(false);if(resetBaseline.current){baseline.current=snapshot;resetBaseline.current=false}
+ const dirty=snapshot!==baseline.current;
+ const form=useRef<HTMLFormElement>(null),formId=useId(),errorTarget=useRef<HTMLDivElement>(null);
+ const submitEvent=()=>form.current?.requestSubmit();
+ const guard=useUnsavedChanges(dirty,busy,onClose,()=>{submitEvent();return false});useModalScrollLock();
  useEffect(()=>{if(error){errorTarget.current?.scrollIntoView({block:'nearest'});errorTarget.current?.focus()}},[error]);
  const occurrenceOnly=!!event?.series_id&&scope==='occurrence',wholeSeries=!!current?.recurrence?.length&&scope==='series';
  const modal=useRef<HTMLElement>(null),busyRef=useRef(busy),closeRef=useRef(onClose),requestId=useRef(eventRequestId());busyRef.current=busy;closeRef.current=guard.requestClose;
@@ -40,9 +47,11 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
  function changeScope(next:'occurrence'|'series'){guard.requestClose(()=>void loadScope(next))}
  function moveStartDate(next:string){if(allDay){const days=(Date.parse(end)-Date.parse(start))/86400000;if(next&&Number.isFinite(days)&&days>=0)setEnd(shiftDay(next,days))}else{const moved=movedEventEnd(start,startTime,end,endTime,next,startTime);if(moved){setEnd(moved.date);setEndTime(moved.time)}}setStart(next)}
  function changeRepeat(update:Partial<RepeatOptions>){setRepeat(old=>({...old,...update}));setRepeatDirty(true)}
- const tutorial=useTutorialPractice();
  async function submit(e:React.FormEvent){
-  e.preventDefault();setBusy(true);setError('');
+  e.preventDefault();
+  if(busyRef.current)return;
+  const invite=(e.nativeEvent as SubmitEvent).submitter?.getAttribute('value')==='invite';
+  busyRef.current=true;setBusy(true);setError('');
   try{
    if(!title.trim())throw Error('Give this event a name.');if(end<start)throw Error('The end date must be on or after the start date.');
    const exclusiveEnd=allDay?shiftDay(end,1):end,starts_at=zonedISO(start,allDay?'00:00':startTime),ends_at=zonedISO(exclusiveEnd,allDay?'00:00':endTime);
@@ -54,20 +63,23 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
     if(!current||repeatDirty)draft.recurrence=frequency==='none'?[]:frequency==='existing'?undefined:buildRecurrence({...repeat,frequency},start,allDay);
    }
    if(tutorial.intercept('event'))return;
-   await onSave(draft,current,requestId.current);onClose();
-  }catch(e){setError(errorText(e))}finally{setBusy(false)}
+   const saved=await onSave(draft,current,requestId.current);
+   if(invite&&saved)loadFields(saved);
+   else onClose();
+  }catch(e){setError(errorText(e))}finally{busyRef.current=false;setBusy(false)}
  }
  const repeatEnabled=frequency!=='none'&&frequency!=='existing';
  const changeLabel=wholeSeries?'the whole series':event?.recurring?'this occurrence':'this event';
  return <div className="modal-backdrop input-card-backdrop" onClick={e=>{if(e.target===e.currentTarget&&!busy)guard.requestClose()}}>
   <section className="modal event-modal compact-event-modal" role="dialog" aria-modal="true" aria-labelledby="event-editor-title" ref={modal}>
-   <InputCardHandle onRequestClose={()=>guard.requestClose()} modal={modal} dirty={snapshot!==baseline.current} busy={busy} onClose={onClose} onSave={()=>submitInputCard(modal.current)}/><header className="event-editor-header"><button type="button" className="event-cancel" aria-label="Close event editor" disabled={busy} onClick={()=>guard.requestClose()}>Cancel</button><h2 id="event-editor-title">{event?'Edit event':'New event'}</h2><div className="event-save-bar"><button type="submit" form={formId} className="button primary" aria-label={wholeSeries?'Save whole series':event?'Save changes':'Add event'} disabled={busy||!title.trim()}>{busy?'Saving…':'Save'}</button></div></header>
+   <InputCardHandle onRequestClose={()=>guard.requestClose()} modal={modal} dirty={dirty} busy={busy} onClose={onClose} onSave={submitEvent}/><header className="event-editor-header"><button type="button" className="event-cancel" aria-label="Close event editor" disabled={busy} onClick={()=>guard.requestClose()}>Cancel</button><h2 id="event-editor-title">{current?'Edit event':'New event'}</h2><div className="event-save-bar"><button type="submit" form={formId} className="button primary" aria-label={wholeSeries?'Save whole series':current?'Save changes':'Add event'} disabled={busy||!title.trim()}>{saving?'Saving…':'Save'}</button></div></header>
    <div className="event-editor-body">
     {error&&<div className="error" role="alert" ref={errorTarget} tabIndex={-1}>{error}</div>}
     {connected&&<p className="event-context-note">Your Google calendar stays active until its HH transfer is verified.</p>}
     {event?.series_id&&<div className="series-scope"><label>Apply changes to<select value={scope} disabled={busy} onChange={e=>changeScope(e.target.value as 'occurrence'|'series')}><option value="occurrence">Only this occurrence</option><option value="series">The whole series</option></select></label><p className="field-help">{busy?'Loading.':scope==='series'?'Changes apply to every occurrence.':'Other dates in this series stay as they are.'} Switching reloads the saved details.</p></div>}
-    <form id={formId} onSubmit={submit}><fieldset disabled={busy} className="event-fields">
-     <div className="event-input-group event-basics"><input aria-label="Event name" required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Event name"/><label className="event-location-input"><MapPin size={17} aria-hidden="true"/><input aria-label="Location (optional)" maxLength={300} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Add location"/></label></div>
+    <div className="event-input-group event-basics"><input form={formId} aria-label="Event name" required disabled={busy} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Event name"/><label className="event-location-input"><MapPin size={17} aria-hidden="true"/><input form={formId} aria-label="Location (optional)" disabled={busy} maxLength={300} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Add location"/></label></div>
+    {guestInvites&&!tutorial.active&&!connected&&current?.source!=='google'&&<EventGuests event={current} editor={{saveForm:!current||dirty?formId:undefined,series:!occurrenceOnly&&frequency!=='none',disabled:saving,onBusyChange:setGuestBusy}}/>}
+    <form id={formId} ref={form} onSubmit={submit}><fieldset disabled={busy} className="event-fields">
      <div className="event-input-group event-schedule">
       <div className="event-date-row"><span>{wholeSeries?'First start':'Starts'}</span><div className={'event-date-controls'+(allDay?' all-day-controls':'')}><input type="date" aria-label={wholeSeries?'First event starts':'Starts'} required value={start} onChange={e=>moveStartDate(e.target.value)}/>{!allDay&&<EventTimeSelect label="Start time" value={startTime} onChange={value=>{setStartTime(value);const next=movedEventEnd(start,startTime,end,endTime,start,value);if(next){setEndTime(next.time);setEnd(next.date)}}}/>}</div></div>
       <div className="event-date-row"><span>Ends</span><div className={'event-date-controls'+(allDay?' all-day-controls':'')}><input type="date" aria-label="Ends" required min={start} value={end} onChange={e=>setEnd(e.target.value)}/>{!allDay&&<EventTimeSelect label="End time" value={endTime} onChange={setEndTime}/>}</div></div>
@@ -98,7 +110,7 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
      <div className="event-input-group event-notes"><label>Notes<textarea aria-label="Notes (optional)" rows={2} maxLength={4000} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Anything the family should know…"/></label></div>
      <p className="event-context-note">Times shown in Eastern time.</p>
     </fieldset></form>
-       {event&&<div className="event-delete">{confirmDelete?<><p>Delete {changeLabel} for everyone?</p><button className="button danger" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await onDelete(current!);onClose()}catch(e){setError(errorText(e))}finally{setBusy(false)}}}>Yes, delete {wholeSeries?'whole series':event.recurring?'occurrence':'event'}</button><button className="text-button" disabled={busy} onClick={()=>setConfirmDelete(false)}>Keep event</button></>:<button className="text-button" disabled={busy} onClick={()=>setConfirmDelete(true)}><Trash2 size={15}/>Delete {wholeSeries?'whole series':event.recurring?'occurrence':'event'}</button>}</div>}
+       {current&&<div className="event-delete">{confirmDelete?<><p>Delete {changeLabel} for everyone?</p><button className="button danger" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await onDelete(current);onClose()}catch(e){setError(errorText(e))}finally{setBusy(false)}}}>Yes, delete {wholeSeries?'whole series':current.recurring?'occurrence':'event'}</button><button className="text-button" disabled={busy} onClick={()=>setConfirmDelete(false)}>Keep event</button></>:<button className="text-button" disabled={busy} onClick={()=>setConfirmDelete(true)}><Trash2 size={15}/>Delete {wholeSeries?'whole series':current.recurring?'occurrence':'event'}</button>}</div>}
 
    </div>
    {guard.confirmation}

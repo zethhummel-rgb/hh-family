@@ -83,7 +83,7 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
    await node.click();const entered=await inputValue(node,guide,index);
    await node.fill(entered);
    assert.equal(await node.evaluate(el=>new Promise(resolve=>requestAnimationFrame(()=>resolve(el.value)))),entered,'Practice typing is preserved');
-   if(guide.id==='calendar'&&index===6){await node.evaluate(el=>el.closest('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.match(await page.locator('.tutorial-help').innerText(),/Finish the highlighted step/);assert.equal(mutations.length,0)}
+   if(guide.id==='calendar'&&index===6){await node.evaluate(el=>el.form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));assert.match(await page.locator('.tutorial-help').innerText(),/Finish the highlighted step/);assert.equal(mutations.length,0)}
    const notesWithKeyboard=guide.id==='event-options'&&step.target.includes('Notes (optional)');
    if(notesWithKeyboard){
     // Model the iPhone keyboard: only the visual viewport shrinks.

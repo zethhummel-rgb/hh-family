@@ -6,14 +6,14 @@
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#f7f9f5">
   <meta name="description" content="A closer look at HH Family, the shared calendar, shopping list, and little details that keep your household together.">
-  <title>About HH Family</title>
+  <title>Explore HH Family</title>
   <script>
     if (location.hash === '#start') location.replace('./home.html');
   </script>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./homepage/landing.css?v=highlights">
-  <link rel="stylesheet" href="./homepage/about.css?v=highlights">
-  <script src="./homepage/about.js?v=highlights" defer></script>
+  <link rel="stylesheet" href="./homepage/landing.css?v=explore">
+  <link rel="stylesheet" href="./homepage/about.css?v=explore">
+  <script src="./homepage/tile-motion.js" defer></script>
 </head>
 <body class="about-page">
   <a class="skip-link" href="#content">Skip to content</a>
@@ -24,6 +24,7 @@
     </a>
     <nav class="main-nav" aria-label="Main">
       <a href="./home.html">Home</a>
+      <a class="nav-explore" href="./about.html" aria-current="page">Explore HH</a>
       <a href="./">Sign in</a>
     </nav>
   </header>
@@ -31,9 +32,11 @@
   <main id="content">
     <section class="about-hero frame" aria-labelledby="about-title">
       <div class="about-intro">
+        <p class="about-label">Explore HH</p>
         <h1 id="about-title">A little more <em>together.</em></h1>
-        <p>From Saturday practice to Sunday dinner, give your household one place to keep up with it all.</p>
-        <a class="about-explore" href="#everyday">Take a closer look <span aria-hidden="true">↓</span></a>
+        <span class="gold-line" aria-hidden="true"></span>
+        <p>See how family plans, dinner, and the little details come together in HH.</p>
+        <a class="action primary about-explore" href="#everyday">Take a closer look <span aria-hidden="true">↓</span></a>
       </div>
       <figure class="hero-fan">
         <div class="fan-screens" aria-hidden="true">
@@ -47,56 +50,77 @@
 
     <section class="about-stories frame" id="everyday" aria-labelledby="everyday-title">
       <h2 id="everyday-title">The things that fill your days.</h2>
-      <div class="chapter-deck">
+      <p class="preview-hint">Swipe the app previews to see more.</p>
+      <div class="chapter-deck" data-tile-deck>
         <article class="about-chapter chapter-sage">
-          <div class="chapter-sheet">
+          <div class="chapter-sheet" data-tile-panel>
             <div class="chapter-copy">
               <h3>Who’s where?<br> And when?</h3>
               <p>Share the calendar, see who’s on pickup, and set reminders for the little things.</p>
-              <ul class="chapter-labels"><li>Calendar</li><li>To-dos &amp; reminders</li></ul>
             </div>
-            <div class="chapter-art">
-              <img class="chapter-main" src="./homepage/screens/calendar.webp" alt="Calendar agenda with colour-coded family plans and times." width="780" height="910" loading="lazy">
-              <img class="chapter-side" src="./homepage/screens/reminders.webp" alt="A shared to-do list with the hockey bag and library returns assigned to family members." width="780" height="910" loading="lazy">
+            <div class="chapter-art" role="group" aria-label="Calendar and reminders" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/calendar.webp" alt="Calendar agenda with colour-coded family plans and times." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Family calendar</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/reminders.webp" alt="A shared to-do list with the hockey bag and library returns assigned to family members." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>To-dos &amp; reminders</figcaption>
+              </figure>
             </div>
           </div>
         </article>
         <article class="about-chapter chapter-linen">
-          <div class="chapter-sheet">
+          <div class="chapter-sheet" data-tile-panel>
             <div class="chapter-copy">
               <h3>From taco night<br> to aisle five.</h3>
               <p>Plan the meals, send ingredients to groceries, and tick them off from the same list.</p>
-              <ul class="chapter-labels"><li>Meal planner</li><li>Shared groceries</li></ul>
             </div>
-            <div class="chapter-art">
-              <img class="chapter-main" src="./homepage/screens/meals.webp" alt="The meal planner shows a planned meal and the option to add its ingredients to groceries." width="780" height="910" loading="lazy">
-              <img class="chapter-side" src="./homepage/screens/groceries.webp" alt="A shared shopping list with quantities and checkboxes." width="780" height="910" loading="lazy">
+            <div class="chapter-art" role="group" aria-label="Meal planner and groceries" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/meals.webp" alt="The meal planner shows a planned meal and the option to add its ingredients to groceries." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Meal planner</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/groceries.webp" alt="A shared shopping list with quantities and checkboxes." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Shared groceries</figcaption>
+              </figure>
             </div>
           </div>
         </article>
         <article class="about-chapter chapter-rose">
-          <div class="chapter-sheet">
+          <div class="chapter-sheet" data-tile-panel>
             <div class="chapter-copy">
               <h3>See you at six.</h3>
               <p>Get the dinner RSVPs in one place and pin the details your household will need again.</p>
-              <ul class="chapter-labels"><li>Event invites</li><li>Family notes</li></ul>
             </div>
-            <div class="chapter-art">
-              <img class="chapter-main" src="./homepage/screens/rsvp.webp" alt="A Sunday dinner invitation with Yes, Maybe, and No response options." width="780" height="910" loading="lazy">
-              <img class="chapter-side" src="./homepage/screens/notes.webp" alt="Family notes with a pinned checklist for the rink bag." width="780" height="910" loading="lazy">
+            <div class="chapter-art" role="group" aria-label="Event invitations and family notes" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/rsvp.webp" alt="A Sunday dinner invitation with Yes, Maybe, and No response options." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Event invitations</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/notes.webp" alt="Family notes with a pinned checklist for the rink bag." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Family notes</figcaption>
+              </figure>
             </div>
           </div>
         </article>
         <article class="about-chapter chapter-coastal">
-          <div class="chapter-sheet">
+          <div class="chapter-sheet" data-tile-panel>
             <div class="chapter-copy">
               <h3>Make it feel<br> like home.</h3>
               <p>Pick a colour palette and keep HH a tap away on your iPhone Home Screen.</p>
-              <ul class="chapter-labels"><li>Colour palettes</li><li>Home Screen guide</li></ul>
             </div>
-            <div class="chapter-art">
-              <img class="chapter-main" src="./homepage/screens/appearance.webp" alt="HH Appearance settings with selectable colour palettes, including Sage &amp; Linen." width="780" height="910" loading="lazy">
-              <img class="chapter-side" src="./homepage/screens/home-screen.webp" alt="HH’s iPhone guide shows the icon to look for on your Home Screen." width="780" height="910" loading="lazy">
+            <div class="chapter-art" role="group" aria-label="Appearance and Home Screen setup" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/appearance.webp" alt="HH Appearance settings with selectable colour palettes, including Sage &amp; Linen." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Colour palettes</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/home-screen.webp" alt="HH’s iPhone guide shows the icon to look for on your Home Screen." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>iPhone Home Screen guide</figcaption>
+              </figure>
             </div>
           </div>
         </article>
@@ -125,7 +149,7 @@
   <footer class="site-footer frame">
     <span>HH Family</span>
     <nav aria-label="Information">
-      <a href="./about.html" aria-current="page">About HH</a>
+      <a href="./about.html" aria-current="page">Explore HH</a>
       <a href="./privacy.html">Privacy</a>
       <a href="./terms.html">Terms</a>
       <a href="mailto:hummelhomeapp@gmail.com">Contact</a>
