@@ -27,6 +27,9 @@ for (const file of ['home.html','about.html','request-invitation.html']) {
  const page=fs.readFileSync('dist/'+file,'utf8');
  assert(!/TEST preview|test-guide\.html|Family TEST|TEST%20invitation/.test(page),file+' includes TEST content');
 }
+const requestPage=fs.readFileSync('dist/request-invitation.html','utf8');
+assert(requestPage.includes('data-endpoint="'+context.exports.publicConfig.url+'/functions/v1/request-pilot-invitation"'),'Invitation form must use the production backend');
+assert(fs.existsSync('dist/homepage/request-invitation.js'),'Invitation form script missing from production output');
 const about=fs.readFileSync('dist/about.html','utf8');
 assert(/<header\b[^>]*\bid="start"/.test(about),'Keep the old event email fragment available when JavaScript is disabled');
 assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');

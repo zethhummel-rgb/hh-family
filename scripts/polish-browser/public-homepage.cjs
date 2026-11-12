@@ -44,13 +44,24 @@ async function run() {
     const app = origin + scope;
     browser = await launchBrowser();
     const context = await browser.newContext({serviceWorkers: 'block', reducedMotion: 'reduce'});
+    const requestEndpoint = 'https://njpdqiwrwgoothkstoql.supabase.co/functions/v1/request-pilot-invitation';
+    const submissions = [];
     await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    await context.route(requestEndpoint, async route => {
+      if (route.request().method() === 'OPTIONS') {
+        return route.fulfill({status: 204, headers: {'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'content-type'}});
+      }
+      submissions.push(route.request().postDataJSON());
+      const success = submissions.length > 1;
+      await route.fulfill({status: success ? 200 : 503, headers: {'Access-Control-Allow-Origin': origin}, json: success ? {sent: true} : {error: 'Please try again shortly.'}});
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
     const errors = [];
     const demoRequests = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
+      if (request.url() === requestEndpoint) return;
       if (new URL(request.url()).origin !== origin || request.method() !== 'GET') demoRequests.push(request.url());
     });
     const out = path.resolve(process.env.HH_POLISH_OUTPUT || 'artifacts/polish');
@@ -118,9 +129,29 @@ async function run() {
       await page.getByRole('heading', {name: 'Request an invitation', exact: true}).waitFor();
       assert.equal(page.url(), app + 'request-invitation.html');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Request page fits width ' + width);
-      const draft = await page.getByRole('link', {name: 'Open email draft'}).getAttribute('href');
-      assert.equal(draft, 'mailto:hummelhomeapp@gmail.com?subject=HH%20Family%20invitation%20request');
-      if (width === 390) await page.screenshot({path: path.join(out, 'public-invitation-request-390.png'), fullPage: true});
+      const sendRequest = page.getByRole('button', {name: 'Send request', exact: true});
+      await sendRequest.waitFor();
+      assert.equal(await page.getByRole('link', {name: 'hummelhomeapp@gmail.com'}).getAttribute('href'), 'mailto:hummelhomeapp@gmail.com');
+      if (width === 390) {
+        await page.screenshot({path: path.join(out, 'public-invitation-request-390.png'), fullPage: true});
+        await sendRequest.click();
+        assert.equal(submissions.length, 0, 'Required answers prevent an empty submission');
+        await page.getByLabel('Your name', {exact: true}).fill('Alex Example');
+        await page.getByLabel('Email address', {exact: true}).fill('alex@example.invalid');
+        await page.getByLabel('Where did you hear about us?').fill('Calendar invite');
+        await page.getByLabel('Would you like to be part of the HH pilot?').selectOption('yes');
+        await page.getByLabel(/Anything else/).fill('I would like to try HH.');
+        await sendRequest.click();
+        await page.getByRole('alert').getByText('Please try again shortly.').waitFor();
+        assert.equal(await page.getByLabel('Email address', {exact: true}).inputValue(), 'alex@example.invalid');
+        assert.equal(await page.locator('#request-message').inputValue(), 'I would like to try HH.');
+        await sendRequest.click();
+        await page.getByRole('status').getByText('Thanks for reaching out. Your request was sent to HH.').waitFor();
+        assert.equal(submissions.length, 2);
+        assert.deepEqual(submissions[0], submissions[1], 'Retrying the same request uses the same ID');
+        assert.deepEqual({...submissions[1], requestId: undefined}, {name:'Alex Example',email:'alex@example.invalid',source:'Calendar invite',interest:'yes',message:'I would like to try HH.',website:'',requestId:undefined});
+        assert.equal(await page.getByLabel('Email address', {exact: true}).inputValue(), '');
+      }
       await page.getByRole('link', {name: 'Back to HH Family'}).click();
       assert.equal(page.url(), app + 'home.html');
       // Let Firefox finish this navigation before resizing the next viewport.
@@ -168,7 +199,12 @@ async function run() {
     assert.deepEqual(demoRequests, [], 'Public demos never contact a backend or submit data');
 
     // Previously sent event emails still link to this fragment.
-    await page.setContent('<a href="' + app + 'about.html#start">Learn about HH and request an invite</a>');
+    const legacyEmail = app + '__legacy-email';
+    await page.route(legacyEmail, route => route.fulfill({
+      contentType: 'text/html',
+      body: '<a href="./about.html#start">Learn about HH and request an invite</a>',
+    }));
+    await page.goto(legacyEmail);
     await page.getByRole('link', {name: 'Learn about HH and request an invite'}).click();
     await page.waitForURL(app + 'home.html');
     await page.getByRole('heading', {name: 'What’s the plan?', exact: true}).waitFor();
