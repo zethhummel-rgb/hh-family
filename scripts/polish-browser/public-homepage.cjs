@@ -199,7 +199,12 @@ async function run() {
     assert.deepEqual(demoRequests, [], 'Public demos never contact a backend or submit data');
 
     // Previously sent event emails still link to this fragment.
-    await page.setContent('<a href="' + app + 'about.html#start">Learn about HH and request an invite</a>');
+    const legacyEmail = app + '__legacy-email';
+    await page.route(legacyEmail, route => route.fulfill({
+      contentType: 'text/html',
+      body: '<a href="./about.html#start">Learn about HH and request an invite</a>',
+    }));
+    await page.goto(legacyEmail);
     await page.getByRole('link', {name: 'Learn about HH and request an invite'}).click();
     await page.waitForURL(app + 'home.html');
     await page.getByRole('heading', {name: 'What’s the plan?', exact: true}).waitFor();
