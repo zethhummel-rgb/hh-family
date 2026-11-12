@@ -474,3 +474,10 @@ h1, h2, h3 { margin: 0; font-family: var(--serif); color: var(--heading); }
   .hills { margin-top: 8px; }
   .request-main { padding-block: 24px 38px; }
 }
+
+.preview-home-screen { display:block; position:relative; width:min(100%, 344px); line-height:0; }
+.preview-home-screen::after { content:""; position:absolute; left:4.1%; top:3%; width:9%; aspect-ratio:1; border-radius:20%; background:url("../icons/hh-180.png") center / cover; }
+@media(max-width: 600px) { .preview-home-screen { width:min(100%, 310px); } }
+
+.preview-rsvp { display:block; position:relative; container-type:inline-size; line-height:0; overflow:hidden; }
+.preview-rsvp::after { content:""; position:absolute; top:8.6cqw; left:11.4%; width:12%; aspect-ratio:1; border-radius:20%; background:url("../icons/hh-180.png") center / cover; }

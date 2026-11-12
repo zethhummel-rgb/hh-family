@@ -145,3 +145,11 @@
 @media (prefers-reduced-motion: reduce) {
   .about-explore span { transition: none; }
 }
+
+.fan-screens::after { content:""; position:absolute; z-index:3; top:7.3%; left:27.8%; width:4.15%; aspect-ratio:1; transform:rotate(-2deg); border-radius:20%; background:url("../icons/hh-180.png") center / cover; }
+.home-install-preview { display:block; position:relative; overflow:hidden; line-height:0; }
+.home-install-preview::after { content:""; position:absolute; top:78.8%; left:36%; width:28%; aspect-ratio:1; border-radius:20%; background:url("../icons/hh-180.png") center / cover; }
+@media(max-width: 700px) { .home-install-preview::after { display:none; } }
+
+.preview-rsvp { display:block; position:relative; container-type:inline-size; line-height:0; overflow:hidden; }
+.preview-rsvp::after { content:""; position:absolute; top:8.6cqw; left:11.4%; width:12%; aspect-ratio:1; border-radius:20%; background:url("../icons/hh-180.png") center / cover; }

@@ -80,3 +80,6 @@
   .website-auth .auth-main { display: grid; justify-content: stretch; }
   .website-auth .auth-card { margin-inline: auto; border-radius: 20px; }
 }
+
+.website-auth .auth-preview-screen { display:block; position:relative; line-height:0; }
+.website-auth .auth-preview-icon { position:absolute; left:4.1%; top:6.4%; width:9%; aspect-ratio:1; border-radius:20%; background-position:center; background-size:cover; }

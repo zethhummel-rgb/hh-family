@@ -26,7 +26,7 @@ export default function AuthLayout({children,loading=false}:{children:ReactNode;
      <p>One shared place for family plans, groceries, and invites.</p>
     </div>
     <figure className="auth-preview">
-     <img src="./homepage/screens/home.webp" alt="The HH home screen shows today’s meals and upcoming family plans." width={780} height={1170} loading="lazy" decoding="async"/>
+     <span className="auth-preview-screen"><img src="./homepage/screens/home.webp" alt="The HH home screen shows today’s meals and upcoming family plans." width={780} height={1170} loading="lazy" decoding="async"/><span className="auth-preview-icon" style={{backgroundImage:'url("./icons/hh-180.png")'}} aria-hidden="true"/></span>
      <figcaption>HH Home · Sample household</figcaption>
     </figure>
    </aside>}
