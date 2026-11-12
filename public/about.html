@@ -2,29 +2,158 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#f4dce4">
-  <meta name="description" content="HH Family brings your household calendar, groceries, to-dos, reminders, family notes and meals together in one shared space.">
-  <title>HH Family &#8212; A little more together</title>
+  <meta name="theme-color" content="#f7f9f5">
+  <meta name="description" content="A closer look at HH Family, the shared calendar, shopping list, and little details that keep your household together.">
+  <title>Explore HH Family</title>
+  <script>
+    if (location.hash === '#start') location.replace('./home.html');
+  </script>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./info.css">
+  <link rel="stylesheet" href="./homepage/landing.css?v=explore">
+  <link rel="stylesheet" href="./homepage/about.css?v=explore">
+  <script src="./homepage/tile-motion.js" defer></script>
 </head>
-<body>
-  <a class="skip" href="#content">Skip to content</a>
-  <header class="site-header"><a class="brand" href="./about.html"><img src="./icons/hh-180.png" alt=""><span>HH Family</span></a><nav aria-label="Main"><a class="about-link" href="./privacy.html">Privacy</a><a class="open-app" href="./">Open HH</a></nav></header>
-  <main id="content" class="page">
-    <section class="hero"><span class="eyebrow">Your household, in one place</span><h1>A little less keeping track.<br>A little more together.</h1><p class="lead">HH Family is a shared home organizer for family plans, groceries, to-dos, recurring reminders, useful family notes and meal plans. Each person has their own login. Each household has its own private space.</p><a class="cta" href="./">Open your household</a><p class="caption">An invitation-only pilot for a small group of families.</p></section>
-    <section aria-labelledby="everyday"><h2 id="everyday">For the things that fill your days.</h2><div class="feature-list">
-      <div class="feature"><span class="number" aria-hidden="true">01</span><h3>Family calendar</h3><p>See the month or an agenda, tag family members, choose colours and find past or upcoming plans. Open an event to see its details before editing.</p></div>
-      <div class="feature"><span class="number" aria-hidden="true">02</span><h3>Shared groceries</h3><p>Keep a household shopping list together so the next person at the store can see what is needed.</p></div>
-      <div class="feature"><span class="number" aria-hidden="true">03</span><h3>To-dos &amp; reminders</h3><p>Share tasks, set recurring reminders and keep completed items separate. Device notifications are optional and require permission on each supported device.</p></div>
-      <div class="feature"><span class="number" aria-hidden="true">04</span><h3>Family notes</h3><p>Keep useful information in one shared place. Pin important notes, search for details and update them together.</p></div>
-      <div class="feature"><span class="number" aria-hidden="true">05</span><h3>Meal planner</h3><p>Plan breakfast, lunch, supper and snacks, reuse your household&#8217;s saved meals and choose ingredients to add to the grocery list. Today&#8217;s meals stay handy on Home.</p></div>
-    </div></section>
-    <section class="callout" aria-labelledby="google"><h2 id="google">Your HH calendar, with an optional Google copy.</h2><p>Your shared plans and reminders live in HH. The household owner can connect Google to see a copy in a dedicated family calendar. Make changes in HH; edits in Google do not change HH. If Google needs reconnecting, your ready HH calendar keeps working. Existing Google-connected homes are preserved and verified before their calendar source changes.</p><p>HH requests access only to calendars created by the app. Your other personal and work calendars stay separate. <a href="./privacy.html#google-calendar">Read about Google access and privacy</a>.</p></section>
-    <section aria-labelledby="start"><h2 id="start">Your own home starts with an invitation.</h2><p>Open the invitation link, make an account and confirm your email. A new-household invitation lets you create your own home; a family-member invitation joins the household that invited you. Google Calendar is an optional connection made by the household owner.</p><p>HH is currently being tested. Google access is limited to approved test users while the Google app remains in Testing mode.</p><p class="contact">Questions or pilot access: <a href="mailto:hummelhomeapp@gmail.com">hummelhomeapp@gmail.com</a>.</p></section>
+<body class="about-page">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="site-header frame" id="start">
+    <a class="wordmark" href="./home.html" aria-label="HH Family home">
+      <img src="./icons/hh-180.png" alt="" width="48" height="48">
+      <span>HH Family</span>
+    </a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="./home.html">Home</a>
+      <a class="nav-explore" href="./about.html" aria-current="page">Explore HH</a>
+      <a href="./">Sign in</a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <section class="about-hero frame" aria-labelledby="about-title">
+      <div class="about-intro">
+        <p class="about-label">Explore HH</p>
+        <h1 id="about-title">A little more <em>together.</em></h1>
+        <span class="gold-line" aria-hidden="true"></span>
+        <p>See how family plans, dinner, and the little details come together in HH.</p>
+        <a class="action primary about-explore" href="#everyday">Take a closer look <span aria-hidden="true">↓</span></a>
+      </div>
+      <figure class="hero-fan">
+        <div class="fan-screens" aria-hidden="true">
+          <img class="fan-calendar" src="./homepage/screens/calendar.webp" alt="" width="780" height="910">
+          <img class="fan-home" src="./homepage/screens/home.webp" alt="" width="780" height="1170" fetchpriority="high">
+          <img class="fan-invite" src="./homepage/screens/rsvp.webp" alt="" width="780" height="910">
+        </div>
+        <figcaption>HH app screens · Sample household</figcaption>
+      </figure>
+    </section>
+
+    <section class="about-stories frame" id="everyday" aria-labelledby="everyday-title">
+      <h2 id="everyday-title">The things that fill your days.</h2>
+      <p class="preview-hint">Swipe the app previews to see more.</p>
+      <div class="chapter-deck" data-tile-deck>
+        <article class="about-chapter chapter-sage">
+          <div class="chapter-sheet" data-tile-panel>
+            <div class="chapter-copy">
+              <h3>Who’s where?<br> And when?</h3>
+              <p>Share the calendar, see who’s on pickup, and set reminders for the little things.</p>
+            </div>
+            <div class="chapter-art" role="group" aria-label="Calendar and reminders" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/calendar.webp" alt="Calendar agenda with colour-coded family plans and times." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Family calendar</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/reminders.webp" alt="A shared to-do list with the hockey bag and library returns assigned to family members." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>To-dos &amp; reminders</figcaption>
+              </figure>
+            </div>
+          </div>
+        </article>
+        <article class="about-chapter chapter-linen">
+          <div class="chapter-sheet" data-tile-panel>
+            <div class="chapter-copy">
+              <h3>From taco night<br> to aisle five.</h3>
+              <p>Plan the meals, send ingredients to groceries, and tick them off from the same list.</p>
+            </div>
+            <div class="chapter-art" role="group" aria-label="Meal planner and groceries" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/meals.webp" alt="The meal planner shows a planned meal and the option to add its ingredients to groceries." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Meal planner</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/groceries.webp" alt="A shared shopping list with quantities and checkboxes." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Shared groceries</figcaption>
+              </figure>
+            </div>
+          </div>
+        </article>
+        <article class="about-chapter chapter-rose">
+          <div class="chapter-sheet" data-tile-panel>
+            <div class="chapter-copy">
+              <h3>See you at six.</h3>
+              <p>Get the dinner RSVPs in one place and pin the details your household will need again.</p>
+            </div>
+            <div class="chapter-art" role="group" aria-label="Event invitations and family notes" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/rsvp.webp" alt="A Sunday dinner invitation with Yes, Maybe, and No response options." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Event invitations</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/notes.webp" alt="Family notes with a pinned checklist for the rink bag." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Family notes</figcaption>
+              </figure>
+            </div>
+          </div>
+        </article>
+        <article class="about-chapter chapter-coastal">
+          <div class="chapter-sheet" data-tile-panel>
+            <div class="chapter-copy">
+              <h3>Make it feel<br> like home.</h3>
+              <p>Pick a colour palette and keep HH a tap away on your iPhone Home Screen.</p>
+            </div>
+            <div class="chapter-art" role="group" aria-label="Appearance and Home Screen setup" tabindex="0">
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/appearance.webp" alt="HH Appearance settings with selectable colour palettes, including Sage &amp; Linen." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>Colour palettes</figcaption>
+              </figure>
+              <figure class="chapter-preview">
+                <img src="./homepage/screens/home-screen.webp" alt="HH’s iPhone guide shows the icon to look for on your Home Screen." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption>iPhone Home Screen guide</figcaption>
+              </figure>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="about-invite frame" id="request" aria-labelledby="start-title">
+      <div>
+        <h2 id="start-title">Make yourself at home.</h2>
+        <p>Each person has their own login. Each household has its own private space.</p>
+      </div>
+      <div class="about-actions">
+        <a class="action primary" href="./request-invitation.html">Request an invitation</a>
+        <a class="action secondary" href="./">Sign in</a>
+      </div>
+      <p class="invited-note">Already invited? Open the link in your invitation to join your household.</p>
+    </section>
+
+    <details class="calendar-info frame" id="google">
+      <summary>Using Google Calendar with HH</summary>
+      <p>Your household owner can connect a dedicated Google calendar to see a copy of your HH plans. Make changes in HH to keep the copy up to date. HH requests access only to the calendar it creates. Your personal and work calendars stay separate. Google access is limited to approved users while the Google app is in Testing mode.</p>
+      <a href="./privacy.html#google-calendar">Read about Google access and privacy</a>
+    </details>
   </main>
-  <footer class="site-footer"><span>HH Family &#183; Made for your everyday.</span><nav aria-label="Information"><a href="./about.html" aria-current="page">About HH</a><a href="./privacy.html">Privacy policy</a><a href="./terms.html">Terms of service</a><a href="mailto:hummelhomeapp@gmail.com">Contact</a></nav></footer>
+
+  <footer class="site-footer frame">
+    <span>HH Family</span>
+    <nav aria-label="Information">
+      <a href="./about.html" aria-current="page">Explore HH</a>
+      <a href="./privacy.html">Privacy</a>
+      <a href="./terms.html">Terms</a>
+      <a href="mailto:hummelhomeapp@gmail.com">Contact</a>
+    </nav>
+  </footer>
 </body>
 </html>

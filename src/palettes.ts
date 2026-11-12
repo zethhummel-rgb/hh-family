@@ -15,6 +15,16 @@ export const PALETTES:Palette[]=[
 ];
 
 const storageKey=(userId:string)=>'home-together:palette:'+userId;
+export const setupPaletteId='sage';
+
+export function prepareSetupPalette(userId:string){
+ try{
+  const key=storageKey(userId);
+  const saved=localStorage.getItem(key);
+  if(!PALETTES.some(p=>p.id===saved))localStorage.setItem(key,setupPaletteId);
+ }catch{/* The palette picker still works for this visit. */}
+}
+
 function validPalette(value:string|null):string{return PALETTES.some(p=>p.id===value)?value!:'blush'}
 function readPalette(userId:string):string{try{return validPalette(localStorage.getItem(storageKey(userId)))}catch{return 'blush'}}
 

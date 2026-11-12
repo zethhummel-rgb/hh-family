@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#f7f9f5">
+  <meta name="description" content="HH Family brings your family plans, groceries, and invitations together in one shared place.">
+  <title>What’s the plan? · HH Family</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./homepage/landing.css?v=explore">
+  <script src="./homepage/demo.js" defer></script>
+  <script src="./homepage/tile-motion.js" defer></script>
+  <script src="./homepage/home-motion.js?v=explore" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header frame">
+    <a class="wordmark" href="./home.html" aria-label="HH Family home">
+      <img src="./icons/hh-180.png" alt="" width="48" height="48">
+      <span>HH Family</span>
+    </a>
+    <nav class="main-nav" aria-label="Main">
+      <a class="nav-explore" href="./about.html">Explore HH</a>
+      <a href="./">Sign in</a>
+      <a class="action primary nav-request" href="./request-invitation.html">Request an invitation</a>
+    </nav>
+  </header>
+
+  <main id="main" class="home-main">
+    <section class="hero frame" aria-labelledby="title">
+      <div class="hero-copy">
+        <h1 id="title">What’s the plan?</h1>
+        <span class="gold-line" aria-hidden="true"></span>
+        <p>One shared place for family plans, groceries, and invites.</p>
+        <div class="hero-actions">
+          <a class="action primary" href="./request-invitation.html">Request an invitation</a>
+          <a class="action secondary" href="./about.html">Explore HH <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <figure class="home-preview">
+        <img src="./homepage/screens/home.webp" alt="HH Home for the fictional Maple House shows today’s meals and upcoming hockey practice." width="780" height="1170" fetchpriority="high">
+        <figcaption>HH Home · Sample household</figcaption>
+      </figure>
+    </section>
+
+    <section class="highlights frame" id="explore" aria-labelledby="explore-title">
+      <h2 id="explore-title">A weekend with HH</h2>
+      <div class="feature-deck" data-tile-deck>
+        <div class="scene-card">
+          <div class="feature-scene scene-sage" data-tile-panel>
+            <div class="scene-copy">
+              <h3>Skates packed.<br> Groceries sorted.</h3>
+            </div>
+            <div class="scene-screens">
+              <figure class="app-screen">
+                <img src="./homepage/screens/calendar.webp" alt="The HH calendar agenda shows hockey practice, a library stop, and Sunday dinner with times and family members." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>Family calendar</strong><span>See where everyone needs to be.</span></figcaption>
+              </figure>
+              <figure class="app-screen">
+                <img src="./homepage/screens/groceries.webp" alt="The HH shopping list groups apples, spinach, and eggs by department, with quantities and checkboxes." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>Shared groceries</strong><span>Tick things off as you shop.</span></figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+        <div class="scene-card">
+          <div class="feature-scene scene-linen" data-tile-panel>
+            <div class="scene-copy">
+              <h3>What’s for dinner?<br> Who’s coming?</h3>
+            </div>
+            <div class="scene-screens">
+              <figure class="app-screen">
+                <img src="./homepage/screens/meals.webp" alt="The HH meal planner shows the week and meals planned for the day, including berry pancakes." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>Meal planner</strong><span>Plan meals and send ingredients to groceries.</span></figcaption>
+              </figure>
+              <figure class="app-screen">
+                <img src="./homepage/screens/rsvp.webp" alt="An HH Sunday dinner invitation shows the time, location, and options to accept, decline, or say maybe." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>Event invitations</strong><span>Share the invite and see who’s coming.</span></figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+        <div class="scene-card">
+          <div class="feature-scene scene-rose" data-tile-panel>
+            <div class="scene-copy">
+              <h3>Keys by the door.<br> Details in HH.</h3>
+            </div>
+            <div class="scene-screens">
+              <figure class="app-screen">
+                <img src="./homepage/screens/reminders.webp" alt="A shared to-do list with the hockey bag and library returns assigned to family members." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>To-dos &amp; reminders</strong><span>Give the little jobs a place to land.</span></figcaption>
+              </figure>
+              <figure class="app-screen">
+                <img src="./homepage/screens/notes.webp" alt="The family notes screen shows a pinned rink bag checklist." width="780" height="910" loading="lazy" decoding="async">
+                <figcaption><strong>Family notes</strong><span>Pin the details you’ll need again.</span></figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="meal-tour frame" aria-labelledby="meal-tour-title" data-meal-carousel>
+      <div class="meal-tour-copy">
+        <p class="meal-tour-label">Meal planner</p>
+        <h2 id="meal-tour-title">From plan to plate.</h2>
+        <p>Pick a day, see what’s cooking, and get the ingredients on your shared list.</p>
+        <div class="meal-controls" data-meal-controls hidden>
+          <button type="button" aria-label="Previous meal preview" aria-controls="meal-previews" data-meal-prev><span aria-hidden="true">←</span></button>
+          <button type="button" aria-label="Next meal preview" aria-controls="meal-previews" data-meal-next><span aria-hidden="true">→</span></button>
+          <span class="meal-position" data-meal-position aria-hidden="true">1 / 3</span>
+          <span class="sr-only" aria-live="polite" data-meal-status></span>
+        </div>
+      </div>
+      <div class="meal-track" id="meal-previews" role="group" aria-label="Meal planner previews" tabindex="0">
+        <article class="meal-slide">
+          <div class="meal-art meal-art-week">
+            <div class="meal-crop">
+              <img src="./homepage/screens/meals.webp" alt="A seven-day strip with Saturday selected in the HH meal planner." width="780" height="910" loading="lazy" decoding="async">
+            </div>
+          </div>
+          <h3>Pick a day</h3>
+          <p>Jump through the week to see what’s planned.</p>
+        </article>
+        <article class="meal-slide">
+          <div class="meal-art meal-art-today">
+            <div class="meal-crop">
+              <img src="./homepage/screens/meals.webp" alt="The breakfast card shows berry pancakes and an option to add another meal." width="780" height="910" loading="lazy" decoding="async">
+            </div>
+          </div>
+          <h3>See what’s cooking</h3>
+          <p>Keep breakfast, lunch, and supper in one place.</p>
+        </article>
+        <article class="meal-slide">
+          <div class="meal-art meal-art-ingredients">
+            <img src="./homepage/screens/meal-ingredients.webp" alt="The berry pancakes ingredient picker shows eggs and blueberries selected." width="664" height="444" loading="lazy" decoding="async">
+          </div>
+          <h3>Shop the ingredients</h3>
+          <p>Choose what you need and send it to shared groceries.</p>
+        </article>
+      </div>
+    </section>
+
+    <details class="try-demo frame">
+      <summary>Try a grocery list or RSVP</summary>
+      <section class="week-board" aria-labelledby="week-title">
+        <div class="week-top">
+          <div class="week-heading">
+            <p class="sample-label">Sample household</p>
+            <h2 id="week-title">Next 7 days</h2>
+          </div>
+          <ol class="week-days" aria-label="Example week, November 9 through 15">
+            <li class="today"><abbr title="Monday">Mon</abbr><span>9</span></li>
+            <li><abbr title="Tuesday">Tue</abbr><span>10</span></li>
+            <li><abbr title="Wednesday">Wed</abbr><span>11</span></li>
+            <li><abbr title="Thursday">Thu</abbr><span>12</span></li>
+            <li><abbr title="Friday">Fri</abbr><span>13</span></li>
+            <li class="planned"><abbr title="Saturday">Sat</abbr><span>14</span></li>
+            <li class="planned"><abbr title="Sunday">Sun</abbr><span>15</span></li>
+          </ol>
+        </div>
+
+        <div class="example-cards">
+          <article class="example-card hockey">
+            <h3>Hockey practice</h3>
+            <p class="event-time">Saturday · 10 AM</p>
+            <img src="./homepage/hockey.webp" alt="" width="420" height="280">
+          </article>
+
+          <article class="example-card groceries">
+            <h3>Groceries</h3>
+            <fieldset class="grocery-items" disabled data-grocery-demo>
+              <legend class="sr-only">Sample grocery list</legend>
+              <label><input type="checkbox"><span>Eggs</span></label>
+              <label><input type="checkbox"><span>Apples</span></label>
+            </fieldset>
+            <img src="./homepage/groceries.webp" alt="" width="420" height="280">
+          </article>
+
+          <article class="example-card dinner">
+            <h3>Sunday dinner</h3>
+            <fieldset class="rsvp-options" disabled data-rsvp-demo>
+              <legend class="sr-only">Sample RSVP for Sunday dinner</legend>
+              <label><input type="radio" name="dinner-reply" value="Yes"><span>Yes</span></label>
+              <label><input type="radio" name="dinner-reply" value="Maybe"><span>Maybe</span></label>
+              <label><input type="radio" name="dinner-reply" value="No"><span>No</span></label>
+            </fieldset>
+            <p class="rsvp-result" role="status" aria-live="polite" data-rsvp-result>Try an RSVP</p>
+            <img src="./homepage/dinner.webp" alt="" width="420" height="280">
+          </article>
+        </div>
+        <img class="hills" src="./homepage/hills.webp" alt="" width="1500" height="240">
+      </section>
+    </details>
+
+    <section class="closing frame" aria-labelledby="closing-title">
+      <h2 id="closing-title">Ready to make a plan?</h2>
+      <div class="closing-actions">
+        <a class="action primary" href="./request-invitation.html">Request an invitation</a>
+        <a href="./about.html">More about HH</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer frame">
+    <span>HH Family</span>
+    <nav aria-label="Information">
+      <a href="./privacy.html">Privacy</a>
+      <a href="./terms.html">Terms</a>
+    </nav>
+  </footer>
+</body>
+</html>

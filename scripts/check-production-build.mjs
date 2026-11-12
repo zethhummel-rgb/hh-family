@@ -23,5 +23,11 @@ assert(fs.readFileSync('src/main.tsx','utf8').includes('testEnvironment&&<aside 
 assert(!/HH Test|Hummel Home/.test(html),'TEST branding in production HTML');
 for(const file of ['manifest.webmanifest','icon.svg','favicon.svg'])assert(fs.readFileSync('dist/'+file).equals(fs.readFileSync('public/'+file)),file+' changed during production build');
 assert(!fs.existsSync('dist/test-guide.html'),'TEST guide in production output');
+for (const file of ['home.html','about.html','request-invitation.html']) {
+ const page=fs.readFileSync('dist/'+file,'utf8');
+ assert(!/TEST preview|test-guide\.html|Family TEST|TEST%20invitation/.test(page),file+' includes TEST content');
+}
+const about=fs.readFileSync('dist/about.html','utf8');
+assert(/<header\b[^>]*\bid="start"/.test(about),'Keep the old event email fragment available when JavaScript is disabled');
 assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
 console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, original branding, offline shell and no TEST guide.');

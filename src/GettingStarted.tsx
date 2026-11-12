@@ -33,10 +33,11 @@ export default function GettingStarted({userId,householdId,active,hasEvent,notif
  },[active,progress.dismissed,userId,householdId,notificationRevision]);
  if(!active||progress.dismissed)return null;
  const eventDone=hasEvent||progress.eventAdded,complete=Number(eventDone)+Number(installed)+Number(enabled);
+ const installFirst=needsHomeScreen();
  const rows=[
   {title:eventDone?'A family plan is added':'Add a family plan',copy:eventDone?'Your shared calendar is ready to use.':'Start with one real event. Google is optional.',done:eventDone,icon:CalendarPlus,action:onAddEvent},
-  {title:installed?'HH is open from its icon':'Add HH to your Home Screen',copy:installed?'Your home is just a tap away.':'See the picture guide, then open the new HH icon.',done:installed,icon:Smartphone,action:onInstall},
-  {title:enabled?'Notifications are on':'Choose your notifications',copy:enabled?'Reminders are enabled on this device.':needsHomeScreen()?'Open the HH icon first, then enable reminders.':'Choose whether this device receives reminders.',done:enabled,icon:Bell,action:onNotifications}
+  {title:installed?'HH is open from its icon':'Add HH to your Home Screen',copy:installed?'Your home is just a tap away.':'Open the interactive Safari tutorial.',done:installed,icon:Smartphone,action:onInstall},
+  {title:enabled?'Notifications are on':'Turn on notifications',copy:enabled?'Reminders are enabled on this device.':installFirst?'On iPhone or iPad, add HH to your Home Screen and open it first.':'Enable reminders for plans and to-dos on this device.',done:enabled,icon:Bell,action:installFirst?onInstall:onNotifications}
  ];
  return <section className="getting-started" aria-labelledby={headingId}>
   <div className="getting-started-header"><button type="button" className="getting-started-toggle" aria-expanded={expanded} aria-controls={bodyId} onClick={()=>{touched.current=true;setExpanded(value=>!value)}}><span><span id={headingId} className="getting-started-title">{complete===3?'You’re all set.':'Getting started'}</span><small>{complete} of 3 · Optional, at your pace</small></span><ChevronDown size={18} className={expanded?'expanded':''}/></button><button type="button" className="icon-button" aria-label="Hide getting-started checklist" onClick={()=>setProgress(saveGettingStarted(userId,householdId,{dismissed:true}))}><X size={18}/></button></div>
