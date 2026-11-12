@@ -4,3 +4,9 @@ export function householdName(value:string){
  if(name.length>76)throw Error('Keep your household name within 80 characters, including “The”.');
  return 'The '+name;
 }
+
+export function suggestHouseholdName(lastName:string){
+ const name=lastName.trim();
+ if(!name)return '';
+ return name+(/(?:s|x|z|ch|sh)$/i.test(name)?'es':'s');
+}
