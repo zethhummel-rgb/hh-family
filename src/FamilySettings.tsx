@@ -1,3 +1,4 @@
+import RemoveFamilyPerson from './RemoveFamilyPerson';
 import {useTutorialPractice} from './InteractiveTutorial';
 import InvitationDelivery from './InvitationDelivery';
 import ChoiceDialog from './ChoiceDialog';
@@ -56,7 +57,7 @@ export default function FamilySettings({owner,members,householdId,householdName,
  <button type="button" disabled={busy} aria-label="Invite a family member by email" aria-expanded={inviteOpen} aria-controls={invitePanelId} onClick={()=>edit(null)}><Mail size={22}/><span><b>Invite by email</b><small>Their own login to your household</small></span><ChevronRight size={17}/></button>
  <button type="button" disabled={busy} aria-label="Add a family member without email" onClick={()=>setAddProfileRequest(n=>n+1)}><Users size={22}/><span><b>Add without email</b><small>A profile for a child or family member</small></span><ChevronRight size={17}/></button></div>}
  <section className="email-family-members"><h4>Members with an email address</h4><p>{owner?'Invite another person to join this household with their own account.':'Each person here has their own account.'}</p>
- <div className="member-list">{members.map(m=><div key={m.user_id}><span className="member-avatar" style={{borderColor:safeColor(m.calendar_color)||defaultColor(m.display_name,m.user_id)}}>{m.display_name.slice(0,1)}</span><span>{m.display_name}</span><small>{m.role==='owner'?'Household owner':'Family member'}</small></div>)}</div>
+ <div className="member-list">{members.map(m=><div key={m.user_id}><span className="member-avatar" style={{borderColor:safeColor(m.calendar_color)||defaultColor(m.display_name,m.user_id)}}>{m.display_name.slice(0,1)}</span><span>{m.display_name}</span><small>{m.role==='owner'?'Household owner':'Family member'}</small>{owner&&m.role==='member'&&<RemoveFamilyPerson householdId={householdId} id={m.user_id} name={m.display_name} kind="member" disabled={busy} onRemoved={async()=>{await onHouseholdSaved();await load()}}/>}</div>)}</div>
  {owner&&<>
  {inviteOpen&&<form className="email-invitation-form" id={invitePanelId} onSubmit={e=>{e.preventDefault();prepare()}}>
  <div className="family-form-heading"><h4>{correcting?'Correct invitation address':'Invite by email'}</h4><button type="button" className="icon-button" aria-label="Close email invitation" disabled={busy} onClick={()=>guard.requestClose()}><X size={16}/></button></div>

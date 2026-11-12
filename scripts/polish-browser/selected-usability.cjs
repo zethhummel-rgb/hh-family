@@ -5,6 +5,8 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
 const dir=path.resolve('dist'),home='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222';
 const user={id:uid,email:'shopper@example.invalid',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
 const member={user_id:uid,display_name:'Alex Morgan',role:'owner',household_id:home};
+const secondMember={user_id:'22222222-2222-4222-8222-222222222223',display_name:'Taylor Morgan',role:'member',household_id:home};
+const removedPeople=[];
 const products=['Milk','Bread','Eggs'].map((title,i)=>({id:'33333333-3333-4333-8333-33333333333'+i,title,category:'Dairy & eggs',kind:'grocery',done:false,household_id:home,reminder_version:1,person:'Everyone',created_at:'2026-01-01',grocery_store:'Test market'}));
 products.push({id:'44444444-4444-4444-8444-444444444444',household_id:home,kind:'task',title:'Book camp tickets',category:'Other',person:'Everyone',done:true,due:'2026-10-01',reminder_version:1,created_at:'2026-01-01'});
 const note={id:'55555555-5555-4555-8555-555555555555',household_id:home,title:'Packing checklist',body:'Remember the camp tickets and warm clothes.',pinned:false,version:1,created_at:'2026-01-01',updated_at:'2026-11-01'};
@@ -46,9 +48,12 @@ else if(u.pathname.includes('/functions/v1/invitation-email')){sends++;data={sta
 else if(table==='household_invites'){
  if(req.method()==='DELETE'){const id=u.searchParams.get('id').slice(3);data=invitations.filter(i=>i.id===id);invitations=invitations.filter(i=>i.id!==id)}else data=invitations;
 }
+else if(table==='remove_family_person'){
+ const body=req.postDataJSON();assert.equal(body.target_household,home);removedPeople.push(body);data=null;
+}
 else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':table==='pilot_status'?{is_host:true}:table==='pilot_invitations'?[]:{};
-   else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
-   else if(table==='household_people')data=['Jamie Morgan','Riley Morgan','Casey Morgan'].map((display_name,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa'+i,household_id:home,display_name,calendar_color:['#E78725','#467EB6','#C46B8C'][i],linked_user_id:null}));
+   else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member,...(removedPeople.some(p=>p.target_id===secondMember.user_id)?[]:[secondMember])];if(u.searchParams.has('user_id'))data=data.filter(m=>'eq.'+m.user_id===u.searchParams.get('user_id'));}
+   else if(table==='household_people')data=['Jamie Morgan','Riley Morgan','Casey Morgan'].map((display_name,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa'+i,household_id:home,display_name,calendar_color:['#E78725','#467EB6','#C46B8C'][i],linked_user_id:null})).filter(p=>!removedPeople.some(r=>r.target_id===p.id));
    else if(table==='households'){
  if(req.method()==='PATCH'){if(failWrites){await route.fulfill({status:503,json:{message:'Fixture unavailable'}});return}if(pauseHomeSave)await new Promise(resolve=>releaseHomeSave=resolve);householdName=req.postDataJSON().name;writes++}
  data={id:home,owner_id:uid,calendar_id:'',name:householdName};
@@ -93,6 +98,20 @@ if(req.method()==='PATCH'){for(const row of data){Object.assign(row,req.postData
  await page.getByRole('button',{name:'Done',exact:true}).click();await choose('Discard');await settings();await page.getByRole('button',{name:/Your household/}).first().click();assert.equal(await page.getByLabel('Household name',{exact:true}).inputValue(),'Test Market Home');
  pauseHomeSave=true;await page.getByLabel('Household name',{exact:true}).fill('Saved home');await page.getByRole('button',{name:'Done',exact:true}).click();await choose('Save');await page.waitForFunction(()=>document.querySelector('.settings-content')?.inert);assert(await page.getByRole('button',{name:'Done',exact:true}).isDisabled());for(let i=0;i<100&&!releaseHomeSave;i++)await page.waitForTimeout(50);assert(releaseHomeSave,'Delayed save reached server');pauseHomeSave=false;releaseHomeSave();await page.locator('.settings-dialog').waitFor({state:'detached'});assert.equal(householdName,'Saved home');pass('Household name: protects drafts, freezes other controls during pending Save, saves before closing and Discard resets');
  await settings();await page.getByRole('button',{name:/Your household/}).first().click();await page.getByRole('button',{name:'Add a family member without email',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Draft child');await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await choose('Keep editing');assert.equal(await page.getByLabel('Name',{exact:true}).inputValue(),'Draft child');await page.getByRole('button',{name:'Back to Settings',exact:true}).click();await choose('Discard');await page.getByRole('button',{name:/Your household/}).first().click();assert.equal(await page.locator('.profile-editor').count(),0);pass('Family profiles: Back protects draft and Discard resets form');
+
+ assert.equal(await page.getByRole('button',{name:'Remove Alex Morgan',exact:true}).count(),0);
+ await page.getByRole('button',{name:'Remove Taylor Morgan',exact:true}).click();
+ await page.getByRole('alertdialog',{name:'Remove Taylor Morgan?'}).getByRole('button',{name:'Keep',exact:true}).click();
+ assert.equal(removedPeople.length,0);
+ await page.getByRole('button',{name:'Remove Taylor Morgan',exact:true}).click();
+ await page.getByRole('alertdialog',{name:'Remove Taylor Morgan?'}).getByRole('button',{name:'Remove',exact:true}).click();
+ await page.getByRole('button',{name:'Remove Taylor Morgan',exact:true}).waitFor({state:'detached'});
+ assert.deepEqual(removedPeople[0],{target_household:home,target_kind:'member',target_id:secondMember.user_id});
+ await page.getByRole('button',{name:'Remove Casey Morgan',exact:true}).click();
+ await page.getByRole('alertdialog',{name:'Remove Casey Morgan?'}).getByRole('button',{name:'Remove',exact:true}).click();
+ await page.getByRole('button',{name:'Remove Casey Morgan',exact:true}).waitFor({state:'detached'});
+ assert.deepEqual(removedPeople[1],{target_household:home,target_kind:'profile',target_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'});
+ pass('Family removal confirms first, protects the owner and refreshes members and profiles');
  await page.getByRole('button',{name:'Correct address for relative@icolud.com',exact:true}).click();await page.getByLabel('Their email address',{exact:true}).fill('relative@icloud.com');await page.getByRole('button',{name:'Review invitation',exact:true}).click();
  assert.equal(reissues,0);assert.equal(sends,0);assert.match(await page.getByRole('alertdialog',{name:'Review invitation'}).innerText(),/relative@icloud.com/);await page.getByRole('button',{name:'Keep editing',exact:true}).click();assert.equal(await page.getByLabel('Their email address',{exact:true}).inputValue(),'relative@icloud.com');
  await page.getByRole('button',{name:'Close email invitation',exact:true}).click();await choose('Save');await page.getByRole('alertdialog',{name:'Review invitation'}).waitFor();assert.equal(sends,0,'Saving an invitation draft still requires address review');
