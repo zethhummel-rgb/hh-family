@@ -12,7 +12,7 @@
     "test:invitations": "node scripts/check-invitation-email.mjs && node scripts/check-invitation-registration.mjs",
     "test:recovery": "node scripts/check-password-recovery.mjs && node scripts/check-login-storage.mjs && node scripts/check-account-switch.mjs && node scripts/check-auth-resume.mjs && node scripts/check-household-navigation.mjs",
     "test:welcome": "node scripts/check-welcome-tour.mjs && node scripts/check-family-setup.mjs && node scripts/check-notification-prompt.mjs && node scripts/check-getting-started.mjs",
-    "test:feedback": "node scripts/check-feedback.mjs",
+    "test:feedback": "node scripts/check-feedback.mjs && node scripts/check-pilot-request.mjs",
     "test:polish": "node scripts/check-polish.mjs"
   },
   "dependencies": {

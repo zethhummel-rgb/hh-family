@@ -401,6 +401,30 @@ h1, h2, h3 { margin: 0; font-family: var(--serif); color: var(--heading); }
 .request-card h1 { font-size: clamp(2.35rem, 5.2vw, 3.8rem); line-height: 1.06; letter-spacing: -.045em; }
 .request-card p { margin: 13px 0 20px; }
 .request-card .mail-note { margin: 12px 0 0; font-size: .88rem; overflow-wrap: anywhere; }
+.request-form fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.request-fields { display: grid; gap: 7px; }
+.request-fields label { font-weight: 650; line-height: 1.4; }
+.request-fields label span { color: var(--muted); font-weight: 400; }
+.request-fields input, .request-fields select, .request-fields textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0 0 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.request-fields textarea { resize: vertical; }
+.request-card .request-caption { margin: 0 0 13px; font-size: .88rem; }
+.request-form button:not(:disabled) { cursor: pointer; }
+.request-form button:disabled { opacity: .7; }
+.request-card .request-result { margin: 12px 0 0; }
+.request-card .request-result:empty { margin: 0; }
+.request-card .request-result:not(:empty) { padding: 10px 12px; border-radius: 9px; background: var(--tint); }
+.request-card .request-error:not(:empty) { background: #fbede4; color: #703b2a; }
 .joining { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
 .joining p { margin: 8px 0 0; }
 

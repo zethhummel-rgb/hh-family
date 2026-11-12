@@ -8,7 +8,8 @@
   <meta name="description" content="Request an invitation to try HH Family with your household.">
   <title>Request an invitation · HH Family</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./homepage/landing.css">
+  <link rel="stylesheet" href="./homepage/landing.css?v=invitation-form">
+  <script src="./homepage/request-invitation.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -27,9 +28,34 @@
     <section class="request-card" aria-labelledby="request-title">
       <a class="back-link" href="./home.html">← Back to HH Family</a>
       <h1 id="request-title">Request an invitation</h1>
-      <p>To try HH with a new household, send us a short note with your name and the email address you’d use to sign in.</p>
-      <a class="action primary" href="mailto:hummelhomeapp@gmail.com?subject=HH%20Family%20invitation%20request">Open email draft</a>
-      <p class="mail-note">Send the request from your email app, or write to <a href="mailto:hummelhomeapp@gmail.com?subject=HH%20Family%20invitation%20request">hummelhomeapp@gmail.com</a>.</p>
+      <p>Tell us a little about yourself and we’ll reply by email.</p>
+      <form class="request-form" data-invitation-request data-endpoint="https://njpdqiwrwgoothkstoql.supabase.co/functions/v1/request-pilot-invitation" hidden>
+        <fieldset>
+          <div class="request-fields">
+            <label for="request-name">Your name</label>
+            <input id="request-name" name="name" autocomplete="name" maxlength="80" required>
+            <label for="request-email">Email address</label>
+            <input id="request-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+            <label for="request-source">Where did you hear about us?</label>
+            <input id="request-source" name="source" maxlength="160" placeholder="A friend, an event invite, a web search…" required>
+            <label for="request-interest">Would you like to be part of the HH pilot?</label>
+            <select id="request-interest" name="interest" required>
+              <option value="">Choose an answer</option>
+              <option value="yes">Yes, I’d like to join</option>
+              <option value="maybe">I’d like to learn more</option>
+              <option value="no">No, I have a question</option>
+            </select>
+            <label for="request-message">Anything else you’d like us to know? <span>(optional)</span></label>
+            <textarea id="request-message" name="message" rows="4" maxlength="1500"></textarea>
+          </div>
+          <div hidden aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <p class="request-caption">Your answers go to the HH team so we can respond.</p>
+          <button type="submit" class="action primary">Send request</button>
+        </fieldset>
+      </form>
+      <p class="request-result" role="status" data-request-status></p>
+      <p class="request-result request-error" role="alert" data-request-error></p>
+      <p class="mail-note">You can also reach us at <a href="mailto:hummelhomeapp@gmail.com">hummelhomeapp@gmail.com</a>.</p>
       <div class="joining">
         <h2>Joining a household?</h2>
         <p>Ask its household admin to invite you from HH. If you already have an invitation, open the link from that email to continue.</p>
