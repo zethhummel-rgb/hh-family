@@ -2,10 +2,10 @@
 .event-guest-section>.button{justify-self:start}
 .compact-event-modal .event-guest-section{margin:0 0 12px;padding:0;border:0}
 .event-guest-prepare{display:grid;justify-items:start;gap:8px}
-.event-guest-section form,.event-guest-review,.event-guest-preview,.event-guest-responses{display:grid;gap:8px;min-width:0}
+.event-guest-section form,.event-guest-preview,.event-guest-responses{display:grid;gap:8px;min-width:0}
 .event-guest-section p,.event-guest-section h3{margin:0;overflow-wrap:anywhere}
 .event-guest-section textarea{resize:vertical}
-.event-guest-review,.event-guest-preview{border:1px solid var(--line);border-radius:12px;padding:12px}
+.event-guest-preview{border:1px solid var(--line);border-radius:12px;padding:12px}
 .event-guest-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .event-guest-responses ul{list-style:none;margin:0;padding:0}
 .event-guest-responses li{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding:8px 0}

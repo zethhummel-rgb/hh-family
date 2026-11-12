@@ -13,10 +13,10 @@ const ownerSteps=[
  deviceStep
 ];
 const memberSteps=[
+ {scene:'appearance',title:'A look that feels like you.',icon:Palette,copy:'Choose a colour palette and see your home change right away.',detail:'Change your palette anytime in Settings → Appearance.'},
  {scene:'home',title:'You’re part of the home.',icon:House,copy:'Your own login opens your family’s shared calendar, groceries and to-dos. The home is ready for you to use.',detail:'Home starts with Today & coming up, including today’s meals. Your next 7 days are just below. Tap More along the bottom for Meal planner and Family notes. Tap your initials for Settings, then Your profile for your calendar colour or Appearance for your look.'},
  {scene:'calendar',title:'Share the family plans.',icon:CalendarDays,copy:'Tap Calendar, then Add event. Pick the people involved, or choose Everyone. Tap an event to see its details.',detail:'Use Edit to change a plan. Settings → Calendar lets you import selected Google plans once. Everyone in your home can see imported plans. Your owner handles the optional Google copy.'},
  {scene:'lists',title:'Lists you share.',icon:ListChecks,copy:'Add what you need to Groceries. Use To Do for tasks and reminders. Your family sees the same lists.',detail:'Staples saves your usual groceries for another trip. More → Family notes holds useful information everyone can read and edit. Pin important notes, or search to find one again.'},
- {scene:'appearance',title:'A look that feels like you.',icon:Palette,copy:'Pick a colour palette to see HH change. Or keep this look and tap Next.',detail:'Change it anytime in Settings → Appearance. Your calendar colour is separate, under Your profile.'},
  deviceStep
 ];
 export default function WelcomeTour({initials,owner,paletteId,paletteMessage,onPaletteChange,onFinish,onInteractive,onInstall,onNotifications}:{initials:string;owner:boolean;paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onFinish:()=>void;onInteractive?:()=>void;onInstall:()=>void;onNotifications:()=>void}){
