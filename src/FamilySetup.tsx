@@ -10,9 +10,9 @@ import {type FamilySetupStep} from './familySetup';
 import './family-setup.css';
 
 type Invite={id:string;email:string};
-export default function FamilySetup({householdName,householdId,members,people,initialStep,onStep,onSaved,onFinish,paletteId,onPaletteChange,paletteMessage}:{
+export default function FamilySetup({householdName,householdId,members,people,initialStep,paletteFirst,onStep,onSaved,onFinish,paletteId,onPaletteChange,paletteMessage}:{
  householdName:string;householdId:string;members:Member[];people:HouseholdPerson[];initialStep:FamilySetupStep;
- onStep:(step:FamilySetupStep)=>void;onSaved:()=>unknown;onFinish:()=>void;
+ paletteFirst:boolean;onStep:(step:FamilySetupStep)=>void;onSaved:()=>unknown;onFinish:()=>void;
  paletteId:string;onPaletteChange:(id:string)=>void;paletteMessage:string;
 }){
  const [step,setStep]=useState(initialStep),[email,setEmail]=useState(''),[delivery,setDelivery]=useState<EmailInvitation|null>(null);
@@ -21,8 +21,10 @@ export default function FamilySetup({householdName,householdId,members,people,in
  const pending=useRef(false),dialog=useRef<HTMLElement>(null),heading=useRef<HTMLHeadingElement>(null);
  const blocked=busy||profileBusy,blockedRef=useRef(blocked);blockedRef.current=blocked;
  const closeRef=useRef(onFinish);closeRef.current=onFinish;
+ const steps:FamilySetupStep[]=paletteFirst?['palette','email','profiles']:['email','profiles','palette'];
+ const index=steps.indexOf(step),next=steps[index+1],previous=steps[index-1];
  const changeStep=(value:FamilySetupStep)=>{if(blockedRef.current)return;setProfileDraft(false);setStep(value);onStep(value)};
- const advance=()=>{if(blockedRef.current)return;if(step==='email')changeStep('profiles');else if(step==='profiles')changeStep('palette');else onFinish()};
+ const advance=()=>{if(blockedRef.current)return;if(next)changeStep(next);else onFinish()};
  useEffect(()=>{
   let active=true;
   supabase.from('household_invites').select('id,email').eq('household_id',householdId).is('used_at',null).gt('expires_at',new Date().toISOString()).then(({data,error})=>{
@@ -56,11 +58,11 @@ export default function FamilySetup({householdName,householdId,members,people,in
   finally{pending.current=false;setBusy(false)}
  }
  return <div className="family-setup-backdrop"><section ref={dialog} className="family-setup" role="dialog" aria-modal="true" aria-labelledby="family-setup-title" aria-describedby="family-setup-copy">
-  <div className="family-setup-top"><img src="./icon.svg" alt=""/><span>MAKE YOURSELF AT HOME</span><span>{step==='email'?'1':step==='profiles'?'2':'3'} of 3</span></div>
-  <div className="family-setup-progress" aria-label={`Step ${step==='email'?1:step==='profiles'?2:3} of 3`}><span className="active"/><span className={step!=='email'?'active':''}/><span className={step==='palette'?'active':''}/></div>
+  <div className="family-setup-top"><img src="./icon.svg" alt=""/><span>MAKE YOURSELF AT HOME</span><span>{index+1} of {steps.length}</span></div>
+  <div className="family-setup-progress" aria-label={`Step ${index+1} of ${steps.length}`}>{steps.map((stage,i)=><span key={stage} className={i<=index?'active':''}/>)}</div>
   <div className="family-setup-body"><span className="round-icon sage">{step==='email'?<Mail/>:step==='profiles'?<Users/>:<Palette/>}</span>
    <h2 ref={heading} tabIndex={-1} id="family-setup-title">{step==='email'?'Invite people with email.':step==='profiles'?'Add your little ones, too.':'A look that feels like you.'}</h2>
-   <p id="family-setup-copy">{step==='email'?`Who else shares ${householdName}? Invite them to join with their own account.`:step==='profiles'?'Add children or other family members without an email address. Their profiles can be tagged in events and reminders.':'Choose a colour palette for HH. Tap one to see it change right away.'}</p>
+   <p id="family-setup-copy">{step==='email'?`Who else shares ${householdName}? Invite them to join with their own account.`:step==='profiles'?'Add children or other family members without an email address. Their profiles can be tagged in events and reminders.':'Choose a colour palette and see your home change right away.'}</p>
    {step==='email'?<>
     <form className="family-setup-invite" onSubmit={invite}><label htmlFor="setup-family-email">Family member’s email address</label><input id="setup-family-email" type="email" required maxLength={254} autoComplete="email" placeholder="e.g. partner@email.com" value={email} disabled={busy} onChange={e=>setEmail(e.target.value)}/><button className="button soft wide" disabled={busy||!email.trim()}><Mail size={17}/>{busy?'Sending…':'Send invitation'}</button></form>
     <p className="family-setup-note">They’ll receive an email with a link to join your home. You can invite more than one person.</p>
@@ -74,6 +76,16 @@ export default function FamilySetup({householdName,householdId,members,people,in
     <button className="text-button family-setup-add" type="button" disabled={blocked} onClick={()=>setAddRequest(n=>n+1)}><Plus size={16}/>Add another profile</button>
    </>:<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage}/>}
   </div>
-  <div className="family-setup-footer"><p>{step==='palette'?'Your palette is personal to this device. Change it anytime: tap your initials in the top right → Appearance.':'You can always add more later: tap your initials in the top right → Your household → Family profiles.'}</p><div className="family-setup-actions">{step!=='email'&&<button type="button" className="text-button" disabled={blocked} onClick={()=>changeStep(step==='profiles'?'email':'profiles')}><ArrowLeft size={16}/>Back</button>}<button type="button" className="button primary" disabled={blocked||(step==='profiles'&&profileDraft)} onClick={advance}>{step==='email'?'Next: without email':step==='profiles'?'Next: your colours':'Done'}{step==='palette'?<Check size={17}/>:<ArrowRight size={17}/>}</button></div><button type="button" className="family-setup-skip" disabled={blocked} onClick={advance}>{step==='palette'?'Keep this look → Continue':'Skip for now → Next step'}</button></div>
+  <div className="family-setup-footer">
+   <p>{step==='palette'?'Change your palette anytime in Settings → Appearance.':'You can add more later in Settings → Your household → Family profiles.'}</p>
+   <div className="family-setup-actions">
+    {previous&&<button type="button" className="text-button" disabled={blocked} onClick={()=>changeStep(previous)}><ArrowLeft size={16}/>Back</button>}
+    <button type="button" className="button primary" disabled={blocked||(step==='profiles'&&profileDraft)} onClick={advance}>
+     {next==='email'?'Continue to invitations':next==='profiles'?'Next: without email':next==='palette'?'Next: your colours':'Done'}
+     {next?<ArrowRight size={17}/>:<Check size={17}/>}
+    </button>
+   </div>
+   {step!=='palette'&&(next||profileDraft)&&<button type="button" className="family-setup-skip" disabled={blocked} onClick={advance}>{next?'Skip for now':'Skip this profile'}</button>}
+  </div>
  </section></div>;
 }

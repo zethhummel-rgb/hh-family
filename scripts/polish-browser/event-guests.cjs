@@ -15,7 +15,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
  const guestUser={...user,id:guestId,email:'guest@example.invalid'};
  const guestSession={...session,user:guestUser,access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:guestId,aud:'authenticated',role:'authenticated',session_id:guestHome}),'fixture'].join('.')};
  const dir=path.resolve('dist'),calls=[];
- let failNextCreate=false;
+ let failNextCreate=false,failNextSend=false;
  const server=http.createServer(async(req,res)=>{
   if(await serveFixture(req,res))return;
   const rel=new URL(req.url,'http://localhost').pathname.replace(/^\/hummel-home\//,'')||'index.html';
@@ -33,6 +33,10 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   if(table==='event-guests'){
    const payload=req.postDataJSON(),signedIn=req.headers().authorization==='Bearer '+session.access_token;
    calls.push({action:payload.action,signedIn:signedIn||asGuest});
+   if(payload.action==='send'&&failNextSend){
+    failNextSend=false;
+    return route.fulfill({status:503,json:{error:'Could not send the test invitation.'}});
+   }
    const reply=await service.request(payload,{auth:asGuest?'guest':signedIn?'host':''});
    return route.fulfill({status:reply.status,json:await reply.json()});
   }
@@ -91,13 +95,11 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   await editor.getByRole('button',{name:'Invite friends',exact:true}).click();
   await editor.getByLabel('Guest email',{exact:true}).fill('guest@example.invalid');
   await editor.getByLabel('Location (optional)',{exact:true}).fill('Back patio');
-  assert.equal(await editor.getByRole('button',{name:'Review invitation',exact:true}).count(),0);
+  assert.equal(await editor.getByRole('button',{name:'Create TEST invitation',exact:true}).count(),0);
   await editor.getByRole('button',{name:'Save & invite friends',exact:true}).click();
   assert.equal(await editor.getByLabel('Guest email',{exact:true}).inputValue(),'guest@example.invalid','Saving event changes preserves the invitation draft');
   await hostPage.getByLabel('Guest email',{exact:true}).fill('guest@example.invalid');
   await hostPage.getByLabel('Message for this guest (optional)',{exact:true}).fill('Bring a snack');
-  await hostPage.getByRole('button',{name:'Review invitation',exact:true}).click();
-  await editor.getByText('Back patio',{exact:true}).waitFor();
   assert.equal(calls.filter(x=>x.action==='send').length,0);
   await hostPage.getByRole('button',{name:'Create TEST invitation',exact:true}).click();
   const testLink=hostPage.getByRole('link',{name:'No · Decline',exact:true});
@@ -106,6 +108,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   guest.on('pageerror',e=>errors.push(e.message));
   await guest.goto(url+href.hash);
   await guest.getByRole('heading',{name:'Family dinner',exact:true}).waitFor();
+  await guest.getByText('Back patio',{exact:true}).waitFor();
   assert.equal(calls.filter(x=>x.action==='respond').length,0,'Opening the email link must leave the RSVP unchanged');
   assert.equal(await guest.getByText('Private note',{exact:true}).count(),0);
   await guest.getByRole('button',{name:'No · Decline',exact:true}).click();
@@ -154,6 +157,28 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   await guest.getByRole('alert').getByText(/unavailable or has expired/).waitFor();
 
   await editor.getByRole('button',{name:'Close event editor'}).click();
+  await hostPage.locator('.home-events').getByText('Family dinner',{exact:true}).click();
+  const details=hostPage.getByRole('dialog',{name:'Family dinner'});
+  await details.getByRole('button',{name:'Invite guests & view RSVPs'}).click();
+  const guestEmail=details.getByLabel('Guest email',{exact:true});
+  const directSend=details.getByRole('button',{name:'Create TEST invitation',exact:true});
+  assert.equal(await directSend.isEnabled(),false);
+  await guestEmail.fill('missing-at-sign');
+  const sendsFromDetails=calls.filter(x=>x.action==='send').length;
+  await directSend.click();
+  assert.equal(await guestEmail.evaluate(input=>input.validity.typeMismatch),true);
+  assert.equal(calls.filter(x=>x.action==='send').length,sendsFromDetails);
+  await guestEmail.fill('detail-guest@example.invalid');
+  await details.getByLabel('Message for this guest (optional)',{exact:true}).fill('See you there');
+  failNextSend=true;
+  await directSend.click();
+  await details.getByRole('alert').getByText('Could not send the test invitation.').waitFor();
+  assert.equal(await guestEmail.inputValue(),'detail-guest@example.invalid');
+  assert.equal(await details.locator('textarea').inputValue(),'See you there');
+  await directSend.click();
+  await details.getByText('TEST invitation ready. Open a reply link below.',{exact:true}).waitFor();
+  assert.equal(calls.filter(x=>x.action==='send').length,sendsFromDetails+2,'The first attempt and the retry each send one request');
+  await details.getByRole('button',{name:'Close event details',exact:true}).click();
   await hostPage.locator('.quick-actions').getByRole('button',{name:'Add event',exact:true}).click();
   const newEvent=hostPage.getByRole('dialog',{name:'New event'});
   await newEvent.getByLabel('Event name').fill('Picnic from the event editor');
@@ -168,9 +193,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   assert.equal(calls.filter(x=>x.action==='send').length,priorSends);
   await newEvent.getByRole('button',{name:'Save & invite friends',exact:true}).click();
   await editor.getByLabel('Guest email',{exact:true}).fill('new-guest@example.invalid');
-  await editor.getByRole('button',{name:'Review invitation',exact:true}).click();
-  await editor.getByText('Picnic from the event editor',{exact:true}).waitFor();
-  assert.equal(calls.filter(x=>x.action==='send').length,priorSends,'Saving a new event and reviewing never sends an invitation');
+  assert.equal(calls.filter(x=>x.action==='send').length,priorSends,'Saving a new event never sends an invitation');
   await editor.getByRole('button',{name:'Create TEST invitation',exact:true}).click();
   await editor.getByText('TEST invitation ready. Open a reply link below.',{exact:true}).waitFor();
   assert.equal(calls.filter(x=>x.action==='send').length,priorSends+1);
@@ -178,6 +201,6 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   assert(calls.filter(x=>['preview','respond'].includes(x.action)).every(x=>!x.signedIn));
   assert.equal(service.sent.length,0);
   assert.deepEqual(errors,[]);
-  console.log('PASS Event invitations: new and edited events, failed-save retry, private RSVP, calendar files, sign-in return, HH copy and cancellation');
+  console.log('PASS Event invitations: direct send from details and editors, retries, private RSVP, calendar files, sign-in return, HH copy and cancellation');
  }finally{await browser.close();await service.db.close();server.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});
