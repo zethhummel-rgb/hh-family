@@ -79,7 +79,8 @@ try{
  assert.ok(live.sent[0].html.includes('/hh-family/#event-invite='));
  assert.ok(!live.sent[0].text.includes('Private note'));
  assert.ok(live.sent[0].html.indexOf('Curious about HH?')>live.sent[0].html.indexOf('No · Decline'));
- assert.ok(live.sent[0].text.includes('https://zethhummel-rgb.github.io/hh-family/about.html#start'));
+ assert.ok(live.sent[0].text.includes('Learn about HH and request an invite: https://zethhummel-rgb.github.io/hh-family/home.html'));
+ assert.ok(live.sent[0].html.includes('href="https://zethhummel-rgb.github.io/hh-family/home.html"'));
  assert.equal((await (await failure.request(invite,host)).json()).delivery,'unknown');
  assert.equal((await failure.request(invite,host)).status,400);
  assert.equal(failure.sent.length,1);

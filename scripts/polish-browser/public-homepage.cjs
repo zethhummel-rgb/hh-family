@@ -129,11 +129,12 @@ async function run() {
     }
     assert.deepEqual(demoRequests, [], 'Public demos never contact a backend or submit data');
 
-    // The existing event email template links to this fragment.
-    await page.goto(app + 'about.html#start');
-    assert.equal(await page.evaluate(() => scrollY), 0, 'Event email opens the About hero');
-    assert.equal(await page.locator('#about-title').evaluate(title => title.getBoundingClientRect().top < innerHeight), true);
-    await page.goto(app + 'home.html');
+    // Previously sent event emails still link to this fragment.
+    await page.setContent('<a href="' + app + 'about.html#start">Learn about HH and request an invite</a>');
+    await page.getByRole('link', {name: 'Learn about HH and request an invite'}).click();
+    await page.waitForURL(app + 'home.html');
+    await page.getByRole('heading', {name: 'What’s the plan?', exact: true}).waitFor();
+    assert.equal(await page.evaluate(() => scrollY), 0, 'Legacy event email opens the homepage hero');
     await page.getByRole('link', {name: 'Sign in', exact: true}).click();
     assert.equal(page.url(), app);
     await page.getByRole('heading', {name: 'Welcome home.'}).waitFor();
