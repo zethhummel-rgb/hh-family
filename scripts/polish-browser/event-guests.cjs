@@ -7,7 +7,6 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
  const service=await fixture(),browser=await launchBrowser();
  const start=new Date(Date.now()+60*60*1000).toISOString(),end=new Date(Date.now()+3*60*60*1000).toISOString();
  await service.db.query('update public.household_events set starts_at=$1,ends_at=$2 where id=$3',[start,end,eventId]);
- const event={...service.master,starts_at:start,ends_at:end};
  const user={id:host,email:'host@example.invalid',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
  const member={user_id:host,display_name:'Alex & Sam',role:'owner',household_id:home};
  const exp=Math.floor(Date.now()/1000)+86400;
@@ -16,6 +15,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
  const guestUser={...user,id:guestId,email:'guest@example.invalid'};
  const guestSession={...session,user:guestUser,access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:guestId,aud:'authenticated',role:'authenticated',session_id:guestHome}),'fixture'].join('.')};
  const dir=path.resolve('dist'),calls=[];
+ let failNextCreate=false;
  const server=http.createServer(async(req,res)=>{
   if(await serveFixture(req,res))return;
   const rel=new URL(req.url,'http://localhost').pathname.replace(/^\/hummel-home\//,'')||'index.html';
@@ -41,7 +41,25 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   else if(target.pathname.startsWith('/auth/'))data=asGuest?guestUser:user;
   else if(table==='household_members')data=asGuest?[{...member,user_id:guestId,household_id:guestHome,display_name:'Guest'}]:[member];
   else if(table==='households')data={name:asGuest?'Guest Home':'Example Home',calendar_id:''};
-  else if(table==='household_events')data=asGuest?(await service.db.query('select * from public.household_events where household_id=$1',[guestHome])).rows:[event];
+  else if(table==='household_events'){
+   const household=asGuest?guestHome:home;
+   const id=target.searchParams.get('id')?.replace(/^eq\./,'');
+   if(req.method()==='POST'){
+    if(failNextCreate){
+     failNextCreate=false;
+     return route.fulfill({status:400,json:{message:'Could not save the test event.'}});
+    }
+    const draft=req.postDataJSON();
+    data=(await service.db.query('insert into public.household_events(id,household_id,title,description,location,starts_at,ends_at,all_day,start_date,end_date) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id',
+      [draft.id,household,draft.title,draft.description,draft.location,draft.starts_at,draft.ends_at,draft.all_day,draft.start_date,draft.end_date])).rows;
+   }else if(req.method()==='PATCH'){
+    const draft=req.postDataJSON(),version=Number(target.searchParams.get('version')?.replace(/^eq\./,''));
+    data=(await service.db.query('update public.household_events set title=$3,location=$4,version=$5 where id=$1 and household_id=$2 and version=$6 returning id',
+      [id,household,draft.title,draft.location,draft.version,version])).rows;
+   }else{
+    data=(await service.db.query('select * from public.household_events where household_id=$1 and ($2::uuid is null or id=$2) order by id',[household,id??null])).rows;
+   }
+  }
   else if(table==='household_calendar_source')data='hh';
   else if(table==='google-calendar')data={configured:false,connected:false,nativeReady:true};
   if(req.headers().accept?.includes('vnd.pgrst.object')&&Array.isArray(data))data=data[0]||null;
@@ -67,10 +85,19 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   const setup=hostPage.getByRole('button',{name:/Skip setup|Finish setup/i}).first();
   if(await setup.isVisible())await setup.click();
   await hostPage.locator('.home-events').getByText('Family dinner',{exact:true}).click();
-  await hostPage.getByRole('button',{name:'Invite guests & view RSVPs'}).click();
+  await hostPage.getByRole('button',{name:'Invite guests & view RSVPs'}).waitFor();
+  await hostPage.getByRole('button',{name:'Edit',exact:true}).click();
+  const editor=hostPage.getByRole('dialog',{name:'Edit event'});
+  await editor.getByRole('button',{name:'Invite friends',exact:true}).click();
+  await editor.getByLabel('Guest email',{exact:true}).fill('guest@example.invalid');
+  await editor.getByLabel('Location (optional)',{exact:true}).fill('Back patio');
+  assert.equal(await editor.getByRole('button',{name:'Review invitation',exact:true}).count(),0);
+  await editor.getByRole('button',{name:'Save & invite friends',exact:true}).click();
+  assert.equal(await editor.getByLabel('Guest email',{exact:true}).inputValue(),'guest@example.invalid','Saving event changes preserves the invitation draft');
   await hostPage.getByLabel('Guest email',{exact:true}).fill('guest@example.invalid');
   await hostPage.getByLabel('Message for this guest (optional)',{exact:true}).fill('Bring a snack');
   await hostPage.getByRole('button',{name:'Review invitation',exact:true}).click();
+  await editor.getByText('Back patio',{exact:true}).waitFor();
   assert.equal(calls.filter(x=>x.action==='send').length,0);
   await hostPage.getByRole('button',{name:'Create TEST invitation',exact:true}).click();
   const testLink=hostPage.getByRole('link',{name:'No · Decline',exact:true});
@@ -125,9 +152,32 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
   await hostPage.getByRole('button',{name:'Cancel invitation',exact:true}).click();
   await guest.reload();
   await guest.getByRole('alert').getByText(/unavailable or has expired/).waitFor();
+
+  await editor.getByRole('button',{name:'Close event editor'}).click();
+  await hostPage.locator('.quick-actions').getByRole('button',{name:'Add event',exact:true}).click();
+  const newEvent=hostPage.getByRole('dialog',{name:'New event'});
+  await newEvent.getByLabel('Event name').fill('Picnic from the event editor');
+  const tomorrow=new Date(Date.now()+48*60*60*1000).toLocaleDateString('en-CA',{timeZone:'America/Toronto'});
+  await newEvent.getByLabel('Starts',{exact:true}).fill(tomorrow);
+  await newEvent.getByRole('button',{name:'Invite friends',exact:true}).click();
+  const priorSends=calls.filter(x=>x.action==='send').length;
+  failNextCreate=true;
+  await newEvent.getByRole('button',{name:'Save & invite friends',exact:true}).click();
+  await newEvent.getByRole('alert').getByText('Could not save the test event.').waitFor();
+  assert.equal(await newEvent.getByLabel('Event name').inputValue(),'Picnic from the event editor');
+  assert.equal(calls.filter(x=>x.action==='send').length,priorSends);
+  await newEvent.getByRole('button',{name:'Save & invite friends',exact:true}).click();
+  await editor.getByLabel('Guest email',{exact:true}).fill('new-guest@example.invalid');
+  await editor.getByRole('button',{name:'Review invitation',exact:true}).click();
+  await editor.getByText('Picnic from the event editor',{exact:true}).waitFor();
+  assert.equal(calls.filter(x=>x.action==='send').length,priorSends,'Saving a new event and reviewing never sends an invitation');
+  await editor.getByRole('button',{name:'Create TEST invitation',exact:true}).click();
+  await editor.getByText('TEST invitation ready. Open a reply link below.',{exact:true}).waitFor();
+  assert.equal(calls.filter(x=>x.action==='send').length,priorSends+1);
+  assert.equal((await service.db.query("select count(*)::int as total from public.household_events where title='Picnic from the event editor'")).rows[0].total,1);
   assert(calls.filter(x=>['preview','respond'].includes(x.action)).every(x=>!x.signedIn));
   assert.equal(service.sent.length,0);
   assert.deepEqual(errors,[]);
-  console.log('PASS Event invitations: private RSVP, browser calendar files, sign-in return, one HH copy, cancellation, and mobile widths');
+  console.log('PASS Event invitations: new and edited events, failed-save retry, private RSVP, calendar files, sign-in return, HH copy and cancellation');
  }finally{await browser.close();await service.db.close();server.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});
