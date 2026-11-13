@@ -29,7 +29,7 @@ const staple={id:'88888888-8888-4888-8888-888888888888',household_id:home,title:
 const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
-let server,browser,page,serve=true,writes=0,failWrites=false;
+let server,browser,page,serve=true,writes=0,failWrites=false,failHolidaySave=false;
 (async()=>{fs.mkdirSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish'),{recursive:true});
  server=http.createServer(async(req,res)=>{if(await serveFixture(req,res))return;
    if(!serve){req.socket.destroy();return;}
@@ -49,7 +49,15 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
    if(!serve){await route.abort('internetdisconnected');return;}
    const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();
    let data=[];
-   if (u.pathname.startsWith('/auth/'))data=user;
+   if (u.pathname.startsWith('/auth/')){
+     if(table==='user'&&req.method()==='PUT'){
+       const attributes=req.postDataJSON();
+       assert.deepEqual(Object.keys(attributes.data),['hh_show_calendar_holidays']);
+       if(failHolidaySave){await route.fulfill({status:400,json:{message:'Fixture unavailable'}});return;}
+       Object.assign(user.user_metadata,attributes.data);
+     }
+     data=user;
+   }
    else if(u.pathname.includes('/functions/'))data={configured:false,connected:false,googleConnected:false,nativeReady:true,copyStatus:'off',enabled:false};
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
@@ -128,7 +136,67 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  await page.getByRole('button',{name:'Previous 3 days',exact:true}).click();await page.getByRole('button',{name:/Midnight finish/}).waitFor();pass('Previous and next navigate three days and restore the original range');
  await page.getByRole('button',{name:/Midnight finish/}).click();await page.getByLabel('Event name').waitFor();assert.equal(await page.getByLabel('Event name').inputValue(),'Midnight finish');assert.equal(await page.getByLabel('Start time',{exact:true}).inputValue(),'22:07');assert.equal(await page.getByLabel('Start time',{exact:true}).locator('option').count(),97);assert.equal(await page.getByLabel('End time',{exact:true}).inputValue(),'00:00');pass('Opening an existing off-quarter event preserves its exact time');await page.getByRole('button',{name:'Close event editor'}).click();pass('Compact event rows still open the correct event editor');
  await page.getByRole('button',{name:'Add event',exact:true}).click();assert.equal(await page.getByLabel('Starts',{exact:true}).inputValue(),'2026-11-30');await page.getByRole('button',{name:'Close event editor'}).click();pass('Add event uses the selected three day start');
+ await page.setViewportSize({width:320,height:844});
  await view.getByRole('button',{name:'Month',exact:true}).click();await page.getByRole('button',{name:'Next month',exact:true}).click();
+ const december=page.locator('.month-grid');
+ const christmasEve=december.getByRole('button',{name:/Thursday, December 24,/});
+ assert.equal(await christmasEve.locator('.month-holiday').innerText(),'Christmas Eve');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await christmasEve.click();
+ assert.equal(await page.getByRole('dialog').locator('.day-holiday').innerText(),'Christmas Eve');
+ await page.getByRole('button',{name:'Close day plans'}).click();
+ await view.getByRole('button',{name:'3 Day',exact:true}).click();
+ assert.deepEqual(await page.locator('.agenda-holiday').allTextContents(),['Christmas Eve','Christmas Day','Boxing Day']);
+ await view.getByRole('button',{name:'Agenda',exact:true}).click();
+ assert.deepEqual(await page.locator('.agenda-holiday').allTextContents(),['Christmas Eve','Christmas Day','Boxing Day']);
+ assert.equal(await page.getByRole('button',{name:'Christmas Eve',exact:true}).count(),0);
+ const settings=page.getByLabel('Calendar settings',{exact:true});
+ const holidays=page.getByRole('switch',{name:'Show holidays',exact:true});
+ await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
+ assert.equal(await holidays.isChecked(),true);
+ failHolidaySave=true;
+ await holidays.click();
+ await page.getByRole('alert').filter({hasText:'Couldn’t save your holiday setting'}).waitFor();
+ assert.equal(await holidays.isChecked(),true);
+ assert.equal(await page.locator('.agenda-holiday').count(),3);
+ failHolidaySave=false;
+ await holidays.click();
+ await page.locator('.agenda-holiday').first().waitFor({state:'detached'});
+ assert.equal(await page.locator('.agenda-holiday').count(),0);
+ assert.equal(await holidays.isChecked(),false);
+ await holidays.press('Escape');
+ await page.locator('.mobile-nav').getByRole('button',{name:'Home',exact:true}).click();
+ await page.locator('.mobile-nav').getByRole('button',{name:'Calendar',exact:true}).click();
+ await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
+ assert.equal(await holidays.isChecked(),false);
+ await page.waitForLoadState('networkidle');reloading=true;await page.reload();await page.locator('.native-calendar').waitFor();
+ await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
+ assert.equal(await holidays.isChecked(),false);
+ const secondContext=await browser.newContext({viewport:{width:390,height:844},timezoneId:'America/Toronto'});
+ await secondContext.route(url=>url.hostname!=='127.0.0.1',route=>route.abort('blockedbyclient'));
+ await secondContext.routeWebSocket('**/*',socket=>socket.close());
+ await secondContext.addInitScript(redirectFixtureAPI);
+ // Start with an old session snapshot and no holiday preference in browser storage.
+ await secondContext.addInitScript(({session})=>localStorage.setItem('hh-test:hh-test:home-together-auth',JSON.stringify(session)),{session:{...session,user:{...user,user_metadata:{}}}});
+ const secondPage=await secondContext.newPage();secondPage.setDefaultTimeout(10000);
+ await secondPage.goto(url+'?reminder_date=2026-12-24');
+ await secondPage.getByLabel('Calendar settings',{exact:true}).click();
+ const secondSwitch=secondPage.getByRole('switch',{name:'Show holidays',exact:true});
+ await secondSwitch.and(secondPage.locator('[aria-disabled="false"]')).waitFor();
+ assert.equal(await secondSwitch.isChecked(),false);
+ await secondSwitch.click();
+ await secondPage.getByText('Christmas Eve',{exact:true}).waitFor();
+ await secondContext.close();
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>document.querySelector('input[aria-label="Show holidays"]')?.checked);
+ await holidays.press('Escape');
+ await page.waitForLoadState('networkidle');reloading=false;
+ pass('Canadian holidays default to visible, stay separate from events, and remember each account’s choice across browsers');
+ await view.getByRole('button',{name:'Month',exact:true}).click();await page.getByRole('button',{name:'Next month',exact:true}).click();
+ assert.equal(await christmasEve.locator('.month-holiday').innerText(),'Christmas Eve');
  await page.locator('.month-grid').getByRole('button',{name:/Thursday, December 31,/}).click();await page.getByRole('button',{name:'Close day plans'}).click();
  await view.getByRole('button',{name:'3 Day',exact:true}).click();assert.deepEqual(await days.evaluateAll(es=>es.map(e=>e.dataset.date)),['2026-12-31','2027-01-01','2027-01-02']);pass('A selected month day anchors three day view across New Year');
  await view.getByRole('button',{name:'Agenda',exact:true}).click();assert.match(await page.locator('.month-move h3').innerText(),/Dec 31, 2026.*Jan 6, 2027/);
