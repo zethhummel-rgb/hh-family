@@ -29,7 +29,7 @@ const staple={id:'88888888-8888-4888-8888-888888888888',household_id:home,title:
 const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
-let server,browser,page,serve=true,writes=0,failWrites=false;
+let server,browser,page,serve=true,writes=0,failWrites=false,failHolidaySave=false;
 (async()=>{fs.mkdirSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish'),{recursive:true});
  server=http.createServer(async(req,res)=>{if(await serveFixture(req,res))return;
    if(!serve){req.socket.destroy();return;}
@@ -49,7 +49,15 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
    if(!serve){await route.abort('internetdisconnected');return;}
    const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();
    let data=[];
-   if (u.pathname.startsWith('/auth/'))data=user;
+   if (u.pathname.startsWith('/auth/')){
+     if(table==='user'&&req.method()==='PUT'){
+       const attributes=req.postDataJSON();
+       assert.deepEqual(Object.keys(attributes.data),['hh_show_calendar_holidays']);
+       if(failHolidaySave){await route.fulfill({status:400,json:{message:'Fixture unavailable'}});return;}
+       Object.assign(user.user_metadata,attributes.data);
+     }
+     data=user;
+   }
    else if(u.pathname.includes('/functions/'))data={configured:false,connected:false,googleConnected:false,nativeReady:true,copyStatus:'off',enabled:false};
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
@@ -145,21 +153,48 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  const settings=page.getByLabel('Calendar settings',{exact:true});
  const holidays=page.getByRole('switch',{name:'Show holidays',exact:true});
  await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
  assert.equal(await holidays.isChecked(),true);
- await holidays.uncheck();
+ failHolidaySave=true;
+ await holidays.click();
+ await page.getByRole('alert').filter({hasText:'Couldn’t save your holiday setting'}).waitFor();
+ assert.equal(await holidays.isChecked(),true);
+ assert.equal(await page.locator('.agenda-holiday').count(),3);
+ failHolidaySave=false;
+ await holidays.click();
+ await page.locator('.agenda-holiday').first().waitFor({state:'detached'});
  assert.equal(await page.locator('.agenda-holiday').count(),0);
+ assert.equal(await holidays.isChecked(),false);
  await holidays.press('Escape');
  await page.locator('.mobile-nav').getByRole('button',{name:'Home',exact:true}).click();
  await page.locator('.mobile-nav').getByRole('button',{name:'Calendar',exact:true}).click();
  await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
  assert.equal(await holidays.isChecked(),false);
  await page.waitForLoadState('networkidle');reloading=true;await page.reload();await page.locator('.native-calendar').waitFor();
  await settings.click();
+ await holidays.and(page.locator('[aria-disabled="false"]')).waitFor();
  assert.equal(await holidays.isChecked(),false);
- await holidays.check();
+ const secondContext=await browser.newContext({viewport:{width:390,height:844},timezoneId:'America/Toronto'});
+ await secondContext.route(url=>url.hostname!=='127.0.0.1',route=>route.abort('blockedbyclient'));
+ await secondContext.routeWebSocket('**/*',socket=>socket.close());
+ await secondContext.addInitScript(redirectFixtureAPI);
+ // Start with an old session snapshot and no holiday preference in browser storage.
+ await secondContext.addInitScript(({session})=>localStorage.setItem('hh-test:hh-test:home-together-auth',JSON.stringify(session)),{session:{...session,user:{...user,user_metadata:{}}}});
+ const secondPage=await secondContext.newPage();secondPage.setDefaultTimeout(10000);
+ await secondPage.goto(url+'?reminder_date=2026-12-24');
+ await secondPage.getByLabel('Calendar settings',{exact:true}).click();
+ const secondSwitch=secondPage.getByRole('switch',{name:'Show holidays',exact:true});
+ await secondSwitch.and(secondPage.locator('[aria-disabled="false"]')).waitFor();
+ assert.equal(await secondSwitch.isChecked(),false);
+ await secondSwitch.click();
+ await secondPage.getByText('Christmas Eve',{exact:true}).waitFor();
+ await secondContext.close();
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>document.querySelector('input[aria-label="Show holidays"]')?.checked);
  await holidays.press('Escape');
  await page.waitForLoadState('networkidle');reloading=false;
- pass('Canadian holidays are visible by default in all calendar views, do not count as events, and can be hidden persistently');
+ pass('Canadian holidays default to visible, stay separate from events, and remember each account’s choice across browsers');
  await view.getByRole('button',{name:'Month',exact:true}).click();await page.getByRole('button',{name:'Next month',exact:true}).click();
  assert.equal(await christmasEve.locator('.month-holiday').innerText(),'Christmas Eve');
  await page.locator('.month-grid').getByRole('button',{name:/Thursday, December 31,/}).click();await page.getByRole('button',{name:'Close day plans'}).click();
