@@ -45,7 +45,6 @@ import {reminderIsDone,type ReminderItem} from './taskReminders';
 import {familyProfiles,matchesPerson} from './people';
 import PersonFilter from './PersonFilter';
 import CalendarScreen,{EventEditor,EventCard} from './Calendar';
-import {useCalendarHolidayPreference} from './useCalendarHolidayPreference';
 import EventDetails from './EventDetails';
 import {EventGuestContext} from './EventGuests';
 import {useFamilyCalendar} from './useFamilyCalendar';
