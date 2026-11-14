@@ -110,35 +110,34 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
    await picker.getByRole('button',{name:'Continue to invitations'}).click();
    await page.getByRole('dialog',{name:'Invite people with email.'}).getByRole('button',{name:'Next: without email'}).click();
    await page.getByRole('dialog',{name:'Add your little ones, too.'}).getByRole('button',{name:'Done',exact:true}).click();
-  }else await picker.getByRole('button',{name:'Next',exact:true}).click();
-  pass(kind+': setup starts with a live palette choice and saves it for this account');
-  const welcome=page.locator('.welcome-tour');
+  }
   await page.evaluate(appleMobile=>{
    Object.defineProperty(navigator,'userAgent',{configurable:true,value:appleMobile?'iPhone':'HH desktop browser fixture'});
    Object.defineProperty(navigator,'maxTouchPoints',{configurable:true,value:appleMobile?5:0});
   },kind==='family');
-  await welcome.getByRole('button',{name:/Show slide .*Keep HH close/}).click();
-  await welcome.getByRole('button',{name:kind==='family'?'Turn on notifications':'Add HH to your Home Screen',exact:true}).click();
-  const settings=page.locator('.settings-dialog');
-  const safari=settings.getByRole('region',{name:'Safari Home Screen tutorial'});
-  await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
-  await settings.getByRole('button',{name:'Done',exact:true}).click();
-  const checklist=page.locator('.getting-started');
-  await checklist.getByRole('button',{name:/^Add HH to your Home Screen/}).click();
-  await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
-  await settings.getByRole('button',{name:'Done',exact:true}).click();
-  await checklist.getByRole('button',{name:/^Turn on notifications/}).click();
+  if(kind!=='pilot')await picker.getByRole('button',{name:'Next',exact:true}).click();
+  const notifications=page.getByRole('dialog',{name:'Turn on notifications?'});
+  await notifications.waitFor();
+  const subscriptions=()=>requests.filter(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe');
+  assert.equal(subscriptions().length,0);
   if(kind==='family'){
-   await safari.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).waitFor();
-  }else await settings.getByRole('heading',{name:'Notifications',exact:true,level:2}).waitFor();
-  assert.equal(requests.some(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe'),false);
-  if(kind==='pilot'){
-   await settings.getByRole('button',{name:'Enable notifications',exact:true}).click();
-   await settings.getByText('Enabled on this device',{exact:true}).waitFor();
-   assert.equal(requests.filter(x=>x.path.endsWith('/event-reminders')&&x.body?.action==='subscribe').length,1);
+   await notifications.getByRole('button',{name:/Add the HH icon to your iPhone/}).click();
+   await notifications.getByRole('button',{name:'Practice: Open Safari menu',exact:true}).click();
+   await notifications.getByRole('heading',{name:'Now tap Share',exact:true}).waitFor();
+   await notifications.getByRole('button',{name:'Close Safari tutorial',exact:true}).click();
+   await notifications.getByRole('button',{name:'Not now',exact:true}).click();
+   assert.equal(subscriptions().length,0);
+  }else{
+   await notifications.getByRole('button',{name:'Enable notifications',exact:true}).click();
+   await notifications.getByText('Enabled on this device',{exact:true}).waitFor();
+   assert.equal(subscriptions().length,1);
+   assert.equal(subscriptions()[0].body.householdId,home);
+   await notifications.getByRole('button',{name:'Continue',exact:true}).click();
   }
-  await settings.getByRole('button',{name:'Done',exact:true}).click();
-  pass(kind+': welcome and Home offer device setup, including the install-first route on iPhone');
+  await page.getByRole('dialog',{name:kind==='pilot'?'Your home starts here.':'You’re part of the home.'}).waitFor();
+  await page.getByRole('button',{name:'Explore tutorials',exact:true}).click();
+  await page.locator('.interactive-lessons').waitFor();
+  pass(kind+': setup prompts for notifications; consent or skip continues to the tutorials');
  }
  await page.evaluate(()=>{localStorage.clear();sessionStorage.clear()});joined=false;scenario='existing';role='member';await page.goto(url+'?invite='+code);await page.getByText(/You already started an account/).waitFor();assert.equal(await page.getByLabel(/^Confirm password/).count(),0);await fillAccount();await page.getByRole('button',{name:'Continue to household',exact:true}).click();await page.getByRole('heading',{name:'Join your family.',exact:true}).waitFor();pass('Previously started accounts use the existing password without a duplicate signup');
  await page.evaluate(uid=>localStorage.setItem('home-together:palette:'+uid,'lavender'),uid);
@@ -147,6 +146,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  await existingPalette.waitFor();
  assert.equal(await existingPalette.getAttribute('aria-pressed'),'true');
  await page.getByRole('dialog',{name:'A look that feels like you.'}).getByRole('button',{name:'Next',exact:true}).click();
+ await page.getByRole('dialog',{name:'Turn on notifications?'}).getByRole('button',{name:/^(Continue|Not now)$/}).click();
  await page.getByRole('button',{name:'Explore tutorials',exact:true}).click();
  await page.locator('.interactive-lessons').waitFor();
  pass('An existing saved palette carries over when joining a household');
