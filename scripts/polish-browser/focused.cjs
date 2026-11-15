@@ -36,9 +36,13 @@ let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports
    if (u.pathname.startsWith('/auth/'))data=user;
    else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
    else if(table==='pilot_status')data={is_host:true};
+   else if(table==='admin_household_usage')data=[
+    {household_id:home,last_used_at:'2026-11-15T19:28:00Z',last_sign_in_at:null},
+    {household_id:'last-login',last_used_at:null,last_sign_in_at:'2026-07-14T12:03:00Z'}
+   ];
    else if(table==='admin-households')data=[
-    {id:home,name:'Recorded home',memberCount:1,protected:true,lastUsedAt:'2026-11-15T19:28:00Z'},
-    {id:'last-login',name:'Sign-in only',memberCount:2,protected:false,lastSignInAt:'2026-07-14T12:03:00Z'},
+    {id:home,name:'Recorded home',memberCount:1,protected:true},
+    {id:'last-login',name:'Sign-in only',memberCount:2,protected:false},
     {id:'no-use',name:'Awaiting activity',memberCount:0,protected:false}
    ];
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};

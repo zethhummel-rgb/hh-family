@@ -1,4 +1,4 @@
--- Retain one timestamp per household. The existing admin endpoint is the only reader.
+-- Retain one timestamp per household. Only the verified pilot admin can read it.
 create table private.household_last_use (
  household_id uuid primary key references public.households(id) on delete cascade,
  last_used_at timestamptz not null
@@ -30,43 +30,28 @@ language sql security invoker set search_path='' as $$select private.record_hous
 revoke all on function public.record_household_use(uuid) from public,anon,authenticated;
 grant execute on function public.record_household_use(uuid) to authenticated;
 
-create or replace function private.admin_households(action text,payload jsonb) returns jsonb
-language plpgsql security definer set search_path='' as $$
-declare uid uuid:=(payload->>'actorId')::uuid; hid uuid; home public.households; member_ids uuid[]; sid uuid;
+-- This endpoint only reads timestamps and cannot modify the household list.
+create function private.admin_household_usage()
+returns table(household_id uuid,last_used_at timestamptz,last_sign_in_at timestamptz)
+language plpgsql stable security definer set search_path='' as $$
 begin
- if not exists(select 1 from auth.users u join private.pilot_hosts h on h.email=lower(u.email) where u.id=uid and lower(u.email)='hummelhomeapp@gmail.com' and u.email_confirmed_at is not null) then raise exception 'Admin access required';end if;
- if action='list' then
-  return coalesce((
-   select jsonb_agg(jsonb_build_object(
-    'id',h.id,'name',h.name,'memberCount',members.member_count,'protected',h.owner_id=uid or coalesce(members.is_admin_member,false),
-    'lastUsedAt',visits.last_used_at,'lastSignInAt',members.last_sign_in
-   ) order by h.created_at)
-   from public.households h
-   left join private.household_last_use visits on visits.household_id=h.id
-   cross join lateral (
-    select count(*) as member_count, bool_or(m.user_id=uid) as is_admin_member, max(u.last_sign_in_at) as last_sign_in
-    from public.household_members m left join auth.users u on u.id=m.user_id
-    where m.household_id=h.id
-   ) members
-  ),'[]'::jsonb);
- end if;
- if action is distinct from 'delete' then raise exception 'Unsupported admin request';end if;
- hid:=(payload->>'householdId')::uuid;
- select * into home from public.households where id=hid for update;
- if not found then raise exception 'Household no longer exists';end if;
- if home.owner_id=uid or exists(select 1 from public.household_members where household_id=hid and user_id=uid) then raise exception 'Your admin household cannot be deleted';end if;
- if payload->>'confirmation' is distinct from home.name then raise exception 'Type the exact household name to confirm';end if;
- select array_agg(distinct user_id) into member_ids from (select user_id from public.household_members where household_id=hid union select home.owner_id) members;
- perform 1 from auth.users where id=any(member_ids) for update;
- if exists(select 1 from auth.users u join private.pilot_hosts p on p.email=lower(u.email) where u.id=any(member_ids)) then raise exception 'A pilot admin household cannot be deleted';end if;
- if exists(select 1 from public.households where owner_id=any(member_ids) and id<>hid) then raise exception 'A member owns another household';end if;
- -- The calendar itself remains in Google; remove only HH's private connection and credential.
- for sid in select secret_id from private.google_calendar_connections where household_id=hid loop
-  delete from vault.secrets where id=sid;
- end loop;
- delete from private.pilot_invites where household_id=hid;
- delete from public.households where id=hid;
-  delete from auth.sessions where user_id=any(member_ids);
-  delete from auth.users where id=any(member_ids);
- return jsonb_build_object('deleted',true);
+ if not exists(
+  select 1 from auth.users u join private.pilot_hosts p on p.email=lower(u.email)
+  where u.id=auth.uid() and lower(u.email)='hummelhomeapp@gmail.com' and u.email_confirmed_at is not null
+ ) then raise exception 'Admin access required' using errcode='42501'; end if;
+ return query
+  select h.id,usage.last_used_at,max(u.last_sign_in_at)
+  from public.households h
+  left join private.household_last_use usage on usage.household_id=h.id
+  left join public.household_members m on m.household_id=h.id
+  left join auth.users u on u.id=m.user_id
+  group by h.id,usage.last_used_at;
 end;$$;
+revoke all on function private.admin_household_usage() from public,anon,authenticated;
+grant execute on function private.admin_household_usage() to authenticated;
+
+create function public.admin_household_usage()
+returns table(household_id uuid,last_used_at timestamptz,last_sign_in_at timestamptz)
+language sql stable security invoker set search_path='' as $$select * from private.admin_household_usage();$$;
+revoke all on function public.admin_household_usage() from public,anon,authenticated;
+grant execute on function public.admin_household_usage() to authenticated;
