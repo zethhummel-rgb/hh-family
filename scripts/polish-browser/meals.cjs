@@ -15,7 +15,8 @@ meal.meal_date=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:
 const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
-let server,browser,page,serve=true,writes=0,failWrites=false;
+const mealSaves=[];
+let server,browser,page,serve=true,writes=0,failWrites=false,failMealSave=false;
 (async()=>{fs.mkdirSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish'),{recursive:true});
  server=http.createServer(async(req,res)=>{if(await serveFixture(req,res))return;
    if(!serve){req.socket.destroy();return;}
@@ -35,6 +36,12 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
    const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();
    let data=[];
    if (u.pathname.startsWith('/auth/'))data=user;
+   else if(table==='household_meal_plans'&&req.method()==='POST'){
+     const saved=req.postDataJSON();
+     mealSaves.push(saved);
+     if(failMealSave){await route.fulfill({status:503,json:{message:'Meal save temporarily unavailable'}});return;}
+     data={...meal,...saved};
+   }
    else if(table==='add_meal_ingredients'){const selections=req.postDataJSON().selections;assert.equal(selections.length,2);products.push({...products[0],id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',grocery_quantity:4});data={added:1,skipped:0};}
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
@@ -60,4 +67,33 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  await page.goto(url);await page.locator('.home-family-name').first().waitFor();await page.locator('.mobile-nav').getByRole('button',{name:'More',exact:true}).click();await page.getByRole('button',{name:/Meal planner/}).click();await page.getByRole('button',{name:'Shop these 7 days',exact:true}).click();await page.locator('.meal-totals').waitFor();assert.equal(await page.locator('.meal-total-row').count(),1);assert.match(await page.locator('.meal-total-row').innerText(),/4 L/);assert.match(await page.locator('.meal-total-row').innerText(),/Already on list: 2 L/);assert.match(await page.locator('.meal-total-row').innerText(),/Existing lines stay separate/);pass('Two selected 2 L ingredients show 4 L total and disclose the existing 2 L line');
  await page.locator('.meal-shop-row input').first().uncheck();assert.match(await page.locator('.meal-total-row').innerText(),/Already on list . skipped/);assert(await page.getByRole('button',{name:'Add to groceries',exact:true}).isDisabled());pass('Selecting just the existing 2 L amount is skipped');
  await page.locator('.meal-shop-row input').first().check();await page.screenshot({path:path.join(out,'meal-totals.png'),fullPage:true});await page.getByRole('button',{name:'Add 1 item',exact:true}).click();await page.getByRole('alertdialog').waitFor();assert.equal(products.filter(x=>x.title==='Milk').length,1);await page.getByRole('button',{name:'Discard duplicate additions',exact:true}).click();assert.equal(await page.locator('.meal-shop-row input:checked').count(),0);assert.equal(products.filter(x=>x.title==='Milk').length,1);pass('Duplicate meal additions can be discarded without changing existing groceries');await page.getByRole('button',{name:'Select available',exact:true}).click();await page.getByRole('button',{name:'Add 1 item',exact:true}).click();await page.getByRole('button',{name:'Keep both',exact:true}).click();await page.getByText('1 item added to groceries.',{exact:false}).waitFor();assert.equal(products.filter(x=>x.title==='Milk'&&x.grocery_quantity===4).length,1);assert.equal(products.filter(x=>x.title==='Milk'&&x.grocery_quantity===2).length,1);pass('Submission sends both meal selections and leaves existing quantities unchanged');assert.deepEqual(errors,[]);pass('No runtime exceptions');
+ await page.getByRole('button',{name:'Close meal',exact:true}).click();
+ await page.getByRole('button',{name:/^Add supper on/}).first().click();
+ const editor=page.getByRole('dialog',{name:'Plan supper'});
+ await editor.getByLabel('Meal name',{exact:true}).fill('Pasted ingredient meal');
+ await editor.getByText('Paste several ingredients',{exact:true}).click();
+ const paste=editor.getByLabel('One ingredient per line');
+ const save=editor.getByRole('button',{name:'Save and view meal',exact:true});
+ const tooMany=Array.from({length:61},(_,i)=>'Ingredient '+(i+1)).join('\n');
+ await paste.fill(tooMany);
+ await save.click();
+ await editor.getByRole('alert').filter({hasText:'60 ingredient lines'}).waitFor();
+ assert.equal(await paste.inputValue(),tooMany);
+ assert.equal(mealSaves.length,0);
+ await paste.fill(' Garlic \n\nGinger\nBlack Beans\nSalsa\nMontreal Steak spice');
+ failMealSave=true;
+ await save.click();
+ await editor.getByRole('alert').filter({hasText:'Meal save temporarily unavailable'}).waitFor();
+ const names=['Garlic','Ginger','Black Beans','Salsa','Montreal Steak spice'];
+ assert.deepEqual(mealSaves[0].ingredients.map(ingredient=>ingredient.title),names);
+ assert.equal(await editor.getByLabel('Ingredient 1',{exact:true}).inputValue(),'Garlic');
+ assert.equal(await editor.getByLabel('Ingredient 5',{exact:true}).inputValue(),'Montreal Steak spice');
+ failMealSave=false;
+ await save.click();
+ const savedMeal=page.getByRole('dialog',{name:'Pasted ingredient meal'});
+ await savedMeal.getByText('Meal is saved for your household.',{exact:true}).waitFor();
+ assert.deepEqual(mealSaves,[mealSaves[0],mealSaves[0]]);
+ assert.deepEqual(await savedMeal.locator('.meal-read-section li').allTextContents(),names);
+ pass('Saving includes uncommitted pasted ingredients, validates the line limit and retries without duplicating ingredients');
+ assert.deepEqual(errors,[]);
 })().catch(async e=>{console.error(e);if(page)fs.writeFileSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish','meals-failure.txt'),await page.locator('body').innerText().catch(()=>''));process.exitCode=1}).finally(async()=>{if(browser)await browser.close();if(server)server.close()});
