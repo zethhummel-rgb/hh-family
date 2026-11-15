@@ -3,7 +3,7 @@ const {launchBrowser}=require('./browser.cjs');
 const {setFixtureHandler,serveFixture,redirectFixtureAPI}=require('./fixture-api.cjs');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const dir=path.resolve('dist'),home='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222';
-const user={id:uid,email:'shopper@example.invalid',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
+const user={id:uid,email:'hummelhomeapp@gmail.com',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
 const member={user_id:uid,display_name:'Alex Morgan',role:'member',household_id:home};
 const products=['Milk','Bread','Eggs'].map((title,i)=>({id:'33333333-3333-4333-8333-33333333333'+i,title,category:'Dairy & eggs',kind:'grocery',done:false,household_id:home,reminder_version:1,person:'Everyone',created_at:'2026-01-01',grocery_store:'Test market'}));
 products.push({id:'44444444-4444-4444-8444-444444444444',household_id:home,kind:'task',title:'Book camp tickets',category:'Other',person:'Everyone',done:true,due:'2026-10-01',reminder_version:1,created_at:'2026-01-01'});
@@ -14,7 +14,7 @@ const staple={id:'88888888-8888-4888-8888-888888888888',household_id:home,title:
 const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
-let server,browser,page,serve=true,writes=0,failWrites=false;
+let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports=0;
 (async()=>{fs.mkdirSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish'),{recursive:true});
  server=http.createServer(async(req,res)=>{if(await serveFixture(req,res))return;
    if(!serve){req.socket.destroy();return;}
@@ -34,6 +34,13 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
    const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();
    let data=[];
    if (u.pathname.startsWith('/auth/'))data=user;
+   else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
+   else if(table==='pilot_status')data={is_host:true};
+   else if(table==='admin-households')data=[
+    {id:home,name:'Recorded home',memberCount:1,protected:true,lastUsedAt:'2026-11-15T19:28:00Z'},
+    {id:'last-login',name:'Sign-in only',memberCount:2,protected:false,lastSignInAt:'2026-07-14T12:03:00Z'},
+    {id:'no-use',name:'Awaiting activity',memberCount:0,protected:false}
+   ];
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
    else if(table==='household_people')data=['Jamie Morgan','Riley Morgan','Casey Morgan'].map((display_name,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa'+i,household_id:home,display_name,calendar_color:['#E78725','#467EB6','#C46B8C'][i],linked_user_id:null}));
@@ -59,6 +66,23 @@ let server,browser,page,serve=true,writes=0,failWrites=false;
  async function nav(name){await page.locator('.mobile-nav').getByRole('button',{name,exact:true}).click()}
  async function protect(close,field,value){await close();await page.getByRole('alertdialog').waitFor();await page.getByRole('button',{name:'Keep editing',exact:true}).click();assert.equal(await field.inputValue(),value);await close();await page.getByRole('button',{name:'Discard',exact:true}).click()}
  await page.goto(url);await page.locator('.home-family-name').first().waitFor();await page.waitForFunction(()=>document.querySelector('.getting-started-toggle')?.getAttribute('aria-expanded')==='false');await page.locator('.getting-started-toggle').click();assert.equal(await page.locator('.getting-started-toggle').getAttribute('aria-expanded'),'true');await page.reload();await page.locator('.home-family-name').first().waitFor();assert.equal(await page.locator('.getting-started-toggle').getAttribute('aria-expanded'),'false');pass('Returning-family checklist starts collapsed and can still be expanded');
+ assert.ok(householdUseReports>0,'Opening a signed-in household records a visit');
+ const reportsBeforeInteraction=householdUseReports;
+ await page.evaluate(()=>{const realNow=performance.now.bind(performance);performance.now=()=>realNow()+16000});
+ const activityReport=page.waitForResponse(response=>response.url().endsWith('/record_household_use')&&response.ok());
+ await page.getByRole('button',{name:'Open Settings',exact:true}).click();
+ await activityReport;
+ assert.equal(householdUseReports,reportsBeforeInteraction+1,'Using the existing session records activity again');
+ await page.getByRole('button',{name:/^Manage households/}).click();
+ const recorded=page.locator('.admin-household-row').filter({hasText:'Recorded home'});
+ const signedIn=page.locator('.admin-household-row').filter({hasText:'Sign-in only'});
+ await recorded.getByText(/Last used:/).waitFor();
+ assert.match(await recorded.locator('time').innerText(),/Nov 15, 2026.*2:28.*ET/i);
+ assert.equal(await recorded.locator('time').getAttribute('datetime'),'2026-11-15T19:28:00Z');
+ assert.match(await signedIn.innerText(),/Last sign-in: Jul 14, 2026.*8:03.*ET/i);
+ assert.match(await page.locator('.admin-household-row').filter({hasText:'Awaiting activity'}).innerText(),/No use recorded yet/);
+ await page.getByRole('button',{name:'Done',exact:true}).click();
+ pass('Admin list shows date and time in Eastern time, with sign-in and missing-history fallbacks');
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
  await page.getByLabel('Repeat',{exact:true}).selectOption('WEEKLY');assert(await page.getByLabel('Repeat every',{exact:true}).isVisible());await page.getByLabel('Repeat',{exact:true}).selectOption('none');assert.equal(await page.getByLabel('Repeat every',{exact:true}).count(),0);pass('Extra repeat fields appear only for repeating events');
  await page.getByLabel('No one selected',{exact:true}).check();assert(await page.getByRole('switch',{name:'30-minute alert',exact:true}).isDisabled());await page.getByLabel('Alex Morgan',{exact:true}).check();assert.equal(await page.getByLabel('No one selected',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Event reminder',{exact:true}).isDisabled(),false);await page.getByLabel('Jamie Morgan',{exact:true}).check();assert(await page.getByLabel('Alex Morgan',{exact:true}).isChecked());assert(await page.getByLabel('Jamie Morgan',{exact:true}).isChecked());await page.getByLabel('Everyone',{exact:true}).check();assert.equal(await page.getByLabel('Alex Morgan',{exact:true}).isChecked(),false);pass('Family chips support multiple people and restore alerts after No one');

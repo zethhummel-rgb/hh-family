@@ -32,7 +32,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false;const mutations=[];
  await context.routeWebSocket('**/*',socket=>socket.close());await context.addInitScript(redirectFixtureAPI);
  setFixtureHandler(async route=>{
    if(!serve){await route.abort('internetdisconnected');return;}
-   const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();if(req.method()!=='GET'&&!u.pathname.startsWith('/auth/')&&!['household_transition_active','household_calendar_source','pilot_status'].includes(table)&&!['status','list','search','range'].includes(req.postDataJSON()?.action))mutations.push({method:req.method(),path:u.pathname,body:req.postDataJSON()});
+   const req=route.request(),u=new URL(req.url()),table=u.pathname.split('/').pop();if(req.method()!=='GET'&&!u.pathname.startsWith('/auth/')&&!['household_transition_active','household_calendar_source','pilot_status','record_household_use'].includes(table)&&!['status','list','search','range'].includes(req.postDataJSON()?.action))mutations.push({method:req.method(),path:u.pathname,body:req.postDataJSON()});
    let data=[];
    if (u.pathname.startsWith('/auth/'))data=user;
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};

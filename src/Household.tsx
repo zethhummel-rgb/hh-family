@@ -16,6 +16,7 @@ import HomeCountdowns from './HomeCountdowns';
 import {createPortal} from 'react-dom';
 import {ActivityBanner,ActivityDialog} from './HouseholdActivity';
 import {useHouseholdActivity} from './useHouseholdActivity';
+import {useHouseholdLastUse} from './useHouseholdLastUse';
 import {loadActivityTarget,type HouseholdChange} from './householdActivityData';
 import FamilyNotes,{NotesPreview,FamilyNoteDialog} from './FamilyNotes';
 import MoreMenu from './MoreMenu';
@@ -59,6 +60,7 @@ const tabs=[{name:'Home',icon:Home},{name:'Calendar',icon:CalendarDays},{name:'G
 export default function Household(props:Parameters<typeof HouseholdBody>[0]){return <InteractiveTutorialProvider key={props.userId+props.householdId} userId={props.userId} householdId={props.householdId}><EventGuestContext.Provider value={!props.offlineOnly}><DraftScope><HouseholdBody {...props}/></DraftScope></EventGuestContext.Provider></InteractiveTutorialProvider>}
 function HouseholdBody({email,name,householdId,members,owner,onSignOut,userId,offlineOnly=false,onOfflineConnected}:{email:string;name:string;householdId:string;userId:string;members:Member[];owner:boolean;onSignOut:()=>unknown;offlineOnly?:boolean;onOfflineConnected?:()=>void}){
  useBottomNavigation();useTextScale();
+ useHouseholdLastUse(householdId,!offlineOnly);
  const tutorial=useInteractiveTutorial();
  const pageDrafts=useDraftGroup()!;
  const pageGuard=useUnsavedChanges(pageDrafts.dirty,pageDrafts.busy,()=>{},pageDrafts.saveAll);
