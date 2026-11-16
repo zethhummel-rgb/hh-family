@@ -15,6 +15,14 @@ const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
 let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports=0;
+const deleteHouseholdName='The Pilot’s Home';
+let deleteAttempts=0;
+let managedHomes=[
+ {id:home,name:'Recorded home',memberCount:1,protected:true},
+ {id:'last-login',name:'Sign-in only',memberCount:2,protected:false},
+ {id:'no-use',name:deleteHouseholdName,memberCount:0,protected:false},
+ ...Array.from({length:15},(_,i)=>({id:`additional-${i}`,name:`Fixture home ${i+1}`,memberCount:1,protected:false}))
+];
 (async()=>{fs.mkdirSync(path.resolve(process.env.HH_POLISH_OUTPUT||'artifacts/polish'),{recursive:true});
  server=http.createServer(async(req,res)=>{if(await serveFixture(req,res))return;
    if(!serve){req.socket.destroy();return;}
@@ -40,11 +48,16 @@ let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports
     {household_id:home,last_used_at:'2026-11-15T19:28:00Z',last_sign_in_at:null},
     {household_id:'last-login',last_used_at:null,last_sign_in_at:'2026-07-14T12:03:00Z'}
    ];
-   else if(table==='admin-households')data=[
-    {id:home,name:'Recorded home',memberCount:1,protected:true},
-    {id:'last-login',name:'Sign-in only',memberCount:2,protected:false},
-    {id:'no-use',name:'Awaiting activity',memberCount:0,protected:false}
-   ];
+   else if(table==='admin-households'){
+    const body=req.postDataJSON();
+    if(body.action==='delete'){
+     assert.deepEqual(body,{action:'delete',householdId:'no-use',confirmation:deleteHouseholdName});
+     deleteAttempts++;
+     if(deleteAttempts===1){await route.fulfill({status:409,json:{error:'Fixture deletion failed. Try again.'}});return;}
+     managedHomes=managedHomes.filter(home=>home.id!==body.householdId);
+     data={ok:true};
+    }else data=managedHomes;
+   }
    else if(u.pathname.includes('/rpc/'))data=table==='household_transition_active'?false:table==='household_calendar_source'?'hh':{};
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
    else if(table==='household_people')data=['Jamie Morgan','Riley Morgan','Casey Morgan'].map((display_name,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa'+i,household_id:home,display_name,calendar_color:['#E78725','#467EB6','#C46B8C'][i],linked_user_id:null}));
@@ -84,9 +97,38 @@ let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports
  assert.match(await recorded.locator('time').innerText(),/Nov 15, 2026.*2:28.*ET/i);
  assert.equal(await recorded.locator('time').getAttribute('datetime'),'2026-11-15T19:28:00Z');
  assert.match(await signedIn.innerText(),/Last sign-in: Jul 14, 2026.*8:03.*ET/i);
- assert.match(await page.locator('.admin-household-row').filter({hasText:'Awaiting activity'}).innerText(),/No use recorded yet/);
- await page.getByRole('button',{name:'Done',exact:true}).click();
+ const target=page.locator('.admin-household-row').filter({hasText:deleteHouseholdName});
+ assert.match(await target.innerText(),/No use recorded yet/);
  pass('Admin list shows date and time in Eastern time, with sign-in and missing-history fallbacks');
+ assert(await recorded.getByRole('button',{name:'Delete household'}).isDisabled());
+ const openDelete=target.getByRole('button',{name:'Delete household'});
+ const confirmation=page.getByRole('form',{name:`Delete ${deleteHouseholdName}?`});
+ const confirmName=confirmation.getByLabel('Type the household name to confirm');
+ const confirmDelete=confirmation.getByRole('button',{name:'Permanently delete household'});
+ await openDelete.click();
+ await page.waitForFunction(()=>document.activeElement?.id==='admin-household-confirm-title');
+ const formBounds=await confirmation.boundingBox();
+ const listBounds=await page.locator('.settings-content').boundingBox();
+ assert(formBounds&&listBounds&&formBounds.y>=listBounds.y&&formBounds.y+formBounds.height<=listBounds.y+listBounds.height+1,'The confirmation is in the visible area of the mobile household list');
+ await confirmName.fill('Other household');
+ assert(await confirmDelete.isDisabled());
+ assert.equal(deleteAttempts,0);
+ await confirmation.getByRole('button',{name:'Cancel'}).click();
+ assert.equal(await openDelete.getAttribute('aria-expanded'),'false');
+ assert(await openDelete.evaluate(button=>button===document.activeElement));
+ await openDelete.click();
+ await confirmName.fill("The Pilot's Home");
+ await confirmDelete.click();
+ await confirmation.getByRole('alert').getByText('Fixture deletion failed. Try again.').waitFor();
+ assert.equal(await confirmName.inputValue(),"The Pilot's Home");
+ await confirmDelete.click();
+ await page.getByRole('status').getByText(`Deleted ${deleteHouseholdName} and its members’ accounts.`).waitFor();
+ await signedIn.waitFor();
+ assert.equal(await target.count(),0);
+ assert.equal(deleteAttempts,2);
+ assert.match(await recorded.locator('time').innerText(),/Nov 15, 2026.*2:28.*ET/i);
+ pass('Mobile household deletion stays in view, preserves confirmation safeguards, and supports retry after an error');
+ await page.getByRole('button',{name:'Done',exact:true}).click();
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
  await page.getByLabel('Repeat',{exact:true}).selectOption('WEEKLY');assert(await page.getByLabel('Repeat every',{exact:true}).isVisible());await page.getByLabel('Repeat',{exact:true}).selectOption('none');assert.equal(await page.getByLabel('Repeat every',{exact:true}).count(),0);pass('Extra repeat fields appear only for repeating events');
  await page.getByLabel('No one selected',{exact:true}).check();assert(await page.getByRole('switch',{name:'30-minute alert',exact:true}).isDisabled());await page.getByLabel('Alex Morgan',{exact:true}).check();assert.equal(await page.getByLabel('No one selected',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Event reminder',{exact:true}).isDisabled(),false);await page.getByLabel('Jamie Morgan',{exact:true}).check();assert(await page.getByLabel('Alex Morgan',{exact:true}).isChecked());assert(await page.getByLabel('Jamie Morgan',{exact:true}).isChecked());await page.getByLabel('Everyone',{exact:true}).check();assert.equal(await page.getByLabel('Alex Morgan',{exact:true}).isChecked(),false);pass('Family chips support multiple people and restore alerts after No one');
