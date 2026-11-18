@@ -96,9 +96,11 @@ export function transferReminderAliases(records:{googleId:string;event:NativeEve
  return aliases;
 }
 
-export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch){
+export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch,personalUserId?:string){
  const service=async(action:string,extra:Record<string,unknown>={})=>{
-  const r=await admin.rpc('calendar_copy_service',{action,payload:{householdId:hid,...extra}});
+  const r=await admin.rpc(personalUserId?'personal_calendar_service':'calendar_copy_service',{
+   action,payload:{householdId:hid,...(personalUserId?{userId:personalUserId}:{}),...extra}
+  });
   if(r.error)throw new CopyError('retry');return r.data;
  };
  const claim=await service('claim');if(!claim)return {busy:true};
@@ -107,14 +109,16 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
  const budget=()=>{if(Date.now()>deadline||requests>=24)throw new CopyError('budget')};
  try{
   if(claim.nativeReady&&!claim.work.length)return {completed:0};
-  const c=await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId:hid}});
-  const connection=c.data;if(c.error||!connection?.refreshToken||!config.clientId||!config.clientSecret)throw new CopyError('reconnect');
+  const connection=personalUserId?await rpc('credentials'):
+   (await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId:hid}})).data;
+  if(!connection?.refreshToken||!config.clientId||!config.clientSecret)throw new CopyError('reconnect');
   budget();requests++;
   const token=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
    body:new URLSearchParams({client_id:config.clientId,client_secret:config.clientSecret,refresh_token:connection.refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(8000)});
   const credentials=await token.json();
   if(!token.ok||!credentials.access_token)throw new CopyError(token.status>=500?'retry':'reconnect');
   const request:RequestGoogle=async(path,method='GET',body)=>{
+   if(personalUserId&&method!=='GET')await rpc('check_lease');
    budget();requests++;
    const url=new URL('https://www.googleapis.com/calendar/v3/'+path);
    if(method!=='GET')url.searchParams.set('sendUpdates','none');

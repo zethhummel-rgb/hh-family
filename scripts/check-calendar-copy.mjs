@@ -26,13 +26,22 @@ await assert.rejects(prepareGoogleTransfer(hid,[{...oldGoogle,start:{dateTime:ma
 const expanded={...oldGoogle,id:'google-original-instance',recurringEventId:oldGoogle.id,start:{dateTime:'2026-11-01T10:00:00-05:00'},end:{dateTime:'2026-11-01T11:00:00-05:00'},originalStartTime:{dateTime:'2026-11-01T10:00:00-05:00'}};
 const aliases=transferReminderAliases(transfer.events,[expanded]);assert.equal(aliases.length,1);assert.equal(aliases[0].minutes,1020);assert.match(aliases[0].googleKey,/:2026-11-01T10:00:00-05:00:1020$/);assert.equal(aliases[0].nativeStart,'2026-11-01T15:00:00.000Z');
 
-function fixture({legacy=false,items=original,event=master,googleFailure=false,unsupported=false,changing=false,failAfterInsert=false,ackFailure=false,conflict=false}={}){
+function fixture({legacy=false,items=original,event=master,googleFailure=false,unsupported=false,changing=false,failAfterInsert=false,ackFailure=false,conflict=false,personalUserId}={}){
  const calls=[],provider=[],records=new Map(),queue=event?[{eventId:id,revision:1,event:structuredClone(event)}]:[],links=new Map();
+ const calendarId=personalUserId?'personal-'+personalUserId:'server-selected-family';
  let ready=!legacy,archived=null,imported=null,lease=null,finished=null,rotations=0,failedAfterInsert=false,failAck=ackFailure,reads=0,posts=0,phaseFailure=false;
  if(!legacy)records.set('home'+id.replaceAll('-',''),{...oldGoogle,extendedProperties:structuredClone(oldGoogle.extendedProperties)});
  const api=async(name,{action,payload})=>{
   calls.push({name,action,payload});
-  if(name==='calendar_service')return {data:{calendarId:'server-selected-family',refreshToken:'server-only-credential'},error:null};
+  if(personalUserId){
+   assert.equal(name,'personal_calendar_service');
+   assert.equal(payload.userId,personalUserId);
+   if(action==='credentials'||action==='check_lease'){
+    assert.equal(payload.lease,lease);
+    return {data:action==='credentials'?{calendarId,refreshToken:'server-only-credential'}:{}};
+   }
+  }
+  if(name==='calendar_service')return {data:{calendarId,refreshToken:'server-only-credential'},error:null};
   const job=queue.find(q=>q.eventId===payload.eventId),link=links.get(payload.eventId);
   if(action==='claim'){if(lease)return {data:null};lease='synthetic-lease';return {data:{lease,nativeReady:ready,baseline:{[id]:1},work:structuredClone(queue)}}}
   if(action==='archive'){archived=structuredClone(payload.events);return {data:{snapshotHash:'synthetic-hash'}}}
@@ -64,7 +73,7 @@ function fixture({legacy=false,items=original,event=master,googleFailure=false,u
    assert.equal(new URLSearchParams(init.body).get('refresh_token'),'server-only-credential');
    return googleFailure?Response.json({error:'invalid_grant'},{status:400}):Response.json({access_token:'google-access'});
   }
-  assert.ok(url.startsWith('https://www.googleapis.com/calendar/v3/calendars/server-selected-family/events'));assert.equal(init.headers.Authorization,'Bearer google-access');
+  assert.ok(url.startsWith('https://www.googleapis.com/calendar/v3/calendars/'+calendarId+'/events'));assert.equal(init.headers.Authorization,'Bearer google-access');
   const u=new URL(url),method=init.method||'GET',body=init.body?JSON.parse(init.body):null;provider.push({url,method,body});
   if(method!=='GET')assert.equal(u.searchParams.get('sendUpdates'),'none','Calendar copying must not email guests');
   const gid=decodeURIComponent(u.pathname.split('/').at(-1));
@@ -90,7 +99,7 @@ function fixture({legacy=false,items=original,event=master,googleFailure=false,u
   if(method==='PATCH'){records.set(gid,{...(records.get(gid)||{}),...body,etag:'updated'});return Response.json(records.get(gid))}
   throw Error('Unexpected provider operation');
  };
- return {calls,provider,records,queue,links,run:()=>runCalendarCopy({rpc:api},hid,{clientId:'synthetic-client',clientSecret:'synthetic-secret'},fetcher),get ready(){return ready},get archived(){return archived},get imported(){return imported},get finished(){return finished},get posts(){return posts}};
+ return {calls,provider,records,queue,links,run:()=>runCalendarCopy({rpc:api},hid,{clientId:'synthetic-client',clientSecret:'synthetic-secret'},fetcher,personalUserId),get ready(){return ready},get archived(){return archived},get imported(){return imported},get finished(){return finished},get posts(){return posts}};
 }
 let f=fixture({legacy:true}),result=await f.run();assert.equal(result.transferred,true);assert.equal(f.ready,true);assert.equal(f.imported.events.length,1);assert.deepEqual(f.archived,original);assert.ok(f.imported.deliveryAliases.length>0);assert.ok(f.provider.every(c=>c.method==='GET'));
 for(const options of [{googleFailure:true},{unsupported:true},{changing:true}]){
@@ -118,4 +127,13 @@ f=fixture();await f.run();f.queue.push({eventId:id,revision:2,event:{...master,v
 f=fixture();await f.run();f.records.set('unrelated-google-event',{summary:'Keep separate'});
 f.queue.push({eventId:id,revision:2,event:{...master,version:4,starts_at:'2026-10-25T15:00:00.000Z',ends_at:'2026-10-25T16:00:00.000Z'}});
 await f.run();assert.equal(f.queue.length,0);assert.equal(f.records.has(oldGoogle.id),false);assert.equal(f.records.get('unrelated-google-event').summary,'Keep separate');assert.equal(f.posts,1);
-console.log('Google copy checks passed: exact preservation before import, DST/all-day/repeat/exception/tag/reminder conversion, source remains unchanged on failures, etag recheck, notification aliases, outbound-only writes, metadata preservation, durable retries, idempotent inserts and deletes. No real Google or database requests.');
+const replicas=[fixture({personalUserId:'first-member'}),fixture({personalUserId:'second-member'})];
+for(const replica of replicas){
+ assert.equal((await replica.run()).completed,1);
+ assert.equal(replica.queue.length,0);
+ assert.ok(replica.provider.some(request=>request.method==='PATCH'));
+ assert.ok(replica.provider.some(request=>request.method==='DELETE'),'A cancelled occurrence is removed from this personal copy');
+ assert.equal(replica.calls.filter(call=>call.action==='check_lease').length,replica.provider.filter(request=>request.method!=='GET').length);
+}
+assert.notEqual(new URL(replicas[0].provider[0].url).pathname,new URL(replicas[1].provider[0].url).pathname);
+console.log('Google copy checks passed: exact preservation before import, DST/all-day/repeat/exception/tag/reminder conversion, source remains unchanged on failures, etag recheck, notification aliases, outbound-only writes, metadata preservation, durable retries, idempotent inserts and deletes, and independent per-member copy destinations. No real Google or database requests.');

@@ -6,7 +6,13 @@ const userId='11111111-1111-4111-8111-111111111111',hid='22222222-2222-4222-8222
 const config={clientId:'synthetic-client',clientSecret:'synthetic-secret',callback:'https://project.invalid/functions/v1/google-calendar/callback',app:'https://hh.invalid/hh-family/'};
 const scopes='https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.readonly';
 const calls=[],requests=[];let state=null,active=null,pendingCompletion=null,granted=scopes,failRpc=false;
-const admin={rpc:async(name,{action,payload})=>{assert.equal(name,'google_import_service');calls.push({action,payload});if(failRpc)return {error:{message:'internal detail with credential must not escape'}};
+const admin={rpc:async(name,{action,payload})=>{
+ if(name==='personal_calendar_service'){
+  assert.equal(action,'filter_import_calendars');
+  assert.equal(payload.userId,userId);
+  return {data:payload.calendars.filter(calendar=>calendar.id!=='generated-personal-copy')};
+ }
+ assert.equal(name,'google_import_service');calls.push({action,payload});if(failRpc)return {error:{message:'internal detail with credential must not escape'}};
  if(action==='start'){state={id:previewId,householdId:payload.householdId,userId:payload.userId,hash:payload.hash,verifier:payload.verifier};return {data:{}}}
  if(action==='state_take'){if(!state||state.hash!==payload.hash)return {data:null};const record=state;state=null;return {data:record}}
  if(action==='authorized'){pendingCompletion=payload.completionHash;active={accessToken:payload.accessToken,expiresAt:'2026-11-01T18:00:00Z',calendars:payload.calendars};return {data:{}}}
@@ -20,7 +26,10 @@ const admin={rpc:async(name,{action,payload})=>{assert.equal(name,'google_import
 const originalFetch=globalThis.fetch;
 globalThis.fetch=async(url,init={})=>{requests.push({url:String(url),init});if(String(url)==='https://oauth2.googleapis.com/token'){assert.equal(init.method,'POST');const body=new URLSearchParams(init.body);assert.equal(body.get('grant_type'),'authorization_code');assert.equal(body.get('redirect_uri'),config.callback);assert.ok(body.get('code_verifier'));return Response.json({access_token:'synthetic-readonly-access-token',refresh_token:'must-never-store-refresh',expires_in:3600,scope:granted})}
  assert.equal(init.headers.Authorization,'Bearer synthetic-readonly-access-token');assert.equal(init.method,undefined,'Google calendar API receives reads only');
- if(String(url).includes('/users/me/calendarList?'))return Response.json({items:[{id:'calendar@example.invalid',summary:'Synthetic calendar',accessRole:'owner'}]});
+ if(String(url).includes('/users/me/calendarList?'))return Response.json({items:[
+  {id:'calendar@example.invalid',summary:'Synthetic calendar',accessRole:'owner'},
+  {id:'generated-personal-copy',summary:'Household · HH Family',accessRole:'owner'}
+ ]});
  assert.ok(String(url).startsWith('https://www.googleapis.com/calendar/v3/calendars/calendar%40example.invalid/events?'));
  const params=new URL(url).searchParams;assert.equal(params.get('singleEvents'),'false');assert.equal(params.get('showDeleted'),'true');
  return Response.json({items:[{id:'event',summary:'Family walk',start:{dateTime:'2026-11-03T10:00:00-05:00'},end:{dateTime:'2026-11-03T11:00:00-05:00'}}]});};

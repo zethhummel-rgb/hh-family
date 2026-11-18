@@ -1,4 +1,5 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {PGlite} from '@electric-sql/pglite';
+import ts from 'typescript';
 const db=new PGlite(),read=name=>fs.readFileSync(new URL('../database/'+name,import.meta.url),'utf8');
 await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
 create schema auth;grant usage on schema auth to authenticated;
@@ -99,4 +100,104 @@ await asUser(other,()=>db.query("insert into public.household_events(id,househol
 assert.equal(await scalar('select count(*)::int from private.calendar_copy_queue where household_id=$1',[b]),1);
 await db.query('delete from public.households where id=$1',[a]);
 for(const table of ['calendar_copy_state','calendar_copy_queue','calendar_copy_links','calendar_transfer_backups','calendar_delivery_aliases'])assert.equal(await scalar(`select count(*)::int from private.${table} where household_id=$1`,[a]),0);
+// The fixture's legacy Vault reader is a table. Add the personal writer and a
+// cascade so a deleted encrypted credential disappears from both fixture tables.
+await db.exec(`create table vault.secrets(id uuid primary key);
+ alter table vault.decrypted_secrets add foreign key(id) references vault.secrets(id) on delete cascade;
+ create function vault.create_secret(value text) returns uuid language plpgsql as $$
+ declare sid uuid:=gen_random_uuid();
+ begin insert into vault.secrets values(sid);insert into vault.decrypted_secrets values(sid,null,value);return sid;end;$$;
+ create function private.household_transition_active(uuid) returns boolean language sql as $$select false$$;`);
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261118212340_personal_google_calendar.sql',import.meta.url),'utf8'));
+for(const uid of [member,owner])await db.query("insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,'Synthetic member','member')",[b,uid]);
+const personal=async(action,userId,extra={})=>scalar('select public.personal_calendar_service($1,$2)',[action,JSON.stringify({householdId:b,userId,...extra})]);
+assert.equal(await scalar("select has_function_privilege('authenticated','public.personal_calendar_service(text,jsonb)','EXECUTE')"),false);
+assert.equal(await scalar("select has_table_privilege('authenticated','private.personal_calendar_connections','SELECT')"),false);
+
+const edge=fs.readFileSync(new URL('../supabase/functions/google-calendar/personal.ts',import.meta.url),'utf8');
+const edgeJs=ts.transpileModule(edge,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {handlePersonalCalendar,personalCalendarCallback}=await import('data:text/javascript;base64,'+Buffer.from(edgeJs).toString('base64'));
+const admin={rpc:async(name,{action,payload})=>{
+ assert.equal(name,'personal_calendar_service');
+ try{return {data:await personal(action,payload.userId,payload)}}
+ catch(error){return {error}}
+}};
+const cfg={clientId:'fixture',clientSecret:'fixture',callback:'https://test.invalid/callback',app:'https://test.invalid/hummel-home/'};
+const request=(action,userId,extra={},fetcher)=>handlePersonalCalendar(admin,{action:'personal_'+action,householdId:b,...extra},userId,cfg,fetcher);
+const approvedScope='https://www.googleapis.com/auth/calendar.app.created';
+let calendarCreates=0;
+const google=async(url,init)=>{
+ if(url==='https://oauth2.googleapis.com/token'){
+  const code=new URLSearchParams(init.body).get('code');
+  assert.ok(new URLSearchParams(init.body).get('code_verifier'));
+  return Response.json({access_token:code,refresh_token:'private-'+code,scope:approvedScope});
+ }
+ const account=init.headers.Authorization.slice('Bearer '.length);
+ if(init.method==='POST'){
+  assert.equal(url,'https://www.googleapis.com/calendar/v3/calendars');
+  assert.match(JSON.parse(init.body).summary,/HH Family/);
+  calendarCreates++;
+ }else assert.equal(url,'https://www.googleapis.com/calendar/v3/users/me/calendarList/'+account);
+ return Response.json({id:account,accessRole:'owner'});
+};
+async function authorize(userId,account){
+ const consent=new URL((await request('start',userId,{userId:other})).url);
+ assert.equal(consent.searchParams.get('scope'),approvedScope);
+ assert.equal(consent.searchParams.get('prompt'),'consent select_account');
+ const state=consent.searchParams.get('state');
+ const callback=new URL(cfg.callback);callback.search=new URLSearchParams({state,code:account});
+ const returned=personalCalendarCallback(callback,cfg.app);
+ const app=new URL(returned.headers.get('Location'));
+ assert.equal(app.searchParams.get('code'),null);
+ assert.equal(new URLSearchParams(app.hash.slice(1)).get('personal_calendar_code'),account);
+ return {state,code:account};
+}
+assert.equal((await request('status',other)).usesExistingCopy,true);
+await assert.rejects(request('start',other),/Reconnect your existing Google calendar/);
+const first=await authorize(owner,'google-first'),second=await authorize(member,'google-second');
+await assert.rejects(request('complete',member,first,()=>assert.fail('Another HH account cannot exchange this Google code')),/started this connection/);
+await request('complete',owner,first,google);await request('complete',member,second,google);
+await assert.rejects(request('complete',owner,first,()=>assert.fail('State is single use')),/started this connection/);
+assert.equal(calendarCreates,2);
+assert.equal(await scalar('select private.dispatch_personal_calendar_copies()'),0,'Missing scheduler configuration keeps external requests off');
+await db.exec(`with inserted as (
+ insert into vault.secrets select gen_random_uuid() from generate_series(1,2) returning id
+) insert into vault.decrypted_secrets(id,name,decrypted_secret)
+ select s.id,n.name,n.value from (select id,row_number() over() as row from inserted) s
+ join (values(1,'home_together_api_url','https://test.invalid'),(2,'hummel_push_cron','fixture-secret')) n(row,name,value) using(row);`);
+assert.equal(Number(await scalar('select private.dispatch_personal_calendar_copies()')),2);
+assert.deepEqual((await db.query("select body->>'userId' as actor from net.requests where body->>'action'='personal_sync' order by actor")).rows.map(row=>row.actor),[owner,member]);
+const initial=await personal('claim',owner);
+assert.equal(initial.nativeReady,true);
+assert.equal(initial.work[0].event.title,'Native while Google is connected');
+assert.equal(await personal('claim',owner),null);
+assert.deepEqual(await personal('credentials',owner,{lease:initial.lease}),{calendarId:'google-first',refreshToken:'private-google-first'});
+await assert.rejects(personal('credentials',member,{lease:initial.lease}),/lease/);
+await assert.rejects(request('disconnect',owner),/updating/);
+await personal('finish',owner,{lease:initial.lease});
+const nextRecipient=await personal('claim',member);
+assert.equal(nextRecipient.work[0].eventId,added);
+const stage=await personal('prepare',member,{lease:nextRecipient.lease,eventId:added,revision:nextRecipient.work[0].revision,shape:{},dates:[]});
+assert.ok(stage.google_id);
+await personal('base_done',member,{lease:nextRecipient.lease,eventId:added,revision:nextRecipient.work[0].revision});
+await asUser(other,()=>db.query("update public.household_events set title='Changed for both copies',version=version+1 where id=$1",[added]));
+await personal('event_done',member,{lease:nextRecipient.lease,eventId:added,revision:nextRecipient.work[0].revision,dates:[]});
+await personal('finish',member,{lease:nextRecipient.lease});
+assert.equal((await request('status',member)).pending,1,'A newer revision survives an in-flight acknowledgment');
+assert.ok(!JSON.stringify(await request('status',owner)).includes('private-google'));
+await request('complete',member,await authorize(member,'google-second'),google);
+assert.equal(calendarCreates,2,'Reconnect reuses the original Google calendar');
+assert.deepEqual(await personal('filter_import_calendars',other,{calendars:[{id:'google-first'},{id:'google-second'},{id:'other-calendar'}]}),[{id:'other-calendar'}]);
+await request('disconnect',owner);
+assert.equal((await request('status',owner)).connected,false);
+assert.equal((await request('status',member)).connected,true);
+assert.equal(await scalar('select count(*)::int from vault.decrypted_secrets where name is null'),1,'Disconnect and reconnect remove superseded credentials');
+await asUser(other,()=>db.query('delete from public.household_events where id=$1',[added]));
+const remove=await personal('claim',member);
+assert.equal(remove.work[0].event,null,'Deletion is queued for the remaining connection');
+await db.query('delete from public.household_members where household_id=$1 and user_id=$2',[b,member]);
+assert.equal(await scalar('select count(*)::int from vault.decrypted_secrets where name is null'),0,'Removing a member removes their Google credential');
+await assert.rejects(personal('check_lease',member,{lease:remove.lease}),/membership/);
+assert.equal(await scalar('select count(*)::int from private.google_calendar_connections where household_id=$1',[b]),1);
+console.log('Personal calendar checks passed: two accounts, OAuth state isolation and replay, private credentials, separate queues, retries, reconnect, disconnect, and membership cleanup.');
 await db.close();console.log('Calendar copy database checks passed: source gating, transactional preservation/rollback, private full backups, member/outsider/anonymous isolation, lease exclusion, checkpoints, concurrent edits, notification cutover deduplication, durable deletes, new connections stay native and complete household cleanup. No live data or Google requests.');

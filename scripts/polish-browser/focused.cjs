@@ -18,6 +18,8 @@ let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports
 const addressLookups=[],savedEvents=[];
 const suggestedStreet='12 Main Street, Example City, ON, Canada';
 const venueSuggestion={placeId:'fixture-venue-id',name:'John Gordon Construction',address:'Example venue address, Cornwall, ON'};
+let personalCalendarConnected=false,personalCompletions=0;
+const personalCalendarState='hhp_'+ 'a'.repeat(43);
 const deleteHouseholdName='The Pilot’s Home';
 let deleteAttempts=0;
 let managedHomes=[
@@ -61,6 +63,17 @@ let managedHomes=[
      if(row)Object.assign(row,draft);
      data=row?[{id:row.id}]:[];
     }
+   }
+   else if(table==='google-calendar'){
+    const body=req.postDataJSON();
+    if(body.action==='status')data={configured:true,connected:false,nativeReady:true,googleConnected:false};
+    if(body.action==='personal_status')data={available:true,configured:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off'};
+    if(body.action==='personal_start')data={url:'https://accounts.google.com/o/oauth2/v2/auth?state='+personalCalendarState};
+    if(body.action==='personal_complete'){
+     assert.deepEqual(body,{action:'personal_complete',householdId:home,state:personalCalendarState,code:'fixture-code'});
+     personalCompletions++;personalCalendarConnected=true;data={};
+    }
+    if(body.action==='personal_disconnect'){personalCalendarConnected=false;data={};}
    }
    else if(table==='admin_household_usage')data=[
     {household_id:home,last_used_at:'2026-11-15T19:28:00Z',last_sign_in_at:null},
@@ -147,6 +160,27 @@ let managedHomes=[
  assert.match(await recorded.locator('time').innerText(),/Nov 15, 2026.*2:28.*ET/i);
  pass('Mobile household deletion stays in view, preserves confirmation safeguards, and supports retry after an error');
  await page.getByRole('button',{name:'Done',exact:true}).click();
+ const consentReturn=url+'?personal_calendar=return#'+new URLSearchParams({personal_calendar_state:personalCalendarState,personal_calendar_code:'fixture-code'});
+ await page.route('https://accounts.google.com/**',route=>route.fulfill({
+  contentType:'text/html',body:'<script>location.replace('+JSON.stringify(consentReturn)+')</script>'
+ }));
+ await page.getByRole('button',{name:'Open Settings',exact:true}).click();
+ await page.getByRole('button',{name:/^Calendar /}).click();
+ await page.getByRole('button',{name:'Connect my Google Calendar',exact:true}).click();
+ await page.getByText('Google Calendar connected. Your HH events will start syncing.').waitFor();
+ assert.equal(personalCompletions,1);
+ assert.equal(new URL(page.url()).hash,'');
+ assert.equal(new URL(page.url()).searchParams.has('personal_calendar'),false);
+ await page.getByRole('button',{name:'Disconnect my Google Calendar',exact:true}).click();
+ await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ assert(personalCalendarConnected);
+ await page.getByRole('button',{name:'Disconnect my Google Calendar',exact:true}).click();
+ await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+ await page.getByText('Google Calendar disconnected.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Connect my Google Calendar',exact:true}).waitFor();
+ assert.equal(personalCalendarConnected,false);
+ await page.getByRole('button',{name:'Done',exact:true}).click();
+ pass('A household member can connect and disconnect their own Google copy, and the OAuth receipt is removed from the URL');
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
  const address=page.getByRole('combobox',{name:'Location (optional)'});
  const addressList=page.getByRole('listbox',{name:'Suggested locations'});
