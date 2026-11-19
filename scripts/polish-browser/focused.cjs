@@ -15,6 +15,8 @@ const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
 let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports=0;
+const addressLookups=[],savedEventLocations=[];
+const suggestedStreet='12 Main Street, Example City, ON, Canada';
 const deleteHouseholdName='The Pilot’s Home';
 let deleteAttempts=0;
 let managedHomes=[
@@ -44,6 +46,13 @@ let managedHomes=[
    if (u.pathname.startsWith('/auth/'))data=user;
    else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
    else if(table==='pilot_status')data={is_host:true};
+   else if(table==='event-addresses'){
+    const {query}=req.postDataJSON();addressLookups.push(query);
+    data=query==='999 Limit'?{status:'paused',suggestions:[]}:{status:'ok',suggestions:[suggestedStreet,'124 Main Street, Example City, ON, Canada']};
+   }
+   else if(table==='household_events'&&req.method()==='POST'){
+    const {id,location}=req.postDataJSON();savedEventLocations.push(location);data=[{id}];
+   }
    else if(table==='admin_household_usage')data=[
     {household_id:home,last_used_at:'2026-11-15T19:28:00Z',last_sign_in_at:null},
     {household_id:'last-login',last_used_at:null,last_sign_in_at:'2026-07-14T12:03:00Z'}
@@ -130,6 +139,41 @@ let managedHomes=[
  pass('Mobile household deletion stays in view, preserves confirmation safeguards, and supports retry after an error');
  await page.getByRole('button',{name:'Done',exact:true}).click();
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
+ const address=page.getByRole('combobox',{name:'Location (optional)'});
+ const addressList=page.getByRole('listbox',{name:'Suggested addresses'});
+ const newEventTitle=page.getByLabel('Event name',{exact:true});
+ await page.setViewportSize({width:320,height:568});
+ await address.fill('12 Main');
+ await addressList.waitFor();
+ const optionsBounds=await addressList.boundingBox(),eventBounds=await page.locator('.event-modal').boundingBox();
+ assert(optionsBounds.x>=eventBounds.x&&optionsBounds.x+optionsBounds.width<=eventBounds.x+eventBounds.width);
+ assert(await page.getByText('Google Maps',{exact:true}).isVisible());
+ await address.press('Escape');
+ assert.equal(await addressList.count(),0);
+ assert(await newEventTitle.isVisible(),'Escape closes the suggestions before the event editor');
+ await address.fill('12 Main St');
+ await addressList.waitFor();
+ await address.press('ArrowDown');await address.press('Enter');
+ assert.equal(await address.inputValue(),suggestedStreet);
+ await address.fill('12 Main');
+ await addressList.getByRole('option',{name:suggestedStreet,exact:true}).click();
+ assert.equal(await address.inputValue(),suggestedStreet);
+ await newEventTitle.fill('Address suggestion fixture');
+ await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
+ await page.locator('.event-modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Add event',exact:true}).click();
+ await address.fill('999 Limit');
+ await page.getByText(/Address suggestions are paused until next month/).waitFor();
+ const requestsAtCutoff=addressLookups.length;
+ await address.fill('24 Manual Road, Unit 2');
+ await newEventTitle.fill('Manual address fixture');
+ await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
+ await page.locator('.event-modal').waitFor({state:'detached'});
+ assert.deepEqual(savedEventLocations,[suggestedStreet,'24 Manual Road, Unit 2']);
+ assert.equal(addressLookups.length,requestsAtCutoff);
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Add event',exact:true}).click();
+ pass('Phone address suggestions support touch and keyboard selection, and an event saves with a typed address after the monthly cutoff');
  await page.getByLabel('Repeat',{exact:true}).selectOption('WEEKLY');assert(await page.getByLabel('Repeat every',{exact:true}).isVisible());await page.getByLabel('Repeat',{exact:true}).selectOption('none');assert.equal(await page.getByLabel('Repeat every',{exact:true}).count(),0);pass('Extra repeat fields appear only for repeating events');
  await page.getByLabel('No one selected',{exact:true}).check();assert(await page.getByRole('switch',{name:'30-minute alert',exact:true}).isDisabled());await page.getByLabel('Alex Morgan',{exact:true}).check();assert.equal(await page.getByLabel('No one selected',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Event reminder',{exact:true}).isDisabled(),false);await page.getByLabel('Jamie Morgan',{exact:true}).check();assert(await page.getByLabel('Alex Morgan',{exact:true}).isChecked());assert(await page.getByLabel('Jamie Morgan',{exact:true}).isChecked());await page.getByLabel('Everyone',{exact:true}).check();assert.equal(await page.getByLabel('Alex Morgan',{exact:true}).isChecked(),false);pass('Family chips support multiple people and restore alerts after No one');
  for(const viewport of [{width:320,height:568},{width:390,height:500},{width:390,height:844},{width:768,height:1024}]){
