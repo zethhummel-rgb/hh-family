@@ -15,10 +15,17 @@ const sql=async(query,args=[])=>Object.values((await db.query(query,args)).rows[
 await db.exec(`create role anon;create role authenticated;create role service_role;
  create schema private;grant usage on schema private to service_role;
  create schema auth;create table auth.users(id uuid primary key);
+ create table public.household_events(id uuid primary key,location text not null);
  create table public.household_members(user_id uuid primary key references auth.users(id) on delete cascade);`);
 for(const actor of [member,other,outsider])await db.query('insert into auth.users values($1)',[actor]);
 for(const actor of [member,other])await db.query('insert into public.household_members values($1)',[actor]);
 await db.exec(read('supabase/migrations/20261118235745_event_address_quota.sql'));
+await db.query("insert into public.household_events values($1,'Original location')",[member]);
+await db.exec(read('supabase/migrations/20261119120746_event_venue_selection.sql'));
+assert.equal(await sql('select location_place_id from public.household_events'),null);
+assert.equal(await sql("select has_column_privilege('authenticated','public.household_events','location_place_id','update')"),true);
+assert.equal(await sql("select has_column_privilege('anon','public.household_events','location_place_id','update')"),false);
+await assert.rejects(db.query("update public.household_events set location_place_id='../bad'"),error=>error.code==='23514');
 for(const role of ['anon','authenticated']){
  assert.equal(await sql("select has_function_privilege($1,'public.reserve_event_address_request(uuid,integer)','execute')",[role]),false);
  assert.equal(await sql("select has_table_privilege($1,'private.event_address_monthly_usage','select')",[role]),false);
@@ -106,14 +113,38 @@ const lookupVenue=eventAddressHandler({
 const venueCall=()=>lookupVenue(new Request('https://fixture.invalid/event-addresses',{
  method:'POST',headers:{origin,authorization:'Bearer member','content-type':'application/json'},body:JSON.stringify({query:'Cornwall Hospital'})
 }));
-const department={name:'Cornwall Hospital Outpatient Health Department',address:'14 Main Street, Example City, ON'};
+const department={placeId:'department-fixture',name:'Cornwall Hospital Outpatient Health Department',address:'14 Main Street, Example City, ON'};
 assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[
- {name:'Cornwall Community Hospital',address:'12 Main Street, Example City, ON, Canada'},department
+ {placeId:'venue-fixture',name:'Cornwall Community Hospital',address:'12 Main Street, Example City, ON, Canada'},department
 ]});
 assert.equal(venueProviderCalls,2);
 venueSlots=1;
 assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[
- {name:'Cornwall Community Hospital',address:'Main Street, Example City, ON'},department
+ {placeId:'venue-fixture',name:'Cornwall Community Hospital',address:'Main Street, Example City, ON'},department
 ]});
 assert.equal(venueProviderCalls,3,'Venue details cannot make a Google request past the shared cutoff');
+let savedVenueCalls=0,savedVenueBudget='allowed';
+const savedVenueLookup=eventAddressHandler({
+ ...admin,
+ rpc:async(name,{actor,monthly_limit})=>{
+  assert.equal(name,'reserve_event_address_request');assert.equal(actor,member);assert.equal(monthly_limit,4500);
+  return {data:savedVenueBudget,error:null};
+ }
+},{origin,apiKey:'fixture-api-key',monthlyLimit:8500},async(url,request)=>{
+ savedVenueCalls++;
+ assert.equal(url,'https://places.googleapis.com/v1/places/venue-fixture');
+ assert.equal(request.headers['X-Goog-FieldMask'],'displayName,formattedAddress');
+ return Response.json({displayName:{text:'Selected venue'},formattedAddress:'123 Main St'});
+});
+const lookupSaved=(placeId,token='member')=>savedVenueLookup(new Request('https://fixture.invalid/event-addresses',{
+ method:'POST',headers:{origin,authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({placeId})
+}));
+assert.equal((await lookupSaved('../venue-fixture')).status,400);
+assert.equal((await lookupSaved('venue-fixture','expired')).status,401);
+assert.deepEqual(await (await lookupSaved('venue-fixture')).json(),{status:'ok',suggestions:[],venues:[
+ {placeId:'venue-fixture',name:'Selected venue',address:'123 Main St'}
+]});
+savedVenueBudget='paused';
+assert.deepEqual(await (await lookupSaved('venue-fixture')).json(),{status:'paused',suggestions:[]});
+assert.equal(savedVenueCalls,1);
 console.log('Event location checks passed: membership, monthly cutoff, numbered addresses, venue names, and separately reserved venue detail lookups. Google was simulated.');

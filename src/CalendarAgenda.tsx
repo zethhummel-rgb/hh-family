@@ -1,5 +1,6 @@
 import {dateObj,eventDate,eventEndDate,eventTime,TIME_ZONE,type FamilyEvent} from './calendarData';
 import PeopleDots from './PeopleDots';
+import {EventLocationLabel} from './venueLocation';
 import type {PersonProfile} from './people';
 import type {CalendarHoliday} from './calendarHolidays';
 
@@ -18,7 +19,7 @@ export default function CalendarAgenda({dates,events,profiles,today,threeDay,fil
    <h3 className="agenda-day-date"><span>{day.toLocaleDateString('en-CA',{weekday:'short'})}</span><b>{day.getDate()}</b><small>{day.toLocaleDateString('en-CA',{month:'short'})}</small>{date===today&&<em>Today</em>}</h3>
    <div className="agenda-day-events">{holiday&&<p className="calendar-holiday agenda-holiday">{holiday.name}</p>}{items.map(event=><button key={event.id} className="agenda-event" onClick={()=>onEdit(event)}>
     <span className="agenda-event-time">{agendaTime(event,date)}</span>
-    <span className="agenda-event-copy"><b>{event.title}</b><span className="agenda-event-meta"><PeopleDots event={event} profiles={profiles}/>{event.location&&<span className="agenda-event-location">{event.location}</span>}</span></span>
+    <span className="agenda-event-copy"><b>{event.title}</b><span className="agenda-event-meta"><PeopleDots event={event} profiles={profiles}/>{(event.location||event.location_place_id)&&<EventLocationLabel className="agenda-event-location" text={event.location} placeId={event.location_place_id}/>}</span></span>
    </button>)}{!items.length&&!holiday&&<p className="agenda-no-plans">{filtered?'No matching plans':'No plans'}</p>}</div>
   </section>})}
  </div>;

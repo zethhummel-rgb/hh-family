@@ -1,5 +1,6 @@
 import {reminderLabel} from '../supabase/functions/google-calendar/reminders';
 import PeopleDots from './PeopleDots';
+import {EventLocationLabel} from './venueLocation';
 import type {PersonProfile} from './people';
 import {useContext,useEffect,useRef} from 'react';
 import EventGuests,{EventGuestContext} from './EventGuests';
@@ -37,7 +38,7 @@ export default function EventDetails({event,onClose,onEdit,profiles}:{profiles:P
     <div><Clock aria-hidden="true"/><div><dt>Time</dt><dd>{event.all_day?'All day':eventTime(event)+' – '+endTime}</dd>{!event.all_day&&<small>Eastern time</small>}</div></div>
     <div><Users aria-hidden="true"/><div><dt>For</dt><dd><PeopleDots event={event} profiles={profiles}/></dd></div></div>
     <div><Bell aria-hidden="true"/><div><dt>Reminders</dt><dd>{reminderLabels.join(' · ')||'No notifications'}</dd>{event.all_day&&reminderLabels.length>0&&<small>Counted from 9 AM Eastern</small>}</div></div>
-    {event.location&&<div><MapPin aria-hidden="true"/><div><dt>Location</dt><dd>{event.location}</dd></div></div>}
+    {(event.location||event.location_place_id)&&<div><MapPin aria-hidden="true"/><div><dt>Location</dt><dd><EventLocationLabel detailed text={event.location} placeId={event.location_place_id}/></dd></div></div>}
    </dl>
    {event.description&&<div className="event-details-notes"><h3>Notes</h3><p>{event.description}</p></div>}
    {event.recurring&&<p className="event-details-recurring">Part of a repeating event. Edit to change one occurrence or the whole series.</p>}

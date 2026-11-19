@@ -4,7 +4,7 @@ import {readRecurrence} from './recurrence.ts';
 const zone='America/Toronto';
 const dateFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'});
 const partsFormat=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
-export type NativeEvent={id:string;title:string;description:string;location:string;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;countdown_enabled?:boolean;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
+export type NativeEvent={id:string;title:string;description:string;location:string;location_place_id?:string|null;person:string;person_ids?:string[]|null;reminder_minutes?:number|null;reminder_30_enabled?:boolean;countdown_enabled?:boolean;starts_at:string;ends_at:string;all_day:boolean;start_date:string|null;end_date:string|null;version?:number;recurrence?:string[];exceptions?:Record<string,Partial<NativeEvent>|null>;source?:'home'|'google';series_id?:string|null;original_date?:string;recurring?:boolean};
 export const localDate=(iso:string)=>dateFormat.format(new Date(iso));
 function shift(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 function localParts(iso:string){return Object.fromEntries(partsFormat.formatToParts(new Date(iso)).map(p=>[p.type,p.value]))}
@@ -49,7 +49,17 @@ export function expandNativeEvent(master:NativeEvent,from:string,to:string,limit
  const result:NativeEvent[]=[],exceptions=master.exceptions||{};let count=0;
  const add=(e:NativeEvent)=>{if(overlaps(e)){if(firstOnly){if(!result.length||e.starts_at<result[0].starts_at||e.starts_at===result[0].starts_at&&e.id<result[0].id)result[0]=e}else{result.push(e);if(result.length>limit)throw Error('Too many repeating events. Choose a smaller date range.')}}};
  // Retain moved instances even when their original date is outside this view.
- for(const date in exceptions){if(!Object.prototype.hasOwnProperty.call(exceptions,date))continue;tick();const change=exceptions[date];if(change){if(change.starts_at&&change.ends_at&&!overlaps(change as NativeEvent))continue;const original=occurrence(master,date,context);if(original)add({...original,...change,id:original.id,series_id:master.id,original_date:date,recurring:true,source:'home',recurrence:undefined,exceptions:undefined})}}
+ for(const date in exceptions){
+  if(!Object.prototype.hasOwnProperty.call(exceptions,date))continue;
+  tick();
+  const change=exceptions[date];
+  if(!change||(change.starts_at&&change.ends_at&&!overlaps(change as NativeEvent)))continue;
+  const original=occurrence(master,date,context);
+  if(!original)continue;
+  // Legacy exceptions with their own location are independent of the series venue.
+  const placeId=change.location_place_id===undefined&&change.location!==undefined&&change.location!==master.location?null:change.location_place_id;
+  add({...original,...change,...(placeId!==undefined?{location_place_id:placeId}:{}),id:original.id,series_id:master.id,original_date:date,recurring:true,source:'home',recurrence:undefined,exceptions:undefined});
+ }
  const final=localDate(new Date(high).toISOString());
  const earliest=localDate(new Date(low-context.duration-86400000).toISOString());
  let firstIndex=0;
