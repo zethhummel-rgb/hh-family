@@ -91,9 +91,13 @@ const lookupVenue=eventAddressHandler({
  venueProviderCalls++;
  if(url.endsWith('/places:autocomplete')){
   assert.deepEqual(JSON.parse(request.body),{input:'Cornwall Hospital',regionCode:'ca',languageCode:'en',includedRegionCodes:['ca']});
-  return Response.json({suggestions:[{placePrediction:{placeId:'venue-fixture',structuredFormat:{
-   mainText:{text:'Example Hospital'},secondaryText:{text:'Main Street, Example City, ON'}
-  }}}]});
+  const suggestion=(placeId,name,address)=>({placePrediction:{placeId,structuredFormat:{
+   mainText:{text:name},secondaryText:{text:address}
+  }}});
+  return Response.json({suggestions:[
+   suggestion('department-fixture','Cornwall Hospital Outpatient Health Department','14 Main Street, Example City, ON'),
+   suggestion('venue-fixture','Cornwall Community Hospital','Main Street, Example City, ON')
+  ]});
  }
  assert.equal(url,'https://places.googleapis.com/v1/places/venue-fixture');
  assert.equal(request.headers['X-Goog-FieldMask'],'formattedAddress');
@@ -102,9 +106,14 @@ const lookupVenue=eventAddressHandler({
 const venueCall=()=>lookupVenue(new Request('https://fixture.invalid/event-addresses',{
  method:'POST',headers:{origin,authorization:'Bearer member','content-type':'application/json'},body:JSON.stringify({query:'Cornwall Hospital'})
 }));
-assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[{name:'Example Hospital',address:'12 Main Street, Example City, ON, Canada'}]});
+const department={name:'Cornwall Hospital Outpatient Health Department',address:'14 Main Street, Example City, ON'};
+assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[
+ {name:'Cornwall Community Hospital',address:'12 Main Street, Example City, ON, Canada'},department
+]});
 assert.equal(venueProviderCalls,2);
 venueSlots=1;
-assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[{name:'Example Hospital',address:'Main Street, Example City, ON'}]});
+assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[
+ {name:'Cornwall Community Hospital',address:'Main Street, Example City, ON'},department
+]});
 assert.equal(venueProviderCalls,3,'Venue details cannot make a Google request past the shared cutoff');
 console.log('Event location checks passed: membership, monthly cutoff, numbered addresses, venue names, and separately reserved venue detail lookups. Google was simulated.');

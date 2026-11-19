@@ -10,6 +10,7 @@ type Prediction={placeId?:unknown;text?:TextValue;structuredFormat?:{mainText?:T
 type ProviderResponse={suggestions?:{placePrediction?:Prediction}[]};
 type Venue={name:string;address:string};
 const text=(value:unknown)=>(typeof value==='string'&&value.length<=300?value.trim():'');
+const nameWords=(value:string)=>value.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'').match(/[\p{L}\p{N}]+/gu)||[];
 
 export function eventAddressHandler(admin:SupabaseService,config:Config,fetcher:typeof fetch=fetch){
  const headers={
@@ -57,11 +58,15 @@ export function eventAddressHandler(admin:SupabaseService,config:Config,fetcher:
    const payload:ProviderResponse=await upstream.json();
    if(payload.suggestions!==undefined&&!Array.isArray(payload.suggestions))return json('unavailable');
    if(venueSearch){
+    const queryWords=nameWords(query);
     const matches=(payload.suggestions||[]).flatMap(item=>{
      const place=item?.placePrediction;
      const name=text(place?.structuredFormat?.mainText?.text),address=text(place?.structuredFormat?.secondaryText?.text);
-     return name&&address?[{name,address,id:place?.placeId}]:[];
-    }).slice(0,5);
+     if(!name||!address)return [];
+     const words=nameWords(name);
+     const rank=queryWords.every(word=>words.includes(word))?words.length:Number.MAX_SAFE_INTEGER;
+     return [{name,address,id:place?.placeId,rank}];
+    }).sort((first,second)=>first.rank-second.rank).slice(0,5);
     const top=matches[0];
     // Autocomplete can omit the street number for a venue. Only complete the
     // best match, and reserve a second slot before sending the detail request.
