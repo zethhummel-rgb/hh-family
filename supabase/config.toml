@@ -24,6 +24,10 @@ verify_jwt = false
 [functions.event-guests]
 verify_jwt = false
 
+# The function verifies the active Supabase session and HH membership before calling Google.
+[functions.event-addresses]
+verify_jwt = false
+
 # Visitors use the public request form before they have an HH account.
 [functions.request-pilot-invitation]
 verify_jwt = false

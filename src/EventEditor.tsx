@@ -1,11 +1,12 @@
 import {useTutorialPractice} from './InteractiveTutorial';
 import InputCardHandle from './InputCardHandle';
+import EventLocationInput from './EventLocationInput';
 import EventGuests,{EventGuestContext} from './EventGuests';
 import {useUnsavedChanges,useModalScrollLock} from './useUnsavedChanges';
 import {reminderLabel} from '../supabase/functions/google-calendar/reminders';
 import {selectedPeople,personLabel,isUnassigned,type PersonProfile} from './people';
 import {useContext,useEffect,useId,useRef,useState} from 'react';
-import {Bell,BellPlus,Check,MapPin,Repeat2,Timer,Trash2} from 'lucide-react';
+import {Bell,BellPlus,Check,Repeat2,Timer,Trash2} from 'lucide-react';
 import {type FamilyEvent,type EventDraft,movedEventEnd,dayKey,eventDate,eventEndDate,eventRequestId,shiftDay,timePart,zonedISO} from './calendarData';
 import {buildRecurrence,readRecurrence,repeatDescription,type RepeatFrequency,type RepeatOptions} from '../supabase/functions/google-calendar/recurrence';
 type Props={event:FamilyEvent|null;date:string;profiles:PersonProfile[];connected:boolean;onClose:()=>void;onSave:(draft:EventDraft,current:FamilyEvent|null,requestId:string)=>Promise<FamilyEvent|undefined>;onDelete:(event:FamilyEvent)=>Promise<void>;onLoadSeries:(event:FamilyEvent)=>Promise<FamilyEvent>};
@@ -77,7 +78,10 @@ export default function EventEditor({event,date,profiles,connected,onClose,onSav
     {error&&<div className="error" role="alert" ref={errorTarget} tabIndex={-1}>{error}</div>}
     {connected&&<p className="event-context-note">Your Google calendar stays active until its HH transfer is verified.</p>}
     {event?.series_id&&<div className="series-scope"><label>Apply changes to<select value={scope} disabled={busy} onChange={e=>changeScope(e.target.value as 'occurrence'|'series')}><option value="occurrence">Only this occurrence</option><option value="series">The whole series</option></select></label><p className="field-help">{busy?'Loading.':scope==='series'?'Changes apply to every occurrence.':'Other dates in this series stay as they are.'} Switching reloads the saved details.</p></div>}
-    <div className="event-input-group event-basics"><input form={formId} aria-label="Event name" required disabled={busy} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Event name"/><label className="event-location-input"><MapPin size={17} aria-hidden="true"/><input form={formId} aria-label="Location (optional)" disabled={busy} maxLength={300} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Add location"/></label></div>
+    <div className="event-input-group event-basics">
+     <input form={formId} aria-label="Event name" required disabled={busy} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Event name"/>
+     <EventLocationInput formId={formId} value={location} disabled={busy} suggest={!tutorial.active} onChange={setLocation}/>
+    </div>
     {guestInvites&&!tutorial.active&&!connected&&current?.source!=='google'&&<EventGuests event={current} editor={{saveForm:!current||dirty?formId:undefined,series:!occurrenceOnly&&frequency!=='none',disabled:saving,onBusyChange:setGuestBusy}}/>}
     <form id={formId} ref={form} onSubmit={submit}><fieldset disabled={busy} className="event-fields">
      <div className="event-input-group event-schedule">
