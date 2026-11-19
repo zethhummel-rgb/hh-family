@@ -126,7 +126,7 @@ The final cutover controls in `household-native-cutover.sql` are inert until exp
 
 Apply the `event_address_quota` migration and deploy the `event-addresses` Edge Function before publishing the frontend. Enable Places API (New) on the Google Cloud project and set a Places-only `HH_GOOGLE_PLACES_API_KEY` separately in each Supabase project's Edge secrets. The key is used only by the server.
 
-The service reserves at most 50 Google Places requests per Pacific-time billing month in TEST and 8,500 in HH. These limits cover address autocomplete, venue autocomplete, and any address details needed for the top venue match. Keep the billing account’s other Maps usage in mind. The service counts each attempt and stops sending requests at the cap. Event locations can still be typed and saved. Venue suggestions show their name and address in the editor, and HH saves the user-entered location text. `node scripts/check-event-addresses.mjs` tests this request handling and the cap without contacting Google.
+The service reserves at most 50 Google Places requests per Pacific-time billing month in TEST and 8,500 in HH. Lookups for saved venues use the same counter and stop once it reaches 4,500 in HH because requesting the current venue name uses a different Google SKU. Keep the billing account’s other Maps usage in mind. HH saves the selected Place ID with the user’s text as a fallback. Manual entry and typed or selected street addresses keep working without a saved Place ID. `node scripts/check-event-addresses.mjs` tests request handling and the caps without contacting Google.
 
 ## One-time import from an existing Google calendar
 

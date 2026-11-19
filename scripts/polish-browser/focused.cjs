@@ -15,9 +15,9 @@ const exp=Math.floor(Date.now()/1000)+86400;
 const b64=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
 const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'authenticated',role:'authenticated',session_id:home}),'fixture'].join('.'),refresh_token:'fixture',expires_in:86400,expires_at:exp,token_type:'bearer',user};
 let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports=0;
-const addressLookups=[],savedEventLocations=[];
+const addressLookups=[],savedEvents=[];
 const suggestedStreet='12 Main Street, Example City, ON, Canada';
-const venueSuggestion={name:'Cornwall Community Hospital',address:'Example hospital address, Cornwall, ON'};
+const venueSuggestion={placeId:'fixture-venue-id',name:'John Gordon Construction',address:'Example venue address, Cornwall, ON'};
 const deleteHouseholdName='The Pilot’s Home';
 let deleteAttempts=0;
 let managedHomes=[
@@ -48,13 +48,19 @@ let managedHomes=[
    else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
    else if(table==='pilot_status')data={is_host:true};
    else if(table==='event-addresses'){
-    const {query}=req.postDataJSON();addressLookups.push(query);
+    const {query,placeId}=req.postDataJSON();if(query)addressLookups.push(query);
     data=query==='999 Limit'?{status:'paused',suggestions:[]}:
-     query==='Cornwall Hospital'?{status:'ok',suggestions:[],venues:[venueSuggestion]}:
+     query==='john gordon'||placeId===venueSuggestion.placeId?{status:'ok',suggestions:[],venues:[venueSuggestion]}:
      {status:'ok',suggestions:[suggestedStreet,'124 Main Street, Example City, ON, Canada']};
    }
-   else if(table==='household_events'&&req.method()==='POST'){
-    const {id,location}=req.postDataJSON();savedEventLocations.push(location);data=[{id}];
+   else if(table==='household_events'&&['POST','PATCH'].includes(req.method())){
+    const draft=req.postDataJSON();
+    if(req.method()==='POST'){savedEvents.push(draft);data=[{id:draft.id}]}
+    else{
+     const row=savedEvents.find(event=>event.id===u.searchParams.get('id')?.slice(3));
+     if(row)Object.assign(row,draft);
+     data=row?[{id:row.id}]:[];
+    }
    }
    else if(table==='admin_household_usage')data=[
     {household_id:home,last_used_at:'2026-11-15T19:28:00Z',last_sign_in_at:null},
@@ -74,7 +80,7 @@ let managedHomes=[
    else if(table==='household_members'){if(req.method()==='PATCH')Object.assign(member,req.postDataJSON());data=[member];}
    else if(table==='household_people')data=['Jamie Morgan','Riley Morgan','Casey Morgan'].map((display_name,i)=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa'+i,household_id:home,display_name,calendar_color:['#E78725','#467EB6','#C46B8C'][i],linked_user_id:null}));
    else if(table==='households')data={calendar_id:'',name:'Test Market Home'};
-   else if(['household_notes','household_meal_plans','household_meal_recipes','household_events','household_grocery_staples'].includes(table)){data=({household_notes:[note],household_meal_plans:[meal],household_meal_recipes:[{...meal,id:'99999999-9999-4999-8999-999999999999',title:'Camp stew'}],household_events:[event],household_grocery_staples:[staple]})[table];const id=u.searchParams.get('id')?.slice(3);if(id)data=data.filter(row=>row.id===id);}
+   else if(['household_notes','household_meal_plans','household_meal_recipes','household_events','household_grocery_staples'].includes(table)){data=({household_notes:[note],household_meal_plans:[meal],household_meal_recipes:[{...meal,id:'99999999-9999-4999-8999-999999999999',title:'Camp stew'}],household_events:[event,...savedEvents],household_grocery_staples:[staple]})[table];const id=u.searchParams.get('id')?.slice(3);if(id)data=data.filter(row=>row.id===id);}
    else if(table==='household_items'){if(failWrites&&['POST','PATCH'].includes(req.method())){await route.fulfill({status:503,json:{message:'Fixture unavailable'}});return;}
      const id=u.searchParams.get('id')?.slice(3),version=u.searchParams.get('reminder_version')?.slice(3);
      const match=products.filter(p=>(!id||p.id===id)&&(!version||p.reminder_version===Number(version))&&(!u.searchParams.get('kind')||p.kind===u.searchParams.get('kind').slice(3)));
@@ -165,15 +171,31 @@ let managedHomes=[
  await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
  await page.locator('.event-modal').waitFor({state:'detached'});
  await page.getByRole('button',{name:'Add event',exact:true}).click();
- await address.fill('Cornwall Hospital');
- const hospital=addressList.getByRole('option',{name:/Cornwall Community Hospital.*Example hospital address/s});
- await hospital.getByText(venueSuggestion.address,{exact:true}).waitFor();
- await hospital.click();
- assert.equal(await address.inputValue(),'Cornwall Hospital');
+ await address.fill('john gordon');
+ const business=addressList.getByRole('option',{name:/John Gordon Construction.*Example venue address/s});
+ await business.getByText(venueSuggestion.address,{exact:true}).waitFor();
+ await business.click();
+ assert.equal(await address.inputValue(),venueSuggestion.name);
  await page.locator('.event-venue-preview').getByText(venueSuggestion.address,{exact:true}).waitFor();
  await newEventTitle.fill('Venue suggestion fixture');
  await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
  await page.locator('.event-modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Month',exact:true}).click();
+ await page.locator('.day-cell.selected').click();
+ const venueEvent=page.getByRole('button',{name:/Venue suggestion fixture/}).first();
+ await venueEvent.scrollIntoViewIfNeeded();
+ await venueEvent.getByText(venueSuggestion.name,{exact:false}).waitFor();
+ await venueEvent.click();
+ await page.getByRole('dialog',{name:'Venue suggestion fixture'}).getByText(venueSuggestion.address,{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Edit',exact:true}).click();
+ await page.waitForFunction(expected=>document.querySelector('input[aria-label="Location (optional)"]')?.value===expected,venueSuggestion.name);
+ assert.equal(savedEvents[1].location_place_id,venueSuggestion.placeId);
+ assert.equal(savedEvents[1].location,'john gordon');
+ await page.getByRole('button',{name:'Change location',exact:true}).click();
+ await address.fill('Side entrance');
+ await page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await page.locator('.event-modal').waitFor({state:'detached'});
+ assert.equal(savedEvents[1].location_place_id,null);
  await page.getByRole('button',{name:'Add event',exact:true}).click();
  await address.fill('999 Limit');
  await page.getByText(/Address suggestions are paused until next month/).waitFor();
@@ -182,11 +204,11 @@ let managedHomes=[
  await newEventTitle.fill('Manual address fixture');
  await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
  await page.locator('.event-modal').waitFor({state:'detached'});
- assert.deepEqual(savedEventLocations,[suggestedStreet,'Cornwall Hospital','24 Manual Road, Unit 2']);
+ assert.deepEqual(savedEvents.map(event=>event.location),[suggestedStreet,'Side entrance','24 Manual Road, Unit 2']);
  assert.equal(addressLookups.length,requestsAtCutoff);
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Add event',exact:true}).click();
- pass('Location suggestions show venue names and addresses, support keyboard and touch, and preserve manual entry at the cutoff');
+ pass('Selecting a venue fills Location, survives reopening, and can be replaced with manual text; address entry still works at the cutoff');
  await page.getByLabel('Repeat',{exact:true}).selectOption('WEEKLY');assert(await page.getByLabel('Repeat every',{exact:true}).isVisible());await page.getByLabel('Repeat',{exact:true}).selectOption('none');assert.equal(await page.getByLabel('Repeat every',{exact:true}).count(),0);pass('Extra repeat fields appear only for repeating events');
  await page.getByLabel('No one selected',{exact:true}).check();assert(await page.getByRole('switch',{name:'30-minute alert',exact:true}).isDisabled());await page.getByLabel('Alex Morgan',{exact:true}).check();assert.equal(await page.getByLabel('No one selected',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Event reminder',{exact:true}).isDisabled(),false);await page.getByLabel('Jamie Morgan',{exact:true}).check();assert(await page.getByLabel('Alex Morgan',{exact:true}).isChecked());assert(await page.getByLabel('Jamie Morgan',{exact:true}).isChecked());await page.getByLabel('Everyone',{exact:true}).check();assert.equal(await page.getByLabel('Alex Morgan',{exact:true}).isChecked(),false);pass('Family chips support multiple people and restore alerts after No one');
  for(const viewport of [{width:320,height:568},{width:390,height:500},{width:390,height:844},{width:768,height:1024}]){
