@@ -2,16 +2,25 @@ import {MapPin} from 'lucide-react';
 import {useEffect,useId,useState} from 'react';
 import {isCurrentAuthClient,supabase} from './supabase';
 
-type LookupState={query:string;status:'ok'|'paused'|'rate_limited'|'unavailable';suggestions:string[]};
+type Venue={name:string;address:string};
+type Suggestion={kind:'address';address:string}|({kind:'venue'}&Venue);
+type LookupState={query:string;status:'ok'|'paused'|'rate_limited'|'unavailable';suggestions:Suggestion[]};
 type Props={formId:string;value:string;disabled:boolean;suggest:boolean;onChange:(value:string)=>void};
+function venueResult(value:unknown):value is Venue{
+ if(!value||typeof value!=='object')return false;
+ const venue=value as Record<string,unknown>;
+ return typeof venue.name==='string'&&venue.name.length>0&&venue.name.length<=300&&
+  typeof venue.address==='string'&&venue.address.length>0&&venue.address.length<=300;
+}
 
 export default function EventLocationInput({formId,value,disabled,suggest,onChange}:Props){
  const listId=useId();
  const [focused,setFocused]=useState(false),[edited,setEdited]=useState('');
  const [result,setResult]=useState<LookupState|null>(null),[active,setActive]=useState(-1);
+ const [selection,setSelection]=useState<{query:string;venue:Venue}|null>(null);
  const [paused,setPaused]=useState(false);
  const query=value.trim();
- const canSuggest=suggest&&!disabled&&focused&&query===edited&&query.length>=3&&/\d/u.test(query)&&/\p{L}/u.test(query);
+ const canSuggest=suggest&&!disabled&&focused&&query===edited&&query.length>=3&&/\p{L}/u.test(query);
  const suggestions=canSuggest&&result?.query===query?result.suggestions:[];
  const expanded=suggestions.length>0;
 
@@ -28,8 +37,10 @@ export default function EventLocationInput({formId,value,disabled,suggest,onChan
      setResult({query,status:'unavailable',suggestions:[]});return;
     }
     if(data.status==='paused')setPaused(true);
-    const suggestions:Array<string>=Array.isArray(data.suggestions)?
-     data.suggestions.filter((address:unknown):address is string=>typeof address==='string'&&address.length<=300).slice(0,5):[];
+    const suggestions:Suggestion[]=Array.isArray(data.venues)?
+     data.venues.filter(venueResult).slice(0,5).map((venue:Venue)=>({kind:'venue',name:venue.name,address:venue.address})):
+     Array.isArray(data.suggestions)?data.suggestions.filter((address:unknown):address is string=>typeof address==='string'&&address.length<=300)
+      .slice(0,5).map((address:string)=>({kind:'address',address})):[];
     setResult({query,status:data.status,suggestions});
    }catch{
     if(current)setResult({query,status:'unavailable',suggestions:[]});
@@ -43,9 +54,15 @@ export default function EventLocationInput({formId,value,disabled,suggest,onChan
   setEdited('');
   setActive(-1);
  }
- function choose(address:string){
+ function choose(suggestion:Suggestion){
   closeSuggestions();
-  onChange(address);
+  if(suggestion.kind==='venue'){
+   setSelection({query,venue:suggestion});
+   onChange(query);
+  }else{
+   setSelection(null);
+   onChange(suggestion.address);
+  }
  }
 
  return <div className="event-location">
@@ -56,7 +73,7 @@ export default function EventLocationInput({formId,value,disabled,suggest,onChan
     aria-expanded={suggest?expanded:undefined} aria-controls={expanded?listId:undefined}
     aria-activedescendant={expanded&&active>=0?listId+'-'+active:undefined}
     onFocus={()=>setFocused(true)} onBlur={()=>{setFocused(false);closeSuggestions()}}
-    onChange={event=>{onChange(event.target.value);setEdited(event.target.value.trim());setResult(null);setActive(-1)}}
+    onChange={event=>{onChange(event.target.value);setEdited(event.target.value.trim());setResult(null);setActive(-1);setSelection(null)}}
     onKeyDown={event=>{
      if(!expanded||event.nativeEvent.isComposing)return;
      if(event.key==='Escape'){
@@ -70,10 +87,17 @@ export default function EventLocationInput({formId,value,disabled,suggest,onChan
     }}/>
   </label>
   {expanded&&<div className="event-address-options">
-   <ul id={listId} role="listbox" aria-label="Suggested addresses">
-    {suggestions.map((address,index)=><li key={address} id={listId+'-'+index} role="option" aria-selected={index===active}
-     onPointerDown={event=>event.preventDefault()} onClick={()=>choose(address)}>{address}</li>)}
+   <ul id={listId} role="listbox" aria-label="Suggested locations">
+    {suggestions.map((suggestion,index)=><li key={suggestion.kind==='venue'?suggestion.name+' '+suggestion.address:suggestion.address}
+     id={listId+'-'+index} role="option" aria-selected={index===active}
+     onPointerDown={event=>event.preventDefault()} onClick={()=>choose(suggestion)}>
+     {suggestion.kind==='venue'?<span className="event-venue-label"><strong>{suggestion.name}</strong><span>{suggestion.address}</span></span>:suggestion.address}
+    </li>)}
    </ul>
+   <p translate="no">Google Maps</p>
+  </div>}
+  {selection?.query===query&&<div className="event-address-options event-venue-preview" role="status">
+   <span className="event-venue-label"><strong>{selection.venue.name}</strong><span>{selection.venue.address}</span></span>
    <p translate="no">Google Maps</p>
   </div>}
   {paused&&focused&&<p className="field-help event-address-help" role="status">Address suggestions are paused until next month. You can type the location.</p>}

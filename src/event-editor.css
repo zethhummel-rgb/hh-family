@@ -17,6 +17,9 @@
 .event-address-options li{display:flex;align-items:center;min-height:44px;padding:8px 10px;border-bottom:1px solid var(--line);color:var(--ink);font-size:14px;overflow-wrap:anywhere;cursor:pointer}
 .event-address-options li:hover,.event-address-options li[aria-selected="true"]{background:var(--theme-soft,#f2e9ec)}
 .event-address-options p{margin:0;padding:5px 10px;text-align:right;font:500 12px/1.35 Roboto,Arial,sans-serif;color:var(--ink)}
+.event-venue-label{display:grid;gap:3px;overflow-wrap:anywhere}
+.event-venue-label>span{color:var(--muted);font-size:13px}
+.event-venue-preview>.event-venue-label{padding:8px 10px;font-size:14px}
 .event-address-help{margin:0 0 8px}
 .compact-event-modal .event-date-row{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:center;gap:6px;min-height:50px;border-bottom:1px solid var(--line);padding:5px 0;font-size:13px}
 .compact-event-modal .event-date-controls{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:5px;min-width:0}

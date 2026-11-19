@@ -57,7 +57,7 @@ assert.equal((await call()).status,401);
 assert.equal((await call('expired')).status,401);
 assert.equal((await call('outsider',{query:'12 Main',actor:member})).status,403);
 assert.equal((await call('member',undefined,{origin:'https://untrusted.invalid'})).status,403);
-assert.equal((await call('member',{query:"Grandma's house"})).status,400);
+assert.equal((await call('member',{query:'123'})).status,400);
 assert.equal(providerCalls,0);
 const first=await call('member',{query:' 12 Main ',monthly_limit:8500,actor:other});
 assert.equal(first.headers.get('Cache-Control'),'no-store');
@@ -80,4 +80,31 @@ assert.equal(await sql("select requests from private.event_address_monthly_usage
 await db.exec('delete from public.household_members where user_id=\''+other+'\'');
 assert.equal(await reserve(other,3),'forbidden');
 await db.close();
-console.log('Event address checks passed: session and membership required, provider status sanitized, monthly cutoff and rate limit enforced, new billing month resets quota. Google was simulated.');
+let venueProviderCalls=0,venueSlots=2;
+const lookupVenue=eventAddressHandler({
+ ...admin,
+ rpc:async(name,{actor,monthly_limit})=>{
+  assert.equal(name,'reserve_event_address_request');assert.equal(actor,member);assert.equal(monthly_limit,50);
+  return {data:venueSlots-->0?'allowed':'paused',error:null};
+ }
+},{origin,apiKey:'fixture-api-key',monthlyLimit:50},async(url,request)=>{
+ venueProviderCalls++;
+ if(url.endsWith('/places:autocomplete')){
+  assert.deepEqual(JSON.parse(request.body),{input:'Cornwall Hospital',regionCode:'ca',languageCode:'en',includedRegionCodes:['ca']});
+  return Response.json({suggestions:[{placePrediction:{placeId:'venue-fixture',structuredFormat:{
+   mainText:{text:'Example Hospital'},secondaryText:{text:'Main Street, Example City, ON'}
+  }}}]});
+ }
+ assert.equal(url,'https://places.googleapis.com/v1/places/venue-fixture');
+ assert.equal(request.headers['X-Goog-FieldMask'],'formattedAddress');
+ return Response.json({formattedAddress:'12 Main Street, Example City, ON, Canada'});
+});
+const venueCall=()=>lookupVenue(new Request('https://fixture.invalid/event-addresses',{
+ method:'POST',headers:{origin,authorization:'Bearer member','content-type':'application/json'},body:JSON.stringify({query:'Cornwall Hospital'})
+}));
+assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[{name:'Example Hospital',address:'12 Main Street, Example City, ON, Canada'}]});
+assert.equal(venueProviderCalls,2);
+venueSlots=1;
+assert.deepEqual(await (await venueCall()).json(),{status:'ok',suggestions:[],venues:[{name:'Example Hospital',address:'Main Street, Example City, ON'}]});
+assert.equal(venueProviderCalls,3,'Venue details cannot make a Google request past the shared cutoff');
+console.log('Event location checks passed: membership, monthly cutoff, numbered addresses, venue names, and separately reserved venue detail lookups. Google was simulated.');

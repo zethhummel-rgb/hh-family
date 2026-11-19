@@ -17,6 +17,7 @@ const session={access_token:[b64({alg:'HS256',typ:'JWT'}),b64({exp,sub:uid,aud:'
 let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports=0;
 const addressLookups=[],savedEventLocations=[];
 const suggestedStreet='12 Main Street, Example City, ON, Canada';
+const venueSuggestion={name:'Cornwall Community Hospital',address:'Example hospital address, Cornwall, ON'};
 const deleteHouseholdName='The Pilot’s Home';
 let deleteAttempts=0;
 let managedHomes=[
@@ -48,7 +49,9 @@ let managedHomes=[
    else if(table==='pilot_status')data={is_host:true};
    else if(table==='event-addresses'){
     const {query}=req.postDataJSON();addressLookups.push(query);
-    data=query==='999 Limit'?{status:'paused',suggestions:[]}:{status:'ok',suggestions:[suggestedStreet,'124 Main Street, Example City, ON, Canada']};
+    data=query==='999 Limit'?{status:'paused',suggestions:[]}:
+     query==='Cornwall Hospital'?{status:'ok',suggestions:[],venues:[venueSuggestion]}:
+     {status:'ok',suggestions:[suggestedStreet,'124 Main Street, Example City, ON, Canada']};
    }
    else if(table==='household_events'&&req.method()==='POST'){
     const {id,location}=req.postDataJSON();savedEventLocations.push(location);data=[{id}];
@@ -140,7 +143,7 @@ let managedHomes=[
  await page.getByRole('button',{name:'Done',exact:true}).click();
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
  const address=page.getByRole('combobox',{name:'Location (optional)'});
- const addressList=page.getByRole('listbox',{name:'Suggested addresses'});
+ const addressList=page.getByRole('listbox',{name:'Suggested locations'});
  const newEventTitle=page.getByLabel('Event name',{exact:true});
  await page.setViewportSize({width:320,height:568});
  await address.fill('12 Main');
@@ -162,6 +165,16 @@ let managedHomes=[
  await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
  await page.locator('.event-modal').waitFor({state:'detached'});
  await page.getByRole('button',{name:'Add event',exact:true}).click();
+ await address.fill('Cornwall Hospital');
+ const hospital=addressList.getByRole('option',{name:/Cornwall Community Hospital.*Example hospital address/s});
+ await hospital.getByText(venueSuggestion.address,{exact:true}).waitFor();
+ await hospital.click();
+ assert.equal(await address.inputValue(),'Cornwall Hospital');
+ await page.locator('.event-venue-preview').getByText(venueSuggestion.address,{exact:true}).waitFor();
+ await newEventTitle.fill('Venue suggestion fixture');
+ await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
+ await page.locator('.event-modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:'Add event',exact:true}).click();
  await address.fill('999 Limit');
  await page.getByText(/Address suggestions are paused until next month/).waitFor();
  const requestsAtCutoff=addressLookups.length;
@@ -169,11 +182,11 @@ let managedHomes=[
  await newEventTitle.fill('Manual address fixture');
  await page.locator('.event-save-bar').getByRole('button',{name:'Add event'}).click();
  await page.locator('.event-modal').waitFor({state:'detached'});
- assert.deepEqual(savedEventLocations,[suggestedStreet,'24 Manual Road, Unit 2']);
+ assert.deepEqual(savedEventLocations,[suggestedStreet,'Cornwall Hospital','24 Manual Road, Unit 2']);
  assert.equal(addressLookups.length,requestsAtCutoff);
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Add event',exact:true}).click();
- pass('Phone address suggestions support touch and keyboard selection, and an event saves with a typed address after the monthly cutoff');
+ pass('Location suggestions show venue names and addresses, support keyboard and touch, and preserve manual entry at the cutoff');
  await page.getByLabel('Repeat',{exact:true}).selectOption('WEEKLY');assert(await page.getByLabel('Repeat every',{exact:true}).isVisible());await page.getByLabel('Repeat',{exact:true}).selectOption('none');assert.equal(await page.getByLabel('Repeat every',{exact:true}).count(),0);pass('Extra repeat fields appear only for repeating events');
  await page.getByLabel('No one selected',{exact:true}).check();assert(await page.getByRole('switch',{name:'30-minute alert',exact:true}).isDisabled());await page.getByLabel('Alex Morgan',{exact:true}).check();assert.equal(await page.getByLabel('No one selected',{exact:true}).isChecked(),false);assert.equal(await page.getByLabel('Event reminder',{exact:true}).isDisabled(),false);await page.getByLabel('Jamie Morgan',{exact:true}).check();assert(await page.getByLabel('Alex Morgan',{exact:true}).isChecked());assert(await page.getByLabel('Jamie Morgan',{exact:true}).isChecked());await page.getByLabel('Everyone',{exact:true}).check();assert.equal(await page.getByLabel('Alex Morgan',{exact:true}).isChecked(),false);pass('Family chips support multiple people and restore alerts after No one');
  for(const viewport of [{width:320,height:568},{width:390,height:500},{width:390,height:844},{width:768,height:1024}]){

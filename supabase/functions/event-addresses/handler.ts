@@ -5,14 +5,20 @@ type SupabaseService={
  rpc:(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
 };
 type Config={origin:string;apiKey:string;monthlyLimit:number};
-type ProviderResponse={suggestions?:{placePrediction?:{text?:{text?:unknown}}}[]};
+type TextValue={text?:unknown};
+type Prediction={placeId?:unknown;text?:TextValue;structuredFormat?:{mainText?:TextValue;secondaryText?:TextValue}};
+type ProviderResponse={suggestions?:{placePrediction?:Prediction}[]};
+type Venue={name:string;address:string};
+const text=(value:unknown)=>(typeof value==='string'&&value.length<=300?value.trim():'');
 
 export function eventAddressHandler(admin:SupabaseService,config:Config,fetcher:typeof fetch=fetch){
  const headers={
   'Access-Control-Allow-Origin':config.origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info',
   'Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'
  };
- const json=(status:string,suggestions:string[]=[],code=200)=>Response.json({status,suggestions},{status:code,headers});
+ const json=(status:string,suggestions:string[]=[],code=200,venues?:Venue[])=>Response.json(
+  {status,suggestions,...(venues?{venues}:{})},{status:code,headers}
+ );
  return async(req:Request)=>{
   if(req.headers.get('origin')!==config.origin)return json('forbidden',[],403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
@@ -29,27 +35,51 @@ export function eventAddressHandler(admin:SupabaseService,config:Config,fetcher:
    try{input=JSON.parse(raw)?.query}catch{return json('invalid',[],400)}
    if(typeof input!=='string')return json('invalid',[],400);
    const query=input.trim();
-   if(query.length<3||query.length>300||!/\d/u.test(query)||!/\p{L}/u.test(query)||/[\x00-\x1f\x7f]/u.test(query))return json('invalid',[],400);
-   const reservation=await admin.rpc('reserve_event_address_request',{actor:data.user.id,monthly_limit:config.monthlyLimit});
+   if(query.length<3||query.length>300||!/\p{L}/u.test(query)||/[\x00-\x1f\x7f]/u.test(query))return json('invalid',[],400);
+   const venueSearch=!/^#?\s*\d/u.test(query);
+   const actor=data.user.id;
+   const reserve=()=>admin.rpc('reserve_event_address_request',{actor,monthly_limit:config.monthlyLimit});
+   const reservation=await reserve();
    if(reservation.error)return json('unavailable');
    if(reservation.data==='forbidden')return json('forbidden',[],403);
    if(reservation.data==='paused'||reservation.data==='rate_limited')return json(reservation.data);
    if(reservation.data!=='allowed')return json('unavailable');
 
-   // One provider request per reservation. No automatic retries or Place Details requests.
+   const apiHeaders={'X-Goog-Api-Key':config.apiKey};
    const upstream=await fetcher(placesUrl,{
     method:'POST',redirect:'error',signal:AbortSignal.timeout(4000),headers:{
-     'Content-Type':'application/json','X-Goog-Api-Key':config.apiKey,'X-Goog-FieldMask':'suggestions.placePrediction.text.text'
+     ...apiHeaders,'Content-Type':'application/json','X-Goog-FieldMask':venueSearch?
+      'suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat':'suggestions.placePrediction.text.text'
     },
-    body:JSON.stringify({input:query,regionCode:'ca',languageCode:'en',includedPrimaryTypes:addressTypes})
+    body:JSON.stringify({input:query,regionCode:'ca',languageCode:'en',...(venueSearch?{includedRegionCodes:['ca']}:{includedPrimaryTypes:addressTypes})})
    });
    if(!upstream.ok)return json('unavailable');
    const payload:ProviderResponse=await upstream.json();
    if(payload.suggestions!==undefined&&!Array.isArray(payload.suggestions))return json('unavailable');
-   const suggestions=(payload.suggestions||[]).flatMap(item=>{
-    const address=item?.placePrediction?.text?.text;
-    return typeof address==='string'&&address.trim()&&address.length<=300?[address.trim()]:[];
-   });
+   if(venueSearch){
+    const matches=(payload.suggestions||[]).flatMap(item=>{
+     const place=item?.placePrediction;
+     const name=text(place?.structuredFormat?.mainText?.text),address=text(place?.structuredFormat?.secondaryText?.text);
+     return name&&address?[{name,address,id:place?.placeId}]:[];
+    }).slice(0,5);
+    const top=matches[0];
+    // Autocomplete can omit the street number for a venue. Only complete the
+    // best match, and reserve a second slot before sending the detail request.
+    if(top&&!/^\d+\p{L}?\s+\p{L}/u.test(top.address)&&typeof top.id==='string'&&/^[A-Za-z0-9_-]{1,300}$/.test(top.id)){
+     try{
+      const detailSlot=await reserve();
+      if(!detailSlot.error&&detailSlot.data==='allowed'){
+       const details=await fetcher('https://places.googleapis.com/v1/places/'+encodeURIComponent(top.id),{
+        redirect:'error',signal:AbortSignal.timeout(2500),headers:{...apiHeaders,'X-Goog-FieldMask':'formattedAddress'}
+       });
+       if(details.ok)top.address=text((await details.json()).formattedAddress)||top.address;
+      }
+     }catch{/* The autocomplete result is still available. */}
+    }
+    const venues=[...new Map(matches.map(({name,address})=>[name+'\0'+address,{name,address}])).values()];
+    return json('ok',[],200,venues);
+   }
+   const suggestions=(payload.suggestions||[]).map(item=>text(item?.placePrediction?.text?.text)).filter(Boolean);
    return json('ok',[...new Set(suggestions)].slice(0,5));
   }catch{return json('unavailable')}
  };
