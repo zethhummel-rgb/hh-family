@@ -138,12 +138,13 @@ $$;
 revoke all on function private.personal_calendar_two_way(text,jsonb),public.personal_calendar_two_way(text,jsonb) from public,anon,authenticated;
 grant execute on function private.personal_calendar_two_way(text,jsonb),public.personal_calendar_two_way(text,jsonb) to service_role;
 
--- The TEST project has a worker credential but uses a separate endpoint from
--- live HH. Schedule only connections whose owners opted into this pilot.
-create function private.dispatch_test_calendar_two_way() returns bigint
+-- Schedule only active two-way connections on the live HH project.
+create function private.dispatch_personal_calendar_two_way() returns bigint
 language plpgsql security definer set search_path='' as $$
 declare item record; credential text; dispatched bigint:=0;
 begin
+ if not exists(select 1 from vault.decrypted_secrets
+  where name='home_together_api_url' and decrypted_secret='https://njpdqiwrwgoothkstoql.supabase.co') then return 0; end if;
  select decrypted_secret into credential from vault.decrypted_secrets where name='hummel_push_cron';
  if credential is null then return 0; end if;
  for item in select household_id,user_id from private.personal_calendar_connections c
@@ -151,7 +152,7 @@ begin
    and private.personal_calendar_ready(c.household_id)
   order by c.next_attempt_at,c.id limit 10
  loop
-  perform net.http_post(url:='https://ybizqfghnplcxlmlhvyn.supabase.co/functions/v1/google-calendar',
+  perform net.http_post(url:='https://njpdqiwrwgoothkstoql.supabase.co/functions/v1/google-calendar',
    headers:=jsonb_build_object('Content-Type','application/json','x-hummel-cron',credential),
    body:=jsonb_build_object('action','personal_sync','householdId',item.household_id,'userId',item.user_id),
    timeout_milliseconds:=30000);
@@ -159,6 +160,6 @@ begin
  end loop;
  return dispatched;
 end;$$;
-revoke all on function private.dispatch_test_calendar_two_way() from public,anon,authenticated;
-select cron.schedule('hh-test-google-two-way','* * * * *','select private.dispatch_test_calendar_two_way();');
+revoke all on function private.dispatch_personal_calendar_two_way() from public,anon,authenticated;
+select cron.schedule('hh-google-two-way','* * * * *','select private.dispatch_personal_calendar_two_way();');
 notify pgrst,'reload schema';

@@ -17,7 +17,7 @@ revoke all on function private.clear_google_calendar_selection() from public,ano
 create trigger clear_google_calendar_selection after update of selection_secret_id or delete on private.personal_calendar_states
  for each row execute function private.clear_google_calendar_selection();
 
-create function private.test_google_existing_calendar(action text,payload jsonb) returns jsonb
+create function private.personal_google_calendar_setup(action text,payload jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare
  hid uuid:=(payload->>'householdId')::uuid;
@@ -87,19 +87,19 @@ begin
  return '{}'::jsonb;
 end;$$;
 
-create function public.test_google_existing_calendar(action text,payload jsonb) returns jsonb
+create function public.personal_google_calendar_setup(action text,payload jsonb) returns jsonb
 language sql security invoker set search_path='' as $$
- select private.test_google_existing_calendar(action,payload);
+ select private.personal_google_calendar_setup(action,payload);
 $$;
-revoke all on function private.test_google_existing_calendar(text,jsonb),public.test_google_existing_calendar(text,jsonb)
+revoke all on function private.personal_google_calendar_setup(text,jsonb),public.personal_google_calendar_setup(text,jsonb)
  from public,anon,authenticated;
-grant execute on function private.test_google_existing_calendar(text,jsonb),public.test_google_existing_calendar(text,jsonb)
+grant execute on function private.personal_google_calendar_setup(text,jsonb),public.personal_google_calendar_setup(text,jsonb)
  to service_role;
 
-create function private.expire_test_google_calendar_choices() returns void
+create function private.expire_google_calendar_choices() returns void
 language sql security definer set search_path='' as $$
  delete from private.personal_calendar_states where source_existing and expires_at<=now();
 $$;
-revoke all on function private.expire_test_google_calendar_choices() from public,anon,authenticated;
-select cron.schedule('hh-test-google-picker-cleanup','*/5 * * * *','select private.expire_test_google_calendar_choices();');
+revoke all on function private.expire_google_calendar_choices() from public,anon,authenticated;
+select cron.schedule('hh-google-picker-cleanup','*/5 * * * *','select private.expire_google_calendar_choices();');
 notify pgrst,'reload schema';

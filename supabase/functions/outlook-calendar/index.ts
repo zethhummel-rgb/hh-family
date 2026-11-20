@@ -2,16 +2,15 @@ import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 import {createGraph,graphId,OutlookProblem} from './graph.ts';
 import {syncEvents} from './sync.ts';
 
-const project='https://ybizqfghnplcxlmlhvyn.supabase.co';
-const testSite='https://zethhummel-rgb.github.io/hummel-home/';
-const origin=new URL(testSite).origin;
+const project='https://njpdqiwrwgoothkstoql.supabase.co';
+const app='https://zethhummel-rgb.github.io/hh-family/';
+const origin=new URL(app).origin;
 const endpoint=project+'/functions/v1/outlook-calendar';
 const callback=endpoint+'/callback';
 const microsoft='https://login.microsoftonline.com/consumers/oauth2/v2.0/';
 const scope='https://graph.microsoft.com/User.Read https://graph.microsoft.com/Calendars.ReadWrite offline_access';
-const clientId=Deno.env.get('TEST_OUTLOOK_CLIENT_ID');
-const clientSecret=Deno.env.get('TEST_OUTLOOK_CLIENT_SECRET');
-const tester=Deno.env.get('TEST_OUTLOOK_TEST_EMAIL')?.trim().toLowerCase();
+const clientId=Deno.env.get('HH_OUTLOOK_CLIENT_ID');
+const clientSecret=Deno.env.get('HH_OUTLOOK_CLIENT_SECRET');
 const serviceKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const admin=Deno.env.get('SUPABASE_URL')===project&&serviceKey?
  createClient(project,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}}):null;
@@ -49,7 +48,7 @@ function returnToSettings(request:Request) {
  const received=new URL(request.url);
  const state=received.searchParams.get('state')||'',code=received.searchParams.get('code')||'';
  const ok=secretPattern.test(state)&&code.length>0&&code.length<=4096&&!received.searchParams.has('error');
- const target=new URL(testSite);
+ const target=new URL(app);
  target.searchParams.set('outlook_calendar',ok?'return':'denied');
  if(ok)target.hash=new URLSearchParams({outlook_state:state,outlook_code:code}).toString();
  return new Response(null,{status:303,headers:{...headers,Location:target.href}});
@@ -71,11 +70,11 @@ Deno.serve(async request=>{
   if(!body||typeof body!=='object'||Array.isArray(body))return reply({error:'Invalid request.'},400);
  }catch{return reply({error:'Invalid request.'},400)}
  const {action,householdId}=body;
- if(!uuid(householdId))return reply({error:'Choose a TEST household.'},400);
+ if(!uuid(householdId))return reply({error:'Choose an HH household.'},400);
  const cron=action==='scheduled';
  let userId:unknown;
  if(cron) {
-  if(!clientId||!clientSecret||!tester)return reply({error:'Outlook sync is unavailable.'},404);
+  if(!clientId||!clientSecret)return reply({error:'Outlook sync is unavailable.'},404);
   const supplied=request.headers.get('x-hummel-cron')||'';
   if(requestOrigin||!supplied)return reply({error:'Not authorized.'},403);
   const result=await admin.rpc('push_service',{action:'secrets',payload:{}});
@@ -83,27 +82,27 @@ Deno.serve(async request=>{
   userId=body.userId;
   if(!uuid(userId))return reply({error:'Invalid request.'},400);
   const actor=await admin.auth.admin.getUserById(userId);
-  if(actor.data.user?.email?.toLowerCase()!==tester||!actor.data.user?.email_confirmed_at)return reply({error:'Not authorized.'},403);
+  if(!actor.data.user?.email_confirmed_at)return reply({error:'Not authorized.'},403);
  }else {
   const session=request.headers.get('authorization')?.match(/^Bearer (\S+)$/i)?.[1];
   if(!session)return reply({error:'Sign in to connect Outlook.'},401);
   const actor=await admin.auth.getUser(session);
   if(actor.error||!actor.data.user)return reply({error:'Sign in to connect Outlook.'},401);
-  if(!clientId||!clientSecret||!tester||actor.data.user.email?.toLowerCase()!==tester||!actor.data.user.email_confirmed_at)
+  if(!clientId||!clientSecret||!actor.data.user.email_confirmed_at)
    return action==='status'?reply({available:false}):reply({error:'Outlook sync is unavailable for this account.'},403);
   userId=actor.data.user.id;
  }
  const membership=await admin.from('household_members').select('user_id').eq('household_id',householdId).eq('user_id',userId).maybeSingle();
- if(membership.error||!membership.data)return reply({error:'This TEST household is unavailable.'},403);
+ if(membership.error||!membership.data)return reply({error:'This household is unavailable.'},403);
  const db=async(action:string,payload:Record<string,unknown>={},name='outlook_calendar')=>{
   const result=await admin.rpc(name,{action,payload:{...payload,householdId,userId}});
   if(result.error) {
    const message=result.error.message;
-   const visible=['Choose a calendar from the list.','Reconnect the same Outlook calendar for this trial.',
-    'This Outlook calendar is already linked to a TEST account.','Calendar sync is running. Try again in a moment.',
-    'This TEST account already has an Outlook calendar.','Connect Outlook again to choose a calendar.',
+   const visible=['Choose a calendar from the list.','Reconnect the same Outlook calendar.',
+    'This Outlook calendar is already linked to an HH account.','Calendar sync is running. Try again in a moment.',
+    'This HH account already has an Outlook calendar.','Connect Outlook again to choose a calendar.',
     'An Outlook calendar is already being set up. Try again in a moment.'];
-   throw new OutlookProblem('retry',visible.includes(message)?message:'The TEST calendar could not finish this request.');
+   throw new OutlookProblem('retry',visible.includes(message)?message:'The Outlook calendar could not finish this request.');
   }
   return result.data;
  };
@@ -117,7 +116,7 @@ Deno.serve(async request=>{
     await db('authorize',{stateHash:await hex(state),verifier});
     const authorize=new URL(microsoft+'authorize');
     authorize.search=new URLSearchParams({client_id:clientId!,response_type:'code',redirect_uri:callback,response_mode:'query',
-     scope,state,code_challenge:encode(await digest(verifier)),code_challenge_method:'S256',prompt:'select_account',login_hint:tester!}).toString();
+     scope,state,code_challenge:encode(await digest(verifier)),code_challenge_method:'S256',prompt:'select_account'}).toString();
     return reply({url:authorize.href});
    }
    case 'complete': {
@@ -131,8 +130,7 @@ Deno.serve(async request=>{
     const graph=createGraph(token.access_token,Date.now()+20000);
     stage='profile';
     const identity=await graph.identity();
-    if(!identity||!graphId(identity.id)||![identity.mail,identity.userPrincipalName].some(value=>value?.toLowerCase()===tester))
-     return reply({error:'Choose the Microsoft account that matches your HH TEST email.'},403);
+    if(!identity||!graphId(identity.id))return reply({error:'Microsoft could not verify this Outlook account.'},403);
     if(!token.refresh_token)return reply({error:'Microsoft did not allow background sync. Connect Outlook again.'},400);
     stage='calendar-list';
     const calendars=await graph.calendars();
@@ -177,6 +175,6 @@ Deno.serve(async request=>{
   }
  }catch(error){
   if(action==='complete')console.warn('Outlook authorization could not finish',stage,error instanceof OutlookProblem?error.issue:'request');
-  return reply({error:error instanceof OutlookProblem?error.message:'Outlook could not complete the TEST request.'},409);
+  return reply({error:error instanceof OutlookProblem?error.message:'Outlook could not complete this request.'},409);
  }
 });

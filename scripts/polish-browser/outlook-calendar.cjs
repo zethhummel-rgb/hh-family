@@ -46,7 +46,7 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
   const googleCalls=[];
   let googleExisting=false;
   let status={available:true,active:false};
-  let googleStatus={available:true,configured:true,connected:false,status:'off'};
+  let googleStatus={available:true,configured:true,twoWayAvailable:true,connected:false,status:'off'};
   setFixtureHandler(async route=>{
    const req=route.request(),target=new URL(req.url()),resource=target.pathname.split('/').pop();
    let data=[];
@@ -93,7 +93,7 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
     }
     if(payload?.action==='personal_disconnect'){
      googleCalls.push(payload.action);
-     googleStatus={available:true,configured:true,connected:false,status:'off'};
+     googleStatus={available:true,configured:true,twoWayAvailable:true,connected:false,status:'off'};
     }
     data=payload?.action==='personal_status'?googleStatus:{};
    }else if(target.pathname.startsWith('/auth/'))data=user;

@@ -32,8 +32,8 @@ await db.exec(`
 `);
 await db.exec(read('database/native-calendar-repeats.sql'));
 await db.exec(read('database/event-notification-toggle.sql'));
-for(const file of ['20261120142442_test_outlook_calendar.sql','20261120150942_test_outlook_share_hh_events.sql',
- '20261120151200_test_outlook_create_family_calendar.sql','20261120162100_test_outlook_repeating_events.sql'])await db.exec(read('supabase/migrations/'+file));
+for(const file of ['20261120142442_outlook_calendar.sql','20261120150942_outlook_share_hh_events.sql',
+ '20261120151200_outlook_create_family_calendar.sql','20261120162100_outlook_repeating_events.sql'])await db.exec(read('supabase/migrations/'+file));
 
 const householdId='10000000-0000-4000-8000-000000000001';
 const userId='10000000-0000-4000-8000-000000000002';

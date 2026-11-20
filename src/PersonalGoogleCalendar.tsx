@@ -1,11 +1,10 @@
 import {useEffect,useId,useState} from 'react';
 import {googleRequest} from './calendarData';
 import {completePersonalCalendarReturn} from './personalCalendarReturn';
-import {testEnvironment} from './config';
 import CalendarSetupChoices from './CalendarSetupChoices';
 
 type Connection={
- configured:boolean;available:boolean;usesExistingCopy:boolean;connected:boolean;
+ configured:boolean;available:boolean;twoWayAvailable?:boolean;usesExistingCopy:boolean;connected:boolean;
  status:'off'|'pending'|'up_to_date'|'reconnect'|'needs_attention'|'retry';
  twoWay?:{enabled:boolean;ready:boolean};
  existingSource?:boolean;calendarName?:string;choices?:{id:string;name:string}[];
@@ -87,7 +86,7 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult,
  if(connection?.usesExistingCopy)return null;
  return <div className="settings-detail-card settings-calendar-card">
   <h3>My Google Calendar</h3>
-  {(!testEnvironment||connection?.connected)&&!connection?.choices&&<p>{connection?.existingSource?
+  {(connection&&!connection.twoWayAvailable||connection?.connected)&&!connection?.choices&&<p>{connection?.existingSource?
    <><strong>{connection.calendarName}</strong> · Syncing both ways</>:connection?.twoWay?.enabled?
    'Edits and deletions to one-time events and supported repeating events sync both ways. This also works in Outlook when it shows the connected Google calendar.':
    connection?.connected?'Find the calendar HH created under My calendars in Google Calendar.':
@@ -112,7 +111,7 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult,
    <button type="button" className="text-button" disabled={busy} onClick={()=>void finishExisting(true)}>Cancel Google connection</button>
   </form>}
   {connection?.configured&&connection.available&&!confirmDisconnect&&!connection.choices&&!(onSetupComplete&&connection.connected)&&(
-   testEnvironment&&!connection.connected?
+   connection.twoWayAvailable&&!connection.connected?
     <CalendarSetupChoices disabled={busy} onChoose={calendar=>void connect(calendar==='new'?'two_way_copy_start':'existing_start')}/>:
     <button type="button" className="button soft wide" disabled={busy} onClick={()=>void connect(connection.existingSource?'existing_start':'start')}>
      {connection.connected?'Reconnect my Google Calendar':'Connect my Google Calendar'}

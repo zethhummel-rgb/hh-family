@@ -1,4 +1,4 @@
--- TEST calendar connections only. Keep household event identities stable.
+-- Keep existing household event identities stable while syncing series.
 create table private.google_calendar_pending_occurrences (
  connection_id uuid not null references private.personal_calendar_connections(id) on delete cascade,
  google_id text not null,

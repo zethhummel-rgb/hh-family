@@ -150,7 +150,7 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
   const cursor=personalUserId&&testTwoWay?await inbound('cursor',{includeRepeating:true}):null;
   let existingSource=false;
   if(cursor){
-   const mode=await admin.rpc('test_google_existing_calendar',{action:'options',payload:{householdId:hid,userId:personalUserId}});
+   const mode=await admin.rpc('personal_google_calendar_setup',{action:'options',payload:{householdId:hid,userId:personalUserId}});
    if(mode.error)throw new CopyError('retry');
    existingSource=mode.data?.existingSource===true;
   }

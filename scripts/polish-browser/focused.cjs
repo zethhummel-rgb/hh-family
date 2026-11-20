@@ -67,7 +67,7 @@ let managedHomes=[
    else if(table==='google-calendar'){
     const body=req.postDataJSON();
     if(body.action==='status')data={configured:true,connected:false,nativeReady:true,googleConnected:false};
-    if(body.action==='personal_status')data={available:true,configured:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off',...(personalCalendarConnected?{twoWay:{enabled:twoWayEnabled,ready:twoWayReady}}:{})};
+    if(body.action==='personal_status')data={available:true,configured:true,twoWayAvailable:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off',...(personalCalendarConnected?{twoWay:{enabled:twoWayEnabled,ready:twoWayReady}}:{})};
     if(body.action==='personal_two_way_set'){twoWayEnabled=body.enabled;twoWayReady=false;data={enabled:twoWayEnabled,ready:twoWayReady}}
     if(body.action==='personal_two_way_sync'){assert.equal(twoWayEnabled,true);twoWayReady=true;data={enabled:true,ready:true}}
     if(body.action==='personal_two_way_copy_start')data={url:'https://accounts.google.com/o/oauth2/v2/auth?state='+personalCalendarState};

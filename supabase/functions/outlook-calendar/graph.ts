@@ -117,7 +117,7 @@ function utc(value:OutlookEvent['start']):string|null {
 }
 function day(value:string):string|null {
  const date=value.slice(0,10);
- // Outlook all-day entries for the pilot must represent UTC or Toronto
+ // Outlook all-day entries must represent UTC or Toronto
  // midnight. Leave other zones alone rather than shift a family's dates.
  return value.slice(11)==='00:00:00.000Z'||value===nativeInstant(date,'00:00')?date:null;
 }

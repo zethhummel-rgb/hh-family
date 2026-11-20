@@ -200,7 +200,7 @@ assert.equal(await scalar('select count(*)::int from vault.decrypted_secrets whe
 await assert.rejects(personal('check_lease',member,{lease:remove.lease}),/membership/);
 assert.equal(await scalar('select count(*)::int from private.google_calendar_connections where household_id=$1',[b]),1);
 console.log('Personal calendar checks passed: two accounts, OAuth state isolation and replay, private credentials, separate queues, retries, reconnect, disconnect, and membership cleanup.');
-for(const path of ['20261119120746_event_venue_selection.sql','20261120130526_test_google_calendar_two_way.sql','20261120162000_test_google_repeating_events.sql']){
+for(const path of ['20261119120746_event_venue_selection.sql','20261120130526_google_calendar_two_way.sql','20261120162000_google_repeating_events.sql']){
  await db.exec(fs.readFileSync(new URL('../supabase/migrations/'+path,import.meta.url),'utf8'));
 }
 const pilot='55555555-5555-4555-8555-555555555555';
@@ -217,7 +217,9 @@ assert.equal(await scalar("select has_function_privilege('authenticated','public
 await assert.rejects(twoWay('status',other),/unavailable/);
 assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
 await twoWay('set',pilotOwner,{enabled:true});
-assert.equal(Number(await scalar('select private.dispatch_test_calendar_two_way()')),1,'Only an opted-in connection is scheduled');
+assert.equal(Number(await scalar('select private.dispatch_personal_calendar_two_way()')),0,'The worker never dispatches outside live HH');
+await db.query("update vault.decrypted_secrets set decrypted_secret=$1 where name='home_together_api_url'",['https://njpdqiwrwgoothkstoql.supabase.co']);
+assert.equal(Number(await scalar('select private.dispatch_personal_calendar_two_way()')),1,'Only an opted-in connection is scheduled');
 const localLease=(await namedService('personal_calendar_service','claim',pilotOwner)).lease;
 const pull=(action,extra={})=>twoWay(action,pilotOwner,{lease:localLease,...extra});
 await assert.rejects(twoWay('apply',pilotOwner,{lease:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'}),/lease/);
@@ -253,11 +255,11 @@ assert.deepEqual(await pull('cursor'),{syncToken:null,pageToken:null});
 await namedService('personal_calendar_service','finish',pilotOwner,{lease:localLease});
 await twoWay('set',pilotOwner,{enabled:false});
 assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
-console.log('TEST two-way calendar checks passed: opt-in, authorization, stable links, inbound add/edit/delete, replay, conflict handling, cursor reset, and other-member copies.');
-await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120151600_test_google_existing_calendar.sql',import.meta.url),'utf8'));
-await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120165407_test_google_two_way_setup.sql',import.meta.url),'utf8'));
-const existing=(action,uid,extra)=>namedService('test_google_existing_calendar',action,uid,extra);
-assert.equal(await scalar("select has_function_privilege('authenticated','public.test_google_existing_calendar(text,jsonb)','execute')"),false);
+console.log('Two-way calendar checks passed: opt-in, authorization, stable links, inbound add/edit/delete, replay, conflict handling, cursor reset, and other-member copies.');
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120151600_google_existing_calendar.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120165407_google_two_way_setup.sql',import.meta.url),'utf8'));
+const existing=(action,uid,extra)=>namedService('personal_google_calendar_setup',action,uid,extra);
+assert.equal(await scalar("select has_function_privilege('authenticated','public.personal_google_calendar_setup(text,jsonb)','execute')"),false);
 assert.equal((await existing('options',pilotOwner)).existingSource,false);
 const newState='f'.repeat(64),newVerifier='v'.repeat(43);
 await assert.rejects(existing('start',pilotOwner,{hash:newState,verifier:newVerifier}),/disconnect/i);
@@ -310,7 +312,7 @@ const setupAdmin={rpc:async(name,{action,payload})=>{
  catch(error){return {error}}
 }};
 const setupRequest=(action,extra={},fetcher)=>handlePersonalCalendar(setupAdmin,
- {action:'personal_'+action,householdId:pilot,...extra},pilotOwner,{...cfg,test:true},fetcher);
+ {action:'personal_'+action,householdId:pilot,...extra},pilotOwner,{...cfg,twoWayEnabled:true},fetcher);
 const createTwoWay=async(action)=>{
  const consent=new URL((await setupRequest(action)).url);
  assert.equal(consent.searchParams.get('scope'),approvedScope,'An HH-owned calendar uses the limited Google scope');

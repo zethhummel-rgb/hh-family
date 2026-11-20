@@ -152,7 +152,7 @@ const incomingCalls=[];
 const incomingAdmin={rpc:async(name,{action,payload})=>{
  incomingCalls.push([name,action,payload]);
  if(action==='claim')return {data:{lease:'new-lease',nativeReady:true,work:[]}};
- if(name==='test_google_existing_calendar'&&action==='options')return {data:{existingSource}};
+ if(name==='personal_google_calendar_setup'&&action==='options')return {data:{existingSource}};
  assert.equal(payload.lease,'new-lease');
  if(action==='credentials')return {data:{calendarId:'outlook-via-google',refreshToken:'test'}};
  if(action==='cursor')return {data:deltaCursor};

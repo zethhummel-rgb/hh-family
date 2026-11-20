@@ -68,10 +68,10 @@ begin
   select item into picked from jsonb_array_elements(staged.calendars) item where item->>'id'=payload->>'calendarId';
   if picked is null then raise exception 'Choose a calendar from the list.'; end if;
   if conn.id is not null and (conn.microsoft_id<>staged.microsoft_id or conn.calendar_id<>picked->>'id')
-   then raise exception 'Reconnect the same Outlook calendar for this trial.'; end if;
+   then raise exception 'Reconnect the same Outlook calendar.'; end if;
   if exists(select 1 from private.outlook_calendar_connections
    where microsoft_id=staged.microsoft_id and calendar_id=picked->>'id' and id is distinct from conn.id)
-   then raise exception 'This Outlook calendar is already linked to a TEST account.'; end if;
+   then raise exception 'This Outlook calendar is already linked to an HH account.'; end if;
   select vault.create_secret(decrypted_secret) into stored_secret from vault.decrypted_secrets where id=staged.secret_id;
   insert into private.outlook_calendar_connections(household_id,user_id,microsoft_id,calendar_id,calendar_name,secret_id)
    values(hid,uid,staged.microsoft_id,picked->>'id',picked->>'name',stored_secret)

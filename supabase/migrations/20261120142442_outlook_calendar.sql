@@ -141,10 +141,10 @@ begin
   select item into picked from jsonb_array_elements(staged.calendars) item where item->>'id'=payload->>'calendarId';
   if picked is null then raise exception 'Choose a calendar from the list.'; end if;
   if conn.id is not null and (conn.microsoft_id<>staged.microsoft_id or conn.calendar_id<>picked->>'id')
-   then raise exception 'Reconnect the same Outlook calendar for this trial.'; end if;
+   then raise exception 'Reconnect the same Outlook calendar.'; end if;
   if exists(select 1 from private.outlook_calendar_connections
    where microsoft_id=staged.microsoft_id and calendar_id=picked->>'id' and id is distinct from conn.id)
-   then raise exception 'This Outlook calendar is already linked to a TEST account.'; end if;
+   then raise exception 'This Outlook calendar is already linked to an HH account.'; end if;
   select vault.create_secret(decrypted_secret) into stored_secret from vault.decrypted_secrets where id=staged.secret_id;
   insert into private.outlook_calendar_connections(household_id,user_id,microsoft_id,calendar_id,calendar_name,secret_id)
    values(hid,uid,staged.microsoft_id,picked->>'id',picked->>'name',stored_secret)
@@ -272,15 +272,15 @@ $$;
 revoke all on function private.outlook_calendar(text,jsonb),public.outlook_calendar(text,jsonb) from public,anon,authenticated;
 grant execute on function private.outlook_calendar(text,jsonb),public.outlook_calendar(text,jsonb) to service_role;
 
-create function private.dispatch_test_outlook_calendar() returns void
+create function private.dispatch_outlook_calendar() returns void
 language plpgsql security definer set search_path='' as $$
 declare item record; credential text;
 begin
  delete from private.outlook_calendar_oauth where expires_at<=now();
  delete from private.outlook_calendar_picker where expires_at<=now();
- -- Enable dispatch explicitly in the TEST database before reading its credential.
+ -- Only use the worker credential on the live HH project.
  if not exists(select 1 from vault.decrypted_secrets
-  where name='hh_test_outlook_origin' and decrypted_secret='https://ybizqfghnplcxlmlhvyn.supabase.co') then return; end if;
+  where name='home_together_api_url' and decrypted_secret='https://njpdqiwrwgoothkstoql.supabase.co') then return; end if;
  select decrypted_secret into credential from vault.decrypted_secrets where name='hummel_push_cron';
  if credential is null then return; end if;
  for item in select household_id,user_id from private.outlook_calendar_connections
@@ -288,12 +288,12 @@ begin
    and (lease_until is null or lease_until<=now()) and private.personal_calendar_ready(household_id)
   order by next_attempt_at limit 5
  loop
-  perform net.http_post(url:='https://ybizqfghnplcxlmlhvyn.supabase.co/functions/v1/outlook-calendar',
+  perform net.http_post(url:='https://njpdqiwrwgoothkstoql.supabase.co/functions/v1/outlook-calendar',
    headers:=jsonb_build_object('Content-Type','application/json','x-hummel-cron',credential),
    body:=jsonb_build_object('action','scheduled','householdId',item.household_id,'userId',item.user_id),
    timeout_milliseconds:=55000);
  end loop;
 end;$$;
-revoke all on function private.dispatch_test_outlook_calendar() from public,anon,authenticated;
-select cron.schedule('hh-test-outlook-calendar','* * * * *','select private.dispatch_test_outlook_calendar();');
+revoke all on function private.dispatch_outlook_calendar() from public,anon,authenticated;
+select cron.schedule('hh-outlook-calendar','* * * * *','select private.dispatch_outlook_calendar();');
 notify pgrst,'reload schema';

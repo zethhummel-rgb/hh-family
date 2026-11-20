@@ -2,7 +2,7 @@
 -- and reconnects keep their existing sync preference.
 alter table private.personal_calendar_states add column enable_two_way_copy boolean not null default false;
 
-create function private.test_google_calendar_setup(action text,payload jsonb) returns jsonb
+create function private.google_calendar_setup_with_sync(action text,payload jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare
  hid uuid:=(payload->>'householdId')::uuid;
@@ -11,7 +11,7 @@ declare
  result jsonb;
 begin
  if action in ('start','start_copy','start_two_way_copy') then
-  result:=private.test_google_existing_calendar(
+  result:=private.personal_google_calendar_setup(
    case when action='start_two_way_copy' then 'start_copy' else action end,payload);
   update private.personal_calendar_states set enable_two_way_copy=action='start_two_way_copy'
    and not exists(select 1 from private.personal_calendar_connections where household_id=hid and user_id=uid)
@@ -31,13 +31,13 @@ begin
   end if;
   return result;
  end if;
- return private.test_google_existing_calendar(action,payload);
+ return private.personal_google_calendar_setup(action,payload);
 end;$$;
 
-revoke all on function private.test_google_calendar_setup(text,jsonb) from public,anon,authenticated;
-grant execute on function private.test_google_calendar_setup(text,jsonb) to service_role;
+revoke all on function private.google_calendar_setup_with_sync(text,jsonb) from public,anon,authenticated;
+grant execute on function private.google_calendar_setup_with_sync(text,jsonb) to service_role;
 
-create or replace function public.test_google_existing_calendar(action text,payload jsonb) returns jsonb
+create or replace function public.personal_google_calendar_setup(action text,payload jsonb) returns jsonb
 language sql security invoker set search_path='' as $$
- select private.test_google_calendar_setup(action,payload);
+ select private.google_calendar_setup_with_sync(action,payload);
 $$;

@@ -128,13 +128,11 @@ Apply the `event_address_quota` migration and deploy the `event-addresses` Edge 
 
 The service reserves at most 50 Google Places requests per Pacific-time billing month in TEST and 8,500 in HH. Lookups for saved venues use the same counter and stop once it reaches 4,500 in HH because requesting the current venue name uses a different Google SKU. Keep the billing account’s other Maps usage in mind. HH saves the selected Place ID with the user’s text as a fallback. Manual entry and typed or selected street addresses keep working without a saved Place ID. `node scripts/check-event-addresses.mjs` tests request handling and the caps without contacting Google.
 
-## Personal Google Calendar copies
+## Two-way calendar sync
 
-Settings → Calendar lets each signed-in household member connect a dedicated Google calendar. HH queues an independent copy of each event change for every connected member. An existing owner-managed calendar continues through its original copy and transfer flow. Disconnecting a personal copy removes its stored authorization and pending work. Existing events on that Google calendar can be removed in Google Calendar.
+Settings → Calendar lets each member connect their own supported calendars. Google offers a dedicated HH calendar and an existing Google calendar. Outlook supports personal Microsoft accounts and lets the member choose an existing Outlook calendar or create HH Family. After authorization, HH opens the finish-setup dialog. Eligible additions, edits, deletions and standard repeats can sync both ways. Each connected calendar uses its own credentials, cursor and worker lease. Existing owner-managed Google copies continue through their original flow.
 
-Apply the `personal_google_calendar` migration before deploying `google-calendar` and the frontend. The migration uses the existing Vault API URL and scheduler credential. For a real TEST OAuth exercise, enable Calendar API in a separate Google Cloud test client, register the TEST Supabase `/functions/v1/google-calendar/callback` URL, and set `TEST_GOOGLE_CALENDAR_CLIENT_ID` and `TEST_GOOGLE_CALENDAR_CLIENT_SECRET` in TEST Edge secrets. Set the TEST project API URL in Vault as `home_together_api_url` for the scheduler. The browser and database suites use synthetic Google accounts and do not require those credentials.
-
-The `test_google_calendar_two_way` migration is for TEST only. Its worker uses the TEST endpoint and checks opted-in connections every minute. It imports one-time calendar events and uses a saved Google change token to apply edits and explicit deletions. Repeating changes from Google are outside the pilot. Existing mappings are reused and a pending HH edit takes precedence over a competing Google edit. Turn on the pilot under Settings → Calendar → My Google Calendar after connecting the TEST Google calendar. Outlook can exercise the same path when it is connected to that Google calendar.
+Use the deployment and smoke test steps in [Calendar sync deployment](docs/CALENDAR_SYNC.md). The automated checks use fictional calendars and never access provider accounts.
 
 ## One-time import from an existing Google calendar
 

@@ -43,6 +43,7 @@ jobs:
           node scripts/polish-browser/input-cards.cjs
           node scripts/polish-browser/scroll-lock.cjs
           node scripts/polish-browser/calendar-views.cjs
+          node scripts/polish-browser/outlook-calendar.cjs
           node scripts/polish-browser/journeys.cjs
           node scripts/polish-browser/focused.cjs
           node scripts/polish-browser/signup.cjs
@@ -68,6 +69,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run test:calendar
+      - run: node --experimental-strip-types scripts/check-outlook-calendar.mjs
       - run: npm run test:database
       - run: node scripts/check-invitation-reissue.mjs
       - run: npm run test:invitations

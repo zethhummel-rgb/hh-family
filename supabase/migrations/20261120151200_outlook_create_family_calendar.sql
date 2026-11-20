@@ -14,7 +14,7 @@ begin
   select 1 from public.household_members where household_id=hid and user_id=uid
  ) then raise exception 'Calendar connection is unavailable'; end if;
  if exists(select 1 from private.outlook_calendar_connections where household_id=hid and user_id=uid)
-  then raise exception 'This TEST account already has an Outlook calendar.'; end if;
+  then raise exception 'This HH account already has an Outlook calendar.'; end if;
  select * into stage from private.outlook_calendar_picker where household_id=hid and user_id=uid and expires_at>now() for update;
  if stage.secret_id is null then raise exception 'Connect Outlook again to choose a calendar.'; end if;
  if action='begin_create' then

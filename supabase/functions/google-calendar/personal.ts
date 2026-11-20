@@ -1,7 +1,7 @@
 const scope='https://www.googleapis.com/auth/calendar.app.created';
 const existingScopes=['https://www.googleapis.com/auth/calendar.calendarlist.readonly','https://www.googleapis.com/auth/calendar.events'];
 const statePattern=/^hhp_[A-Za-z0-9_-]{43}$/;
-type Config={clientId:string;clientSecret:string;callback:string;app:string;test?:boolean};
+type Config={clientId:string;clientSecret:string;callback:string;app:string;twoWayEnabled?:boolean};
 type CalendarListEntry={id:string;name:string};
 const encode=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const random=()=>encode(crypto.getRandomValues(new Uint8Array(32)));
@@ -33,23 +33,24 @@ export function personalCalendarCallback(url:URL,app:string){
 export async function handlePersonalCalendar(admin:any,body:any,userId:string,config:Config,fetcher:typeof fetch=fetch){
  const actor={householdId:body.householdId,userId};
  const configured=Boolean(config.clientId&&config.clientSecret);
- const existing=(action:string,payload:Record<string,unknown>={})=>service(admin,action,{...actor,...payload},'test_google_existing_calendar');
+ const existing=(action:string,payload:Record<string,unknown>={})=>service(admin,action,{...actor,...payload},'personal_google_calendar_setup');
  if(body.action==='personal_status'){
   const status=await service(admin,'status',actor);
-  return {...status,configured,...(config.test&&status.available?await existing('options'):{})};
+  return {...status,configured,twoWayAvailable:configured&&Boolean(config.twoWayEnabled),
+   ...(configured&&config.twoWayEnabled&&status.available?await existing('options'):{})};
  }
  if(body.action==='personal_disconnect')return service(admin,'disconnect',actor);
  if(!configured)throw Error('Personal Google Calendar connections are being prepared.');
- if(config.test&&body.action==='personal_existing_cancel')return existing('cancel');
- if(config.test&&body.action==='personal_existing_connect'){
+ if(config.twoWayEnabled&&body.action==='personal_existing_cancel')return existing('cancel');
+ if(config.twoWayEnabled&&body.action==='personal_existing_connect'){
   if(typeof body.calendarId!=='string'||!body.calendarId||body.calendarId.length>1024||body.acknowledgeShared!==true)
    throw Error('Choose a Google calendar and confirm sharing it with your household.');
   return existing('connect',{calendarId:body.calendarId,acknowledgeShared:true});
  }
- if(body.action==='personal_start'||(config.test&&['personal_existing_start','personal_two_way_copy_start'].includes(body.action))){
+ if(body.action==='personal_start'||(config.twoWayEnabled&&['personal_existing_start','personal_two_way_copy_start'].includes(body.action))){
   const state='hhp_'+random(),verifier=random();
   const parameters={hash:await hash(state),verifier},useExisting=body.action==='personal_existing_start';
-  if(config.test)await existing(useExisting?'start':body.action==='personal_two_way_copy_start'?'start_two_way_copy':'start_copy',parameters);
+  if(config.twoWayEnabled)await existing(useExisting?'start':body.action==='personal_two_way_copy_start'?'start_two_way_copy':'start_copy',parameters);
   else await service(admin,'state_create',{...actor,...parameters});
   const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.search=new URLSearchParams({client_id:config.clientId,redirect_uri:config.callback,response_type:'code',
@@ -60,7 +61,7 @@ export async function handlePersonalCalendar(admin:any,body:any,userId:string,co
  if(body.action!=='personal_complete'||typeof body.state!=='string'||!statePattern.test(body.state)
   ||typeof body.code!=='string'||!body.code||body.code.length>4096)throw Error('Google connection expired. Start again in Settings.');
  const stateHash=await hash(body.state);
- const pending=config.test?await existing('take',{hash:stateHash}):await service(admin,'state_take',{...actor,hash:stateHash});
+ const pending=config.twoWayEnabled?await existing('take',{hash:stateHash}):await service(admin,'state_take',{...actor,hash:stateHash});
  if(!pending)throw Error('Open the HH account that started this connection, or start again in Settings.');
  let keepSelection=false;
  try{
@@ -91,7 +92,7 @@ export async function handlePersonalCalendar(admin:any,body:any,userId:string,co
       choices.push({id:item.id,name:String(item.summaryOverride||item.summary||'Google Calendar').slice(0,200)});
     }
     page=data.nextPageToken||'';
-    if(choices.length>250)throw Error('This account has too many calendars for the TEST connection.');
+    if(choices.length>250)throw Error('This account has too many calendars to list here.');
    }while(page);
    const staged=await existing('stage',{hash:stateHash,refreshToken:token.refresh_token,choices});
    keepSelection=true;
@@ -100,7 +101,7 @@ export async function handlePersonalCalendar(admin:any,body:any,userId:string,co
   const calendars='https://www.googleapis.com/calendar/v3/calendars';
   const target=pending.calendarId?await fetcher('https://www.googleapis.com/calendar/v3/users/me/calendarList/'+encodeURIComponent(pending.calendarId),{headers,signal:AbortSignal.timeout(8000)}):
    await fetcher(calendars,{method:'POST',headers:{...headers,'Content-Type':'application/json'},signal:AbortSignal.timeout(8000),
-    body:JSON.stringify({summary:pending.householdName+' · HH Family',description:config.test?'Family plans from HH.':'Family plans from HH. Make updates in HH.',timeZone:'America/Toronto'})});
+    body:JSON.stringify({summary:pending.householdName+' · HH Family',description:config.twoWayEnabled?'Family plans from HH.':'Family plans from HH. Make updates in HH.',timeZone:'America/Toronto'})});
   if(!target.ok)throw Error(pending.calendarId&&[403,404,410].includes(target.status)?
    'Use the Google account that owns this copy. If you deleted it in Google, disconnect it here and connect again.':
    'Google could not open your HH calendar. Please try again.');
@@ -108,7 +109,7 @@ export async function handlePersonalCalendar(admin:any,body:any,userId:string,co
   if(typeof calendar.id!=='string'||!calendar.id||calendar.id.length>1024)throw Error('Google did not return a calendar.');
   if(pending.calendarId&&calendar.accessRole!=='owner')throw Error('Use the Google account that owns this copy.');
   const connection={hash:stateHash,calendarId:calendar.id,refreshToken:token.refresh_token};
-  return await (config.test?existing('connect_copy',connection):service(admin,'connection_set',{...actor,...connection}));
+  return await (config.twoWayEnabled?existing('connect_copy',connection):service(admin,'connection_set',{...actor,...connection}));
  }finally{
   // A completed connection has already removed its state. Failures release it for re-entry.
   if(!keepSelection)await service(admin,'state_release',{...actor,hash:stateHash}).catch(()=>{});
