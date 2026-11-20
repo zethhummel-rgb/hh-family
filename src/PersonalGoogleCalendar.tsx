@@ -2,6 +2,7 @@ import {useEffect,useId,useState} from 'react';
 import {googleRequest} from './calendarData';
 import {completePersonalCalendarReturn} from './personalCalendarReturn';
 import {testEnvironment} from './config';
+import CalendarSetupChoices from './CalendarSetupChoices';
 
 type Connection={
  configured:boolean;available:boolean;usesExistingCopy:boolean;connected:boolean;
@@ -82,19 +83,20 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
  if(connection?.usesExistingCopy)return null;
  return <div className="settings-detail-card settings-calendar-card">
   <h3>My Google Calendar</h3>
-  <p>{connection?.existingSource?
-   <><strong>{connection.calendarName}</strong> · Import and keep in sync</>:connection?.twoWay?.enabled?
-   'Add, edit or delete a one-time event on your connected calendar to update HH. This also works in Outlook when it shows that same Google calendar.':
-   testEnvironment&&!connection?.connected?'Share your household’s events to a dedicated Google calendar.':
-   'See your household’s HH events on your connected Google calendar.'}</p>
-  {connection&&<span className="settings-connection"><i className={connection.connected?'connected':''}/>{labels[connection.status]}</span>}
+  {(!testEnvironment||connection?.connected)&&!connection?.choices&&<p>{connection?.existingSource?
+   <><strong>{connection.calendarName}</strong> · Syncing both ways</>:connection?.twoWay?.enabled?
+   'Edits and deletions to one-time events and supported repeating events sync both ways. This also works in Outlook when it shows the connected Google calendar.':
+   connection?.connected?'Find the calendar HH created under My calendars in Google Calendar.':
+   'See your household’s HH events on your connected Google calendar.'}</p>}
+  {connection?.connected&&!connection.choices&&<span className="settings-connection"><i className="connected"/>{labels[connection.status]}</span>}
   {(busy||notice)&&<p role="status">{busy?'Working on your Google connection…':notice}</p>}
   {error&&<p className="error" role="alert">{error}</p>}
   {!connection&&!error&&!busy&&<p role="status">Loading your Google connection…</p>}
   {!connection&&error&&<button type="button" className="text-button" onClick={()=>{setError('');setRetry(n=>n+1)}}>Try again</button>}
   {connection&&!connection.configured&&<p>Personal Google Calendar connections are being prepared.</p>}
-  {connection?.choices&&<form className="google-calendar-sync-picker" onSubmit={event=>{event.preventDefault();void finishExisting()}}>
-   <p>Choose the Google calendar you want to keep using alongside HH.</p>
+  {connection?.choices&&<form className="calendar-setup-picker google-calendar-sync-picker" onSubmit={event=>{event.preventDefault();void finishExisting()}}>
+   <p className="settings-connection"><i className="connected"/>Signed in to Google</p>
+   <p>Choose the Google calendar you want to use in both apps.</p>
    <label htmlFor={pickerId}>Google calendar</label>
    <select id={pickerId} required disabled={busy} value={selected} onChange={event=>{setSelected(event.target.value);setShare(false)}}>
     <option value="">Choose a calendar</option>
@@ -102,15 +104,17 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
    </select>
    {!connection.choices.length&&<p>Google did not return a writable calendar available to connect.</p>}
    <label className="google-calendar-sync-consent"><input type="checkbox" disabled={busy||!selected} checked={share} onChange={event=>setShare(event.target.checked)}/>Share ordinary events, notes, and locations from this calendar with everyone in my HH household. Edits and deletions can sync both ways.</label>
-   <button type="submit" className="button soft wide" disabled={busy||!selected||!share}>Import and connect Google calendar</button>
+   <button type="submit" className="button primary wide" disabled={busy||!selected||!share}>Start two-way sync</button>
    <button type="button" className="text-button" disabled={busy} onClick={()=>void finishExisting(true)}>Cancel Google connection</button>
   </form>}
-  {connection?.configured&&connection.available&&!confirmDisconnect&&!connection.choices&&<>
-   <button type="button" className="button soft wide" disabled={busy} onClick={()=>void connect(connection.existingSource)}>
-    {connection.connected?'Reconnect my Google Calendar':testEnvironment?'Share HH events':'Connect my Google Calendar'}
-   </button>
-   {testEnvironment&&!connection.connected&&<button type="button" className="text-button" disabled={busy} onClick={()=>void connect(true)}>Import and keep in sync</button>}
-  </>}
+  {connection?.configured&&connection.available&&!confirmDisconnect&&!connection.choices&&(
+   testEnvironment&&!connection.connected?
+    <CalendarSetupChoices provider="Google" heading="Choose how to sync your plans. You’ll sign in with Google next."
+     disabled={busy} onChoose={mode=>void connect(mode==='two-way')}/>:
+    <button type="button" className="button soft wide" disabled={busy} onClick={()=>void connect(connection.existingSource)}>
+     {connection.connected?'Reconnect my Google Calendar':'Connect my Google Calendar'}
+    </button>
+  )}
   {connection?.connected&&connection.twoWay&&!confirmDisconnect&&!connection.choices&&<div className="settings-calendar-sync">
    {connection.twoWay.enabled?<>
     <p role="status">{connection.twoWay.ready?'Two-way sync is on.':'Preparing two-way sync…'}</p>

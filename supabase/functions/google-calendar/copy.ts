@@ -103,23 +103,32 @@ function canShareGoogleEntry(entry:any){
 
 export function googleCalendarChanges(items:unknown,existingSource=false){
  if(!Array.isArray(items)||items.length>100)throw new CopyError('retry');
- return items.flatMap((entry:any)=>{
-  if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>1200||entry.recurringEventId||
-   entry.recurrence?.length||entry.eventType&&entry.eventType!=='default')return [];
+ const changes=items.flatMap((entry:any)=>{
+  if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>1200||entry.eventType&&entry.eventType!=='default')return [];
   const googleId=entry.id;
-  if(entry.status==='cancelled')return [{kind:'deleted',googleId}];
-  if(existingSource&&!canShareGoogleEntry(entry))return [];
   try{
+   const occurrence=entry.recurringEventId?{
+    kind:'occurrence',googleId:entry.recurringEventId,
+    date:entry.originalStartTime?.date?date(entry.originalStartTime.date):localDate(iso(entry.originalStartTime?.dateTime))
+   }:null;
+   if(occurrence&&(typeof occurrence.googleId!=='string'||occurrence.googleId.length>1200))return [];
+   if(entry.status==='cancelled')return [occurrence?{...occurrence,event:null}:{kind:'deleted',googleId}];
+   if(existingSource&&!canShareGoogleEntry(entry))return [];
    const {title,description,location,starts_at,ends_at,all_day,start_date,end_date}=nativeFields({
     summary:entry.summary,description:entry.description,location:entry.location,start:entry.start,end:entry.end
    });
+   const fields={title,description,location,starts_at,ends_at,all_day,start_date,end_date};
+   if(occurrence)return [{...occurrence,event:fields}];
+   if(entry.recurrence?.length&&!all_day&&!['America/Toronto','America/New_York','Canada/Eastern'].includes(entry.start?.timeZone))return [];
+   const recurrence=importRule(entry.recurrence,start_date??localDate(starts_at),all_day);
    return [{
     kind:'event',googleId,hhCopy:entry.extendedProperties?.shared?.hh_source==='native',
-    event:{title,description,location,starts_at,ends_at,all_day,start_date,end_date},
-    shape:{starts_at,ends_at,all_day,start_date,end_date,recurrence:[]}
+    event:fields,
+    shape:{starts_at,ends_at,all_day,start_date,end_date,recurrence}
    }];
   }catch{return [];}
  });
+ return changes.sort((a,b)=>Number(a.kind==='occurrence')-Number(b.kind==='occurrence'));
 }
 
 export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch,personalUserId?:string,testTwoWay=false){
@@ -138,7 +147,7 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
  };
  const budget=()=>{if(Date.now()>deadline||requests>=24)throw new CopyError('budget')};
  try{
-  const cursor=personalUserId&&testTwoWay?await inbound('cursor'):null;
+  const cursor=personalUserId&&testTwoWay?await inbound('cursor',{includeRepeating:true}):null;
   let existingSource=false;
   if(cursor){
    const mode=await admin.rpc('test_google_existing_calendar',{action:'options',payload:{householdId:hid,userId:personalUserId}});
@@ -210,7 +219,10 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
    const args={eventId:job.eventId,revision:job.revision};let rotate=false;
    try{
     budget();const event:NativeEvent|null=job.event,dates=event?Object.keys(event.exceptions||{}):[];
-    if(cursor&&event&&!event.recurrence?.length&&!dates.length)await inbound('keep_single_event_id',{...args,shape:copyShape(event)});
+     if(cursor&&event){
+      await inbound('keep_series_event_id',{...args,shape:copyShape(event)});
+      if(!event.recurrence?.length&&!dates.length)await inbound('keep_single_event_id',{...args,shape:copyShape(event)});
+     }
     let link=await rpc('prepare',{...args,shape:event?copyShape(event):null,dates});if(!link)continue;
     const remove=async(gid:string)=>{
      const path=base+'/'+encodeURIComponent(gid);
@@ -254,7 +266,8 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
        const change=event.exceptions?.[day];
        if(change===null){if(instance.status!=='cancelled')await remove(instance.id)}
        else {const body=googleCopy({...original,...(change||{}),recurrence:[]});delete (body as any).recurrence;
-        await request(base+'/'+encodeURIComponent(instance.id),'PATCH',{...body,extendedProperties:{...instance.extendedProperties,shared:{...instance.extendedProperties?.shared,...body.extendedProperties.shared}}})}
+        if(existingSource&&(!canShareGoogleEntry(instance)||!instance.etag))throw new CopyError('needs_attention');
+        await request(base+'/'+encodeURIComponent(instance.id),'PATCH',{...body,extendedProperties:{...instance.extendedProperties,shared:{...instance.extendedProperties?.shared,...body.extendedProperties.shared}}},existingSource?instance.etag:undefined)}
       }else if(event.exceptions?.[day]!==undefined)throw new CopyError('needs_attention');
      }
      await rpc('date_done',{...args,date:day});

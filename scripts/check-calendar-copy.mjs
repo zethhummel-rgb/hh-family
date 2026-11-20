@@ -138,8 +138,13 @@ for(const replica of replicas){
 assert.notEqual(new URL(replicas[0].provider[0].url).pathname,new URL(replicas[1].provider[0].url).pathname);
 const remote={id:'outlook-entry',summary:'Hockey practice',start:{dateTime:'2026-11-20T19:00:00-05:00'},end:{dateTime:'2026-11-20T20:00:00-05:00'}};
 const changes=googleCalendarChanges([remote,changed,oldGoogle,cancelled,{id:'old',status:'cancelled'},{id:'invalid',summary:'Invalid'}]);
-assert.deepEqual(changes.map(c=>[c.googleId,c.kind]),[['outlook-entry','event'],['old','deleted']]);
+assert.deepEqual(changes.map(c=>[c.googleId,c.kind]),[['outlook-entry','event'],[oldGoogle.id,'event'],['old','deleted'],[oldGoogle.id,'occurrence'],[oldGoogle.id,'occurrence']]);
 assert.equal(changes[0].event.starts_at,'2026-11-21T00:00:00.000Z');
+assert.deepEqual(changes[1].shape.recurrence,master.recurrence);
+assert.equal(changes[3].date,'2026-11-08');
+assert.equal(changes[3].event.starts_at,'2026-11-09T20:00:00.000Z');
+assert.deepEqual(changes[4],{kind:'occurrence',googleId:oldGoogle.id,date:'2026-11-01',event:null});
+assert.deepEqual(googleCalendarChanges([{...oldGoogle,recurrence:['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']}]),[]);
 assert.equal(googleCalendarChanges([{...allDay,recurrence:[]}])[0].event.ends_at,'2026-11-02T05:00:00.000Z');
 
 let deltaCursor={syncToken:'prior',pageToken:null},expired=false,existingSource=false;

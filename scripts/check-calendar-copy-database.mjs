@@ -200,7 +200,7 @@ assert.equal(await scalar('select count(*)::int from vault.decrypted_secrets whe
 await assert.rejects(personal('check_lease',member,{lease:remove.lease}),/membership/);
 assert.equal(await scalar('select count(*)::int from private.google_calendar_connections where household_id=$1',[b]),1);
 console.log('Personal calendar checks passed: two accounts, OAuth state isolation and replay, private credentials, separate queues, retries, reconnect, disconnect, and membership cleanup.');
-for(const path of ['20261119120746_event_venue_selection.sql','20261120130526_test_google_calendar_two_way.sql']){
+for(const path of ['20261119120746_event_venue_selection.sql','20261120130526_test_google_calendar_two_way.sql','20261120162000_test_google_repeating_events.sql']){
  await db.exec(fs.readFileSync(new URL('../supabase/migrations/'+path,import.meta.url),'utf8'));
 }
 const pilot='55555555-5555-4555-8555-555555555555';
@@ -281,6 +281,24 @@ assert.deepEqual(await namedService('personal_calendar_service','credentials',pi
  {calendarId:selectedCalendar.id,refreshToken:'private-existing-credential'});
 const firstImport=await twoWay('apply',pilotOwner,{lease:existingLease,changes:[remote(baseFields)],nextPage:null,nextSync:'existing-cursor'});
 assert.equal(firstImport.changed,1);
+const pullPage=(changes,nextSync,nextPage=null)=>twoWay('apply',pilotOwner,{lease:existingLease,changes,nextPage,nextSync});
+const series={...remote({...baseFields,title:'Google weekly series'}),googleId:'google-weekly'};
+series.shape.recurrence=['RRULE:FREQ=WEEKLY;INTERVAL=1;COUNT=5'];
+const skip={kind:'occurrence',googleId:series.googleId,date:'2026-11-27',event:null};
+const move={...skip,date:'2026-12-04',event:{...baseFields,title:'Moved hockey',starts_at:'2026-12-05T23:00:00Z',ends_at:'2026-12-06T00:00:00Z'}};
+assert.equal((await pullPage([skip],null,'repeat-page-2')).changed,0);
+assert.equal((await pullPage([series,move],'repeat-cursor-1')).changed,3);
+const weekly=(await db.query("select id,recurrence,exceptions from public.household_events where title='Google weekly series'")).rows[0];
+assert.deepEqual(weekly.recurrence,series.shape.recurrence);
+assert.equal(weekly.exceptions[skip.date],null);
+assert.equal(weekly.exceptions[move.date].title,'Moved hockey');
+assert.equal(weekly.exceptions[move.date].person,'Everyone');
+assert.equal((await pullPage([move],'repeat-cursor-2')).changed,0,'A repeated Google exception does not generate another edit');
+const longer={...series,shape:{...series.shape,recurrence:['RRULE:FREQ=WEEKLY;INTERVAL=1;COUNT=6']}};
+assert.equal((await pullPage([longer],'repeat-cursor-3')).changed,1);
+assert.deepEqual(await scalar('select recurrence from public.household_events where id=$1',[weekly.id]),longer.shape.recurrence);
+assert.equal((await pullPage([{kind:'deleted',googleId:series.googleId}],'repeat-cursor-4')).changed,1);
+assert.equal(await scalar('select exists(select 1 from public.household_events where id=$1)',[weekly.id]),false,'Only a master tombstone removes the entire series');
 assert.equal((await namedService('personal_calendar_service','status',pilotOwner)).pending,0,'Imported Google events must not echo back as new copies');
 await namedService('personal_calendar_service','finish',pilotOwner,{lease:existingLease});
 await namedService('personal_calendar_service','disconnect',pilotOwner);

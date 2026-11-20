@@ -1,7 +1,8 @@
 import {nativeInstant,type NativeEvent} from '../google-calendar/native.ts';
+import {graphRepeat,outlookInstanceWindow,outlookRule,outlookWallClock,type GraphRepeat,type SeriesFields} from './series.ts';
 
 const graphOrigin='https://graph.microsoft.com';
-const selectedFields='id,subject,body,location,start,end,isAllDay,type,isCancelled,changeKey,sensitivity,isOrganizer,attendees,transactionId,isOnlineMeeting,hasAttachments';
+const selectedFields='id,subject,body,location,start,end,isAllDay,type,isCancelled,changeKey,sensitivity,isOrganizer,attendees,transactionId,isOnlineMeeting,hasAttachments,recurrence,originalStartTimeZone,occurrenceId,originalStart';
 const eventQuery=new URLSearchParams({'$select':selectedFields}).toString();
 const maxEvents=500;
 
@@ -10,6 +11,8 @@ export type OutlookEvent={
  start?:{dateTime:string;timeZone:string};end?:{dateTime:string;timeZone:string};isAllDay?:boolean;
  type?:string;isCancelled?:boolean;sensitivity?:string;isOrganizer?:boolean;attendees?:unknown[];
  changeKey?:string;transactionId?:string;isOnlineMeeting?:boolean;hasAttachments?:boolean;'@odata.etag'?:string;
+ recurrence?:GraphRepeat;originalStartTimeZone?:string;originalStart?:string;occurrenceId?:string;
+ cancelledOccurrences?:string[];exceptionOccurrences?:OutlookEvent[];'exceptionOccurrences@odata.nextLink'?:string;
 };
 export type EventFields=Pick<NativeEvent,'title'|'description'|'location'|'starts_at'|'ends_at'|'all_day'|'start_date'|'end_date'>;
 export type CalendarChoice={id:string;name:string};
@@ -96,8 +99,12 @@ export function createGraph(accessToken:string,expiresAt:number,request=fetch) {
   // event from one moved elsewhere. This lookup does not read event details.
   exists:(id:string)=>get<{id:string}>('/v1.0/me/events/'+segment(id)+'?$select=id'),
   event:(calendar:string,id:string)=>get<OutlookEvent>(eventPath(calendar,id)+'?'+eventQuery),
-  create:(calendar:string,event:EventFields,transactionId:string)=>get<OutlookEvent>(base(calendar)+'/events','POST',{...outlookFields(event),transactionId}),
-  update:(calendar:string,id:string,event:EventFields,current:EventFields,etag:string)=>
+  series:(calendar:string,id:string)=>get<OutlookEvent>(eventPath(calendar,id)+'?'+new URLSearchParams({
+   '$select':selectedFields+',cancelledOccurrences,exceptionOccurrences','$expand':'exceptionOccurrences'})),
+  instances:(calendar:string,id:string,date:string)=>list<OutlookEvent>(eventPath(calendar,id)+'/instances',new URLSearchParams({
+   '$select':selectedFields,...outlookInstanceWindow(date)}),10),
+  create:(calendar:string,event:SeriesFields,transactionId:string)=>get<OutlookEvent>(base(calendar)+'/events','POST',{...outlookFields(event),transactionId}),
+  update:(calendar:string,id:string,event:SeriesFields,current:SeriesFields,etag:string)=>
    get<OutlookEvent>(eventPath(calendar,id),'PATCH',outlookChanges(event,current),etag),
   remove:(calendar:string,id:string,etag:string)=>get<boolean>(eventPath(calendar,id),'DELETE',undefined,etag)
  };
@@ -115,9 +122,13 @@ function day(value:string):string|null {
  return value.slice(11)==='00:00:00.000Z'||value===nativeInstant(date,'00:00')?date:null;
 }
 
-export function eventFields(event:OutlookEvent):EventFields|null {
- if(event.type!=='singleInstance'||event.isCancelled!==false||event.sensitivity!=='normal'||
-  event.isOrganizer!==true||!Array.isArray(event.attendees)||event.attendees.length>0||event.isOnlineMeeting||event.hasAttachments||
+export function ordinaryAppointment(event:OutlookEvent) {
+ return event.isCancelled===false&&event.sensitivity==='normal'&&event.isOrganizer===true&&
+  Array.isArray(event.attendees)&&event.attendees.length===0&&!event.isOnlineMeeting&&!event.hasAttachments;
+}
+
+export function eventFields(event:OutlookEvent,occurrence=false):SeriesFields|null {
+ if(!(occurrence?['exception','occurrence']:['singleInstance','seriesMaster']).includes(event.type||'')||!ordinaryAppointment(event)||
   typeof event.isAllDay!=='boolean'||event.body?.contentType?.toLowerCase()!=='text')return null;
  const start=utc(event.start),end=utc(event.end);
  if(!start||!end||end<=start)return null;
@@ -125,21 +136,25 @@ export function eventFields(event:OutlookEvent):EventFields|null {
  if(!title||title.length>160||description.length>4000||location.length>300)return null;
  const start_date=event.isAllDay?day(start):null,end_date=event.isAllDay?day(end):null;
  if(event.isAllDay&&(!start_date||!end_date||end_date<=start_date))return null;
- return {title,description,location,all_day:event.isAllDay,start_date,end_date,
+ const fields={title,description,location,all_day:event.isAllDay,start_date,end_date,
   starts_at:start_date?nativeInstant(start_date,'00:00')!:start,
   ends_at:end_date?nativeInstant(end_date,'00:00')!:end};
+ if(event.type!=='seriesMaster')return fields;
+ const recurrence=outlookRule(fields,event.recurrence,event.originalStartTimeZone);
+ return recurrence?{...fields,recurrence}:null;
 }
 
-export function outlookFields(event:EventFields) {
- const dateTime=(instant:string,date:string|null)=>date?
+export function outlookFields(event:SeriesFields) {
+ const repeat=graphRepeat(event);
+ const dateTime=(instant:string,date:string|null)=>repeat?outlookWallClock(instant,date):date?
   {dateTime:date+'T00:00:00',timeZone:'Eastern Standard Time'}:
   {dateTime:new Date(instant).toISOString().slice(0,-1),timeZone:'UTC'};
  return {subject:event.title,body:{contentType:'text',content:event.description},
   location:{displayName:event.location},isAllDay:event.all_day,
-  start:dateTime(event.starts_at,event.start_date),end:dateTime(event.ends_at,event.end_date)};
+  start:dateTime(event.starts_at,event.start_date),end:dateTime(event.ends_at,event.end_date),...(repeat?{recurrence:repeat}:{})};
 }
 
-function outlookChanges(event:EventFields,current:EventFields) {
+function outlookChanges(event:SeriesFields,current:SeriesFields) {
  const next=outlookFields(event),before=outlookFields(current);
  const dateChanged=next.isAllDay!==before.isAllDay||
   JSON.stringify(next.start)!==JSON.stringify(before.start)||JSON.stringify(next.end)!==JSON.stringify(before.end);
@@ -147,11 +162,12 @@ function outlookChanges(event:EventFields,current:EventFields) {
   ...(next.subject.trim()!==before.subject.trim()?{subject:next.subject}:{}),
   ...(next.body.content.replace(/\r\n/g,'\n')!==before.body.content?{body:next.body}:{}),
   ...(next.location.displayName!==before.location.displayName?{location:next.location}:{}),
-  ...(dateChanged?{start:next.start,end:next.end,isAllDay:next.isAllDay}:{})
+  ...(dateChanged?{start:next.start,end:next.end,isAllDay:next.isAllDay}:{}),
+  ...(JSON.stringify(next.recurrence)!==JSON.stringify(before.recurrence)?{recurrence:next.recurrence??null}:{})
  };
 }
 
-export function eventKey(event:EventFields) {
+export function eventKey(event:SeriesFields) {
  return JSON.stringify([event.title.trim(),event.description.replace(/\r\n/g,'\n'),event.location,event.all_day,
-  event.all_day?event.start_date:Date.parse(event.starts_at),event.all_day?event.end_date:Date.parse(event.ends_at)]);
+  event.all_day?event.start_date:Date.parse(event.starts_at),event.all_day?event.end_date:Date.parse(event.ends_at),event.recurrence??[]]);
 }

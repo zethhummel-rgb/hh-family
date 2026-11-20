@@ -15,14 +15,16 @@
 .admin-household-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;border-bottom:1px solid var(--theme-line,#eed5de)}.admin-household-row small{display:block;margin-top:6px;font-size:12px}.admin-household-row .text-button{font-size:12px;min-height:44px;white-space:normal}.admin-household-confirm{margin-top:24px;padding:18px;border:1px solid #b56363;border-radius:12px}.admin-household-confirm p{font-size:14px;line-height:1.7}.admin-household-actions{display:flex;gap:14px;flex-wrap:wrap}.admin-households h3{font:24px Georgia,serif}
 
 .self-deletion{margin-top:28px;padding-top:20px;border-top:1px solid var(--theme-line,#eed5de)}.self-deletion h3{font:23px Georgia,serif}.self-deletion p{font-size:14px;line-height:1.8}.self-deletion .deletion-warning{color:var(--theme-ink,#7a5865);font-weight:600}.deletion-confirm-value{display:block;margin:8px 0;overflow-wrap:anywhere}.self-deletion .button{white-space:normal;min-height:44px;text-align:center}.self-deletion .text-button{min-height:44px}
-.outlook-calendar-card form label{display:block;margin-top:14px}
-.outlook-calendar-card form select{width:100%}
-.outlook-calendar-card .text-button{min-height:44px}
-.outlook-calendar-modes{margin-top:12px;border:0;padding:0}
-.outlook-calendar-card .outlook-calendar-modes label{display:flex;gap:9px;align-items:flex-start}
-.outlook-calendar-modes input{width:auto;margin:4px 0 0}
-.outlook-calendar-modes .settings-caption{display:block;margin-top:4px}
-.google-calendar-sync-picker label{display:block;margin-top:14px}
-.google-calendar-sync-picker select{width:100%}
+.calendar-setup-options{display:grid;gap:9px}
+.calendar-setup-options p,.calendar-setup-picker p{font-size:13px;line-height:1.65}
+.calendar-setup-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;text-align:left;width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;color:var(--ink);background:var(--theme-surface,#fffafb);cursor:pointer;font:inherit}
+.calendar-setup-option:hover{background:var(--theme-hover,#fbf0f4)}
+.calendar-setup-option:disabled{opacity:.55;cursor:default}
+.calendar-setup-option strong,.calendar-setup-option small{display:block;line-height:1.5}
+.calendar-setup-option small{font-size:12px;color:var(--muted);margin-top:3px}
+.calendar-setup-picker label{display:block;margin-top:14px}
+.calendar-setup-picker select{width:100%}
+.calendar-setup-picker .calendar-setup-family{margin-top:4px}
+.calendar-setup-picker .text-button,.outlook-calendar-card .text-button{min-height:44px}
 .google-calendar-sync-picker .google-calendar-sync-consent{display:flex;gap:9px;align-items:flex-start}
 .google-calendar-sync-consent input{width:auto;margin:4px 0 0}

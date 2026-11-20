@@ -50,6 +50,7 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
     assert.equal(req.headers().authorization,'Bearer '+session.access_token);
     assert.equal(payload.householdId,householdId);
     calls.push(payload);
+    if(payload.action==='authorize')return route.fulfill({status:200,json:{url:'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize'}});
     if(payload.action==='complete'){
      assert.deepEqual([payload.state,payload.code],[state,code]);
      status={...status,calendars};
@@ -60,14 +61,18 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
     }
     if(payload.action==='connect'){
      assert.equal(payload.calendarId,family.id);
-     assert.equal(payload.importEvents,false);
-     status={available:true,active:true,calendarName:family.name};
+     assert.equal(payload.importEvents,true);
+     status={available:true,active:true,calendarName:family.name,importEvents:true};
     }
     if(payload.action==='sync')status={...status,syncedAt:new Date().toISOString()};
     if(payload.action==='disconnect')status={...status,active:false};
     data=payload.action==='status'?status:{ok:true};
    }else if(resource==='google-calendar'){
     const payload=req.postDataJSON();
+    if(payload?.action==='personal_existing_start'){
+     googleCalls.push(payload.action);
+     return route.fulfill({status:200,json:{url:'https://accounts.google.com/o/oauth2/v2/auth'}});
+    }
     if(payload?.action==='personal_complete'){
      googleCalls.push(payload.action);
      googleStatus={...googleStatus,choices:[googleChoice]};
@@ -89,43 +94,61 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
    if(req.headers().accept?.includes('vnd.pgrst.object')&&Array.isArray(data))data=data[0]||null;
    await route.fulfill({status:200,json:data});
   });
-  await page.goto(url+'?outlook_calendar=return#'+new URLSearchParams({outlook_state:state,outlook_code:code}).toString());
+  const outlookReturn=url+'?outlook_calendar=return#'+new URLSearchParams({outlook_state:state,outlook_code:code}).toString();
+  await page.route('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize',route=>route.fulfill({
+   contentType:'text/html',body:'<script>location.replace('+JSON.stringify(outlookReturn)+')</script>'
+  }));
+  await page.goto(url);
+  await page.getByRole('button',{name:'Open Settings',exact:true}).click();
+  await page.getByRole('button',{name:/^Calendar /}).click();
   const card=page.locator('.settings-calendar-card').filter({has:page.getByRole('heading',{name:'Outlook Calendar',exact:true})});
-  const connect=card.getByRole('button',{name:'Connect selected calendar',exact:true});
+  await card.getByRole('button',{name:'Send HH events to Outlook',exact:true}).waitFor();
+  await card.getByRole('button',{name:'Use both HH and Outlook',exact:true}).click();
+  const connect=card.getByRole('button',{name:'Start two-way sync',exact:true});
   await connect.waitFor();
   assert.ok(await connect.isDisabled());
   assert.equal(new URL(page.url()).hash,'');
   assert.equal(new URL(page.url()).search,'');
   assert.equal(calls.filter(call=>call.action==='complete').length,1);
   assert.equal(calls.some(call=>call.action==='connect'),false);
-  assert.ok(await card.getByRole('radio',{name:/Share HH events/}).isChecked());
-  await card.getByRole('radio',{name:/Import and keep in sync/}).check();
+  await card.getByText('Signed in to Microsoft',{exact:true}).waitFor();
+  await card.getByText('Repeating events, meetings and private events stay in their original calendar.',{exact:true}).waitFor();
   await card.getByRole('button',{name:'Create HH Family calendar',exact:true}).click();
-  await card.getByText('HH Family is ready to connect.',{exact:true}).waitFor();
+  await card.getByText('HH Family is selected. Start syncing to finish setup.',{exact:true}).waitFor();
   assert.equal(await card.getByLabel('Outlook calendar',{exact:true}).inputValue(),family.id);
-  assert.ok(await card.getByRole('radio',{name:/Share HH events/}).isChecked());
+  await card.getByRole('button',{name:'Change how it syncs',exact:true}).click();
+  await card.getByRole('button',{name:'Send HH events to Outlook',exact:true}).click();
+  assert.ok(await card.getByRole('button',{name:'Start sharing to Outlook',exact:true}).isEnabled());
+  await card.getByRole('button',{name:'Change how it syncs',exact:true}).click();
+  await card.getByRole('button',{name:'Use both HH and Outlook',exact:true}).click();
+  assert.ok(await connect.isEnabled());
   await connect.click();
-  await card.getByText(family.name,{exact:true}).waitFor();
+  await card.locator('p').filter({hasText:/HH Family.*Syncing both ways/}).waitFor();
   await card.getByRole('button',{name:'Sync now',exact:true}).click();
   await card.getByText('Calendar synced.',{exact:true}).waitFor();
   await card.getByRole('button',{name:'Disconnect Outlook',exact:true}).click();
-  await card.getByRole('button',{name:'Reconnect Outlook',exact:true}).waitFor();
-  assert.deepEqual(calls.map(call=>call.action).filter(action=>action!=='status'),['complete','create_family','connect','sync','disconnect']);
-  console.log('Outlook browser passed: both sync modes, optional HH Family calendar, share by default, manual sync and disconnect.');
+  await card.getByRole('button',{name:'Use both HH and Outlook',exact:true}).waitFor();
+  assert.deepEqual(calls.map(call=>call.action).filter(action=>action!=='status'),['authorize','complete','create_family','connect','sync','disconnect']);
+  console.log('Outlook browser passed: choose before sign-in, preserve sync mode through HH Family creation, review, connect and disconnect.');
 
-  await page.goto(url+'?personal_calendar=return#'+new URLSearchParams({
+  const googleReturn=url+'?personal_calendar=return#'+new URLSearchParams({
    personal_calendar_state:'hhp_'+state,personal_calendar_code:'synthetic-google-code'
-  }).toString());
+  }).toString();
+  await page.route('https://accounts.google.com/**',route=>route.fulfill({
+   contentType:'text/html',body:'<script>location.replace('+JSON.stringify(googleReturn)+')</script>'
+  }));
   const googleCard=page.locator('.settings-calendar-card').filter({has:page.getByRole('heading',{name:'My Google Calendar',exact:true})});
-  const importGoogle=googleCard.getByRole('button',{name:'Import and connect Google calendar',exact:true});
+  await googleCard.getByRole('button',{name:'Send HH events to Google',exact:true}).waitFor();
+  await googleCard.getByRole('button',{name:'Use both HH and Google',exact:true}).click();
+  const importGoogle=googleCard.getByRole('button',{name:'Start two-way sync',exact:true});
   await importGoogle.waitFor();
   assert.ok(await importGoogle.isDisabled());
   await googleCard.getByLabel('Google calendar',{exact:true}).selectOption(googleChoice.id);
   assert.ok(await importGoogle.isDisabled());
   await googleCard.getByRole('checkbox',{name:/Share ordinary events/}).check();
   await importGoogle.click();
-  await googleCard.getByText(googleChoice.name,{exact:true}).waitFor();
-  assert.deepEqual(googleCalls,['personal_complete','personal_existing_connect']);
+  await googleCard.locator('p').filter({hasText:/Original Google calendar.*Syncing both ways/}).waitFor();
+  assert.deepEqual(googleCalls,['personal_existing_start','personal_complete','personal_existing_connect']);
   console.log('Google browser passed: existing calendar picker and household-sharing consent before connecting.');
  }finally{
   await browser?.close();

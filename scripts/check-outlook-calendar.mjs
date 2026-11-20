@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import {createGraph,eventFields,outlookFields} from '../supabase/functions/outlook-calendar/graph.ts';
 import {syncEvents} from '../supabase/functions/outlook-calendar/sync.ts';
+import {nativeInstant} from '../supabase/functions/google-calendar/native.ts';
 
 const db=new PGlite();
 const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
@@ -26,11 +27,13 @@ await db.exec(`
  alter table public.household_members add unique(household_id,user_id);
  grant usage on schema private to service_role;
  create function private.personal_calendar_ready(uuid) returns boolean language sql as $$select true$$;
- alter table public.household_events add column recurrence text[] not null default '{}',
-  add column location_place_id text,add column reminder_30_enabled boolean not null default false;
+ alter table public.household_events add column location_place_id text,add column reminder_minutes integer,
+  add column person_ids uuid[];
 `);
+await db.exec(read('database/native-calendar-repeats.sql'));
+await db.exec(read('database/event-notification-toggle.sql'));
 for(const file of ['20261120142442_test_outlook_calendar.sql','20261120150942_test_outlook_share_hh_events.sql',
- '20261120151200_test_outlook_create_family_calendar.sql'])await db.exec(read('supabase/migrations/'+file));
+ '20261120151200_test_outlook_create_family_calendar.sql','20261120162100_test_outlook_repeating_events.sql'])await db.exec(read('supabase/migrations/'+file));
 
 const householdId='10000000-0000-4000-8000-000000000001';
 const userId='10000000-0000-4000-8000-000000000002';
@@ -112,7 +115,16 @@ const remote=new Map([
  ['repeat',makeEvent('repeat','Repeat',{type:'seriesMaster'})]
 ]);
 const writes=[];
-let networkBreak=false,breakBeforeAck=false,eventsCreated=0;
+const occurrences=new Map();
+const utc=stamp=>stamp?.timeZone==='Eastern Standard Time'?
+ {dateTime:nativeInstant(stamp.dateTime.slice(0,10),stamp.dateTime.slice(11)).slice(0,-1),timeZone:'UTC'}:stamp;
+const responseFields=body=>({...body,...(body.start?{start:utc(body.start),end:utc(body.end)}:{})});
+const version=(item,fields)=>({...item,...responseFields(fields),changeKey:'v'+(writes.length+1),'@odata.etag':'W/"v'+(writes.length+1)+'"'});
+const occurrence=(master,date,extra={})=>makeEvent(master+'-'+date,'HH weekly series',{
+ type:'occurrence',occurrenceId:'OID.'+master+'.'+date,
+ start:{dateTime:date+'T14:00:00',timeZone:'UTC'},end:{dateTime:date+'T15:00:00',timeZone:'UTC'},...extra
+});
+let networkBreak=false,breakBeforeAck=false,htmlDetail=false,eventsCreated=0;
 const base='/v1.0/me/calendars/'+encodeURIComponent(calendarId);
 const request=async(url,options)=>{
  const address=new URL(url),method=options.method,path=address.pathname,body=options.body?JSON.parse(options.body):null;
@@ -125,18 +137,42 @@ const request=async(url,options)=>{
  if(path===base+'/events'&&method==='POST'){
   writes.push(method);
   const id='from-home-'+(++eventsCreated);
-  const result={...makeEvent(id,body.subject),...body};
+  const result={...makeEvent(id,body.subject),...responseFields(body),...(body.recurrence?{type:'seriesMaster',exceptionOccurrences:[],cancelledOccurrences:[]}:{} )};
   remote.set(id,result);
   if(breakBeforeAck){breakBeforeAck=false;throw Error('Response lost after commit')}
   return response(result,201);
  }
- const id=path.split('/').at(-1);
- const item=remote.get(id);
- if(method==='GET')return item?response(item):response({},404);
+ if(path.endsWith('/instances')){
+  const master=path.split('/').at(-2),date=address.searchParams.get('startDateTime').slice(0,10);
+  const item=occurrence(master,date);
+  occurrences.set(item.id,{master,item});
+  return response({value:[item]});
+ }
+ const id=path.split('/').at(-1),instance=occurrences.get(id);
+ const item=remote.get(id)??instance?.item;
+ if(method==='GET')return item?response(htmlDetail&&id==='from-home-1'?{...item,body:{contentType:'html',content:'<html>Family notes</html>'}}:item):response({},404);
  assert.equal(path,base+'/events/'+id);
  assert.equal(options.headers['If-Match'],item['@odata.etag']);
  writes.push(method);
+ if(instance){
+  const master=remote.get(instance.master);
+  const exceptions=master.exceptionOccurrences.filter(e=>e.id!==id);
+  if(method==='DELETE'){
+   remote.set(master.id,{...master,exceptionOccurrences:exceptions,cancelledOccurrences:[...master.cancelledOccurrences,item.occurrenceId]});
+   occurrences.delete(id);
+   return new Response(null,{status:204});
+  }
+  const updated=version(item,{...body,type:'exception'});
+  occurrences.set(id,{master:master.id,item:updated});
+  remote.set(master.id,{...master,exceptionOccurrences:[...exceptions,updated]});
+  return response(updated);
+ }
  if(method==='DELETE'){remote.delete(id);return new Response(null,{status:204})}
+ if(item.type==='seriesMaster'){
+  const updated=version(item,body);
+  remote.set(id,updated);
+  return response(updated);
+ }
  assert.deepEqual(body,{subject:'HH edit'},'Editing only the name must preserve Outlook formatting and location metadata');
  const updated={...item,...body,changeKey:'v3','@odata.etag':'W/"v3"'};
  remote.set(id,updated);
@@ -188,17 +224,60 @@ await assert.rejects(sync(),/invalid calendar page/);
 assert.equal(await scalar('select count(*)::int from public.household_events'),2,'A failed list must not delete HH events');
 networkBreak=false;
 await db.query('delete from public.household_events where id=$1',[homeId]);
+const copyBeforeDelete=remote.get('from-home-1');
+remote.set(copyBeforeDelete.id,{...copyBeforeDelete,changeKey:'edited-outside-hh'});
+await sync('review');
+assert.equal(remote.has(copyBeforeDelete.id),true,'Preserve a copy when Outlook changed after the HH deletion');
+remote.set(copyBeforeDelete.id,copyBeforeDelete);
+htmlDetail=true;
 await sync();
-assert.equal(remote.has('from-home-1'),false);
+assert.equal(remote.has('from-home-1'),false,'A confirmed, unchanged copy can be removed even when Outlook returns HTML notes');
 assert.equal(await scalar('select count(*)::int from public.household_events'),0);
 assert.deepEqual(writes,['POST','PATCH','DELETE']);
 assert.deepEqual([...remote.keys()],['private','meeting','repeat']);
+assert.equal(tick,6);
+
+const seriesId='10000000-0000-4000-8000-000000000005';
+const weekly=['RRULE:FREQ=WEEKLY;INTERVAL=1;COUNT=6'];
+await db.query("insert into public.household_events(id,household_id,title,description,location,starts_at,ends_at,recurrence,exceptions) values($1,$2,'HH weekly series','Family notes','Cornwall','2038-03-15T14:00:00Z','2038-03-15T15:00:00Z',$3,$4)",
+ [seriesId,householdId,weekly,JSON.stringify({'2038-03-22':null,'2038-03-29':{...home,person:'Everyone',title:'Moved in HH',starts_at:'2038-03-30T14:00:00Z',ends_at:'2038-03-30T15:00:00Z'}})]);
+await sync();
+const exported=remote.get('from-home-2');
+assert.equal(exported.recurrence.pattern.type,'weekly');
+assert.equal(exported.recurrence.range.numberOfOccurrences,6);
+assert.deepEqual(exported.cancelledOccurrences,['OID.from-home-2.2038-03-22']);
+assert.equal(exported.exceptionOccurrences[0].subject,'Moved in HH');
+const priorWrites=writes.length;
+await sync();
+assert.equal(writes.length,priorWrites,'A repeated sync leaves unchanged Outlook series and exceptions alone');
+const externalMove=occurrence(exported.id,'2038-04-05',{type:'exception',subject:'Moved in Outlook',
+ start:{dateTime:'2038-04-06T14:00:00',timeZone:'UTC'},end:{dateTime:'2038-04-06T15:00:00',timeZone:'UTC'}});
+remote.set(exported.id,{...exported,exceptionOccurrences:[...exported.exceptionOccurrences,externalMove],
+ cancelledOccurrences:[...exported.cancelledOccurrences,'OID.from-home-2.2038-04-12']});
+await sync();
+const hhExceptions=await scalar('select exceptions from public.household_events where id=$1',[seriesId]);
+assert.equal(hhExceptions['2038-04-05'].title,'Moved in Outlook','A changed occurrence imports even if the series change key did not change');
+assert.equal(hhExceptions['2038-04-12'],null);
+assert.equal(hhExceptions['2038-03-29'].title,'Moved in HH');
+const providerOnly=makeEvent('outlook-series','Created a series in Outlook',{type:'seriesMaster',recurrence:exported.recurrence,
+ exceptionOccurrences:[],cancelledOccurrences:['OID.outlook-series.2038-03-22']});
+remote.set(providerOnly.id,providerOnly);
+await sync();
+const importedSeries=(await db.query("select id,recurrence,exceptions from public.household_events where title='Created a series in Outlook'")).rows[0];
+assert.deepEqual(importedSeries.recurrence,weekly);
+assert.deepEqual(importedSeries.exceptions,{'2038-03-22':null});
+await db.query("update public.household_events set title='Edited Outlook series in HH',version=version+1 where id=$1",[importedSeries.id]);
+await sync();
+assert.equal(remote.get(providerOnly.id).subject,'Edited Outlook series in HH');
+remote.delete(providerOnly.id);
+await sync();
+assert.equal(await scalar('select exists(select 1 from public.household_events where id=$1)',[importedSeries.id]),false);
+assert.equal(await scalar('select count(*)::int from public.household_events'),1,'Deleting one series leaves the other intact');
 
 await call('disconnect');
 assert.equal((await call('status')).active,false);
 assert.equal(await call('lease'),null);
 assert.equal(await scalar("select count(*)::int from vault.secrets where secret='trial-token'"),0);
-assert.equal(await scalar('select count(*)::int from private.outlook_calendar_links where retired'),2);
-assert.equal(tick,5);
+assert.equal(await scalar('select count(*)::int from private.outlook_calendar_links where retired'),3);
 await db.close();
 console.log('Outlook trial checks passed: default HH sharing, opt-in import, one-use authorization, safe HH Family calendar creation, two-way edits and deletions, lost-response recovery and credential cleanup.');
