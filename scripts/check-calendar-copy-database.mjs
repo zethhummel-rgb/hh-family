@@ -200,4 +200,58 @@ assert.equal(await scalar('select count(*)::int from vault.decrypted_secrets whe
 await assert.rejects(personal('check_lease',member,{lease:remove.lease}),/membership/);
 assert.equal(await scalar('select count(*)::int from private.google_calendar_connections where household_id=$1',[b]),1);
 console.log('Personal calendar checks passed: two accounts, OAuth state isolation and replay, private credentials, separate queues, retries, reconnect, disconnect, and membership cleanup.');
+for(const path of ['20261119120746_event_venue_selection.sql','20261120130526_test_google_calendar_two_way.sql']){
+ await db.exec(fs.readFileSync(new URL('../supabase/migrations/'+path,import.meta.url),'utf8'));
+}
+const pilot='55555555-5555-4555-8555-555555555555';
+const pilotOwner='66666666-6666-4666-8666-666666666666',pilotMember='77777777-7777-4777-8777-777777777777';
+for(const uid of [pilotOwner,pilotMember])await db.query('insert into auth.users values($1,$2,now())',[uid,uid+'@hh-copy.invalid']);
+await db.query("insert into public.households(id,name,owner_id) values($1,'Synthetic two-way home',$2)",[pilot,pilotOwner]);
+for(const [uid,role] of [[pilotOwner,'owner'],[pilotMember,'member']]){
+ await db.query('insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,$3,$4)',[pilot,uid,'Fixture member',role]);
+ await db.query('insert into private.personal_calendar_connections(household_id,user_id,calendar_id,secret_id) values($1,$2,$3,gen_random_uuid())',[pilot,uid,'two-way-fixture-'+role]);
+}
+const namedService=(name,action,uid,extra={})=>scalar('select public.'+name+'($1,$2)',[action,JSON.stringify({householdId:pilot,userId:uid,...extra})]);
+const twoWay=(action,uid,extra)=>namedService('personal_calendar_two_way',action,uid,extra);
+assert.equal(await scalar("select has_function_privilege('authenticated','public.personal_calendar_two_way(text,jsonb)','execute')"),false);
+await assert.rejects(twoWay('status',other),/unavailable/);
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
+await twoWay('set',pilotOwner,{enabled:true});
+assert.equal(Number(await scalar('select private.dispatch_test_calendar_two_way()')),1,'Only an opted-in connection is scheduled');
+const localLease=(await namedService('personal_calendar_service','claim',pilotOwner)).lease;
+const pull=(action,extra={})=>twoWay(action,pilotOwner,{lease:localLease,...extra});
+await assert.rejects(twoWay('apply',pilotOwner,{lease:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'}),/lease/);
+const baseFields={title:'Added in Outlook',description:'Family notes',location:'Rink',starts_at:'2026-11-20T23:00:00.000Z',ends_at:'2026-11-21T00:00:00.000Z',all_day:false,start_date:null,end_date:null};
+const remote=(event)=>({kind:'event',googleId:'outlook-new',event,shape:{starts_at:event.starts_at,ends_at:event.ends_at,all_day:false,start_date:null,end_date:null,recurrence:[]}});
+const page=(changes,nextSync,nextPage=null)=>pull('apply',{changes,nextSync,nextPage});
+assert.equal((await page([remote(baseFields)],null,'page-2')).changed,1);
+assert.deepEqual(await pull('cursor'),{syncToken:null,pageToken:'page-2'});
+const linked=(await db.query('select id,version from public.household_events where household_id=$1',[pilot])).rows[0];
+assert.equal(await scalar('select count(*)::int from private.personal_calendar_queue where event_id=$1',[linked.id]),1,'Only the other connection has outbound work');
+const tombstone={kind:'deleted',googleId:'outlook-new'};
+assert.equal((await page([tombstone],'cursor-1')).changed,0,'Initial snapshot cannot delete household events');
+assert.equal((await page([remote(baseFields)],'cursor-2')).changed,0,'Same Google event does not create a duplicate or increment version');
+const moved={...baseFields,title:'Moved in Outlook',starts_at:'2026-11-21T00:00:00.000Z',ends_at:'2026-11-21T01:00:00.000Z'};
+assert.equal((await page([remote(moved)],'cursor-3')).changed,1);
+assert.equal(await scalar('select title from public.household_events where id=$1',[linked.id]),moved.title);
+assert.equal(await scalar('select version from public.household_events where id=$1',[linked.id]),linked.version+1);
+await asUser(pilotOwner,()=>db.query("update public.household_events set title='HH wins simultaneous edit',version=version+1 where id=$1",[linked.id]));
+assert.equal((await page([tombstone],'cursor-4')).changed,0,'An unsent HH change wins over a competing deletion');
+const job=(await db.query('select q.revision from private.personal_calendar_queue q join private.personal_calendar_connections c on c.id=q.connection_id where c.user_id=$1 and q.event_id=$2',[pilotOwner,linked.id])).rows[0];
+const work={eventId:linked.id,revision:Number(job.revision),lease:localLease};
+const hhShape=remote({...moved,starts_at:'2026-11-21T02:00:00.000Z',ends_at:'2026-11-21T03:00:00.000Z'}).shape;
+await pull('keep_single_event_id',{...work,shape:hhShape});
+const reused=await namedService('personal_calendar_service','prepare',pilotOwner,{...work,shape:hhShape,dates:[]});
+assert.equal(reused.google_id,'outlook-new','An HH edit of a one-time event patches its existing provider ID');
+await namedService('personal_calendar_service','base_done',pilotOwner,work);
+await namedService('personal_calendar_service','event_done',pilotOwner,{...work,version:linked.version+2,dates:[]});
+assert.equal((await page([tombstone],'cursor-5')).changed,1);
+assert.equal(await scalar('select exists(select 1 from public.household_events where id=$1)',[linked.id]),false);
+assert.equal((await page([tombstone],'cursor-6')).changed,0,'Replaying a deletion is harmless');
+await pull('reset');
+assert.deepEqual(await pull('cursor'),{syncToken:null,pageToken:null});
+await namedService('personal_calendar_service','finish',pilotOwner,{lease:localLease});
+await twoWay('set',pilotOwner,{enabled:false});
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
+console.log('TEST two-way calendar checks passed: opt-in, authorization, stable links, inbound add/edit/delete, replay, conflict handling, cursor reset, and other-member copies.');
 await db.close();console.log('Calendar copy database checks passed: source gating, transactional preservation/rollback, private full backups, member/outsider/anonymous isolation, lease exclusion, checkpoints, concurrent edits, notification cutover deduplication, durable deletes, new connections stay native and complete household cleanup. No live data or Google requests.');

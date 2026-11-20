@@ -5,6 +5,7 @@ import {completePersonalCalendarReturn} from './personalCalendarReturn';
 type Connection={
  configured:boolean;available:boolean;usesExistingCopy:boolean;connected:boolean;
  status:'off'|'pending'|'up_to_date'|'reconnect'|'needs_attention'|'retry';
+ twoWay?:{enabled:boolean;ready:boolean};
 };
 const labels={
  off:'Google Calendar is off',pending:'Updating your Google copy',up_to_date:'Google copy is up to date',
@@ -54,10 +55,19 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
    setNotice('Google Calendar disconnected.');
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
+ async function updateTwoWay(enabled?:boolean){
+  setBusy(true);setError('');setNotice('');
+  try{
+   const twoWay=await (enabled===undefined?request('two_way_sync'):request('two_way_set',{enabled}));
+   setConnection(current=>current?{...current,twoWay}:null);
+  }catch(e){setError((e as Error).message)}finally{setBusy(false)}
+ }
  if(connection?.usesExistingCopy)return null;
  return <div className="settings-detail-card settings-calendar-card">
   <h3>My Google Calendar</h3>
-  <p>See your household’s HH events on a separate calendar in your Google account. Make changes in HH to keep your copy up to date.</p>
+  <p>{connection?.twoWay?.enabled?
+   'Add, edit or delete a one-time event on your connected calendar to update HH. This also works in Outlook when it shows that same Google calendar.':
+   'See your household’s HH events on your connected Google calendar.'}</p>
   {connection&&<span className="settings-connection"><i className={connection.connected?'connected':''}/>{labels[connection.status]}</span>}
   {(busy||notice)&&<p role="status">{busy?'Working on your Google connection…':notice}</p>}
   {error&&<p className="error" role="alert">{error}</p>}
@@ -67,6 +77,16 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
   {connection?.configured&&connection.available&&!confirmDisconnect&&<button type="button" className="button soft wide" disabled={busy} onClick={connect}>
    {connection.connected?'Reconnect my Google Calendar':'Connect my Google Calendar'}
   </button>}
+  {connection?.connected&&connection.twoWay&&!confirmDisconnect&&<div className="settings-calendar-sync">
+   {connection.twoWay.enabled?<>
+    <p role="status">{connection.twoWay.ready?'Two-way sync is on.':'Preparing two-way sync…'}</p>
+    <button type="button" className="button soft" disabled={busy} onClick={()=>void updateTwoWay()}>Sync now</button>{' '}
+    <button type="button" className="text-button" disabled={busy} onClick={()=>void updateTwoWay(false)}>Turn off two-way sync</button>
+   </>:<>
+    <p>Changes from this Google calendar can update or remove shared HH events.</p>
+    <button type="button" className="button soft" disabled={busy} onClick={()=>void updateTwoWay(true)}>Enable two-way sync</button>
+   </>}
+  </div>}
   {connection?.connected&&!confirmDisconnect&&<button type="button" className="text-button" disabled={busy} onClick={()=>setConfirmDisconnect(true)}>Disconnect my Google Calendar</button>}
   {confirmDisconnect&&<div>
    <p>Your copy will stop updating. You can remove the old calendar in Google Calendar.</p>

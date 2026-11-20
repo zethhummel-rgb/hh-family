@@ -18,7 +18,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false,householdUseReports
 const addressLookups=[],savedEvents=[];
 const suggestedStreet='12 Main Street, Example City, ON, Canada';
 const venueSuggestion={placeId:'fixture-venue-id',name:'John Gordon Construction',address:'Example venue address, Cornwall, ON'};
-let personalCalendarConnected=false,personalCompletions=0;
+let personalCalendarConnected=false,personalCompletions=0,twoWayEnabled=false,twoWayReady=false;
 const personalCalendarState='hhp_'+ 'a'.repeat(43);
 const deleteHouseholdName='The Pilot’s Home';
 let deleteAttempts=0;
@@ -67,7 +67,9 @@ let managedHomes=[
    else if(table==='google-calendar'){
     const body=req.postDataJSON();
     if(body.action==='status')data={configured:true,connected:false,nativeReady:true,googleConnected:false};
-    if(body.action==='personal_status')data={available:true,configured:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off'};
+    if(body.action==='personal_status')data={available:true,configured:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off',...(personalCalendarConnected?{twoWay:{enabled:twoWayEnabled,ready:twoWayReady}}:{})};
+    if(body.action==='personal_two_way_set'){twoWayEnabled=body.enabled;twoWayReady=false;data={enabled:twoWayEnabled,ready:twoWayReady}}
+    if(body.action==='personal_two_way_sync'){assert.equal(twoWayEnabled,true);twoWayReady=true;data={enabled:true,ready:true}}
     if(body.action==='personal_start')data={url:'https://accounts.google.com/o/oauth2/v2/auth?state='+personalCalendarState};
     if(body.action==='personal_complete'){
      assert.deepEqual(body,{action:'personal_complete',householdId:home,state:personalCalendarState,code:'fixture-code'});
@@ -171,6 +173,12 @@ let managedHomes=[
  assert.equal(personalCompletions,1);
  assert.equal(new URL(page.url()).hash,'');
  assert.equal(new URL(page.url()).searchParams.has('personal_calendar'),false);
+ await page.getByRole('button',{name:'Enable two-way sync',exact:true}).click();
+ await page.getByText('Preparing two-way sync…',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Sync now',exact:true}).click();
+ await page.getByText('Two-way sync is on.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Turn off two-way sync',exact:true}).click();
+ await page.getByRole('button',{name:'Enable two-way sync',exact:true}).waitFor();
  await page.getByRole('button',{name:'Disconnect my Google Calendar',exact:true}).click();
  await page.getByRole('button',{name:'Cancel',exact:true}).click();
  assert(personalCalendarConnected);

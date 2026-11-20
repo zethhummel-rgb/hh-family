@@ -5,7 +5,7 @@ import {readReminder} from './reminders.ts';
 import {calendarReminders} from '../event-reminders/logic.ts';
 
 export class CopyError extends Error{
- constructor(public code:'reconnect'|'retry'|'needs_attention'|'missing'|'conflict'|'budget'){super(code)}
+ constructor(public code:'reconnect'|'retry'|'needs_attention'|'missing'|'conflict'|'budget'|'sync_expired'){super(code)}
 }
 type RequestGoogle=(path:string,method?:string,body?:unknown)=>Promise<any>;
 const iso=(value:string)=>new Date(value).toISOString();
@@ -96,7 +96,27 @@ export function transferReminderAliases(records:{googleId:string;event:NativeEve
  return aliases;
 }
 
-export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch,personalUserId?:string){
+export function googleCalendarChanges(items:unknown){
+ if(!Array.isArray(items)||items.length>100)throw new CopyError('retry');
+ return items.flatMap((entry:any)=>{
+  if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>1200||entry.recurringEventId||
+   entry.recurrence?.length||entry.eventType&&entry.eventType!=='default')return [];
+  const googleId=entry.id;
+  if(entry.status==='cancelled')return [{kind:'deleted',googleId}];
+  try{
+   const {title,description,location,starts_at,ends_at,all_day,start_date,end_date}=nativeFields({
+    summary:entry.summary,description:entry.description,location:entry.location,start:entry.start,end:entry.end
+   });
+   return [{
+    kind:'event',googleId,hhCopy:entry.extendedProperties?.shared?.hh_source==='native',
+    event:{title,description,location,starts_at,ends_at,all_day,start_date,end_date},
+    shape:{starts_at,ends_at,all_day,start_date,end_date,recurrence:[]}
+   }];
+  }catch{return [];}
+ });
+}
+
+export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch,personalUserId?:string,testTwoWay=false){
  const service=async(action:string,extra:Record<string,unknown>={})=>{
   const r=await admin.rpc(personalUserId?'personal_calendar_service':'calendar_copy_service',{
    action,payload:{householdId:hid,...(personalUserId?{userId:personalUserId}:{}),...extra}
@@ -106,9 +126,14 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
  const claim=await service('claim');if(!claim)return {busy:true};
  const lease=claim.lease,deadline=Date.now()+20000;let requests=0,problem:string|null=null,completed=0,transferred=false;
  const rpc=(action:string,extra:Record<string,unknown>={})=>service(action,{lease,...extra});
+ const inbound=async(action:string,extra:Record<string,unknown>={})=>{
+  const r=await admin.rpc('personal_calendar_two_way',{action,payload:{householdId:hid,userId:personalUserId,lease,...extra}});
+  if(r.error)throw new CopyError('retry');return r.data;
+ };
  const budget=()=>{if(Date.now()>deadline||requests>=24)throw new CopyError('budget')};
  try{
-  if(claim.nativeReady&&!claim.work.length)return {completed:0};
+  const cursor=personalUserId&&testTwoWay?await inbound('cursor'):null;
+  if(claim.nativeReady&&!claim.work.length&&!cursor)return {completed:0};
   const connection=personalUserId?await rpc('credentials'):
    (await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId:hid}})).data;
   if(!connection?.refreshToken||!config.clientId||!config.clientSecret)throw new CopyError('reconnect');
@@ -125,7 +150,7 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
    const response=await fetcher(url.toString(),{method,headers:{Authorization:'Bearer '+credentials.access_token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(8000)});
    if(response.status===204)return null;
    const value=await response.json();
-   if(!response.ok){if([401,403].includes(response.status))throw new CopyError('reconnect');if([404,410].includes(response.status))throw new CopyError('missing');if(response.status===409)throw new CopyError('conflict');throw new CopyError(response.status===400?'needs_attention':'retry')}
+   if(!response.ok){if([401,403].includes(response.status))throw new CopyError('reconnect');if(response.status===410&&url.searchParams.has('syncToken'))throw new CopyError('sync_expired');if([404,410].includes(response.status))throw new CopyError('missing');if(response.status===409)throw new CopyError('conflict');throw new CopyError(response.status===400?'needs_attention':'retry')}
    return value;
   };
   const base='calendars/'+encodeURIComponent(connection.calendarId)+'/events';
@@ -153,10 +178,23 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
    budget();await rpc('import',{...incoming,deliveryAliases,snapshotHash:archived.snapshotHash});
    transferred=true;return {transferred:true,imported:incoming.events.length};
   }
+  if(cursor){
+   const q=new URLSearchParams({showDeleted:'true',singleEvents:'false',maxResults:'100'});
+   if(cursor.syncToken)q.set('syncToken',cursor.syncToken);
+   if(cursor.pageToken)q.set('pageToken',cursor.pageToken);
+   try{
+    const delta=await request(base+'?'+q);
+    await inbound('apply',{changes:googleCalendarChanges(delta.items??[]),nextPage:delta.nextPageToken??null,nextSync:delta.nextSyncToken??null});
+   }catch(e){
+    if(e instanceof CopyError&&e.code==='sync_expired')await inbound('reset');
+    else throw e;
+   }
+  }
   for(const job of claim.work){
    const args={eventId:job.eventId,revision:job.revision};let rotate=false;
    try{
     budget();const event:NativeEvent|null=job.event,dates=event?Object.keys(event.exceptions||{}):[];
+    if(cursor&&event&&!event.recurrence?.length&&!dates.length)await inbound('keep_single_event_id',{...args,shape:copyShape(event)});
     let link=await rpc('prepare',{...args,shape:event?copyShape(event):null,dates});if(!link)continue;
     const remove=async(gid:string)=>{try{await request(base+'/'+encodeURIComponent(gid),'DELETE')}catch(e){if(!(e instanceof CopyError)||e.code!=='missing')throw e}};
     for(const gid of link.retired_ids||[]){await remove(gid);await rpc('retired_done',{...args,googleId:gid})}

@@ -5,7 +5,7 @@ const base='supabase/functions/google-calendar/';
 const recurrence=uri(read(base+'recurrence.ts')),native=uri(read(base+'native.ts').replace("'./recurrence.ts'",JSON.stringify(recurrence)));
 let source=read(base+'copy.ts');
 for(const [path,url] of [['./native.ts',native],['./recurrence.ts',recurrence],['./tags.ts',uri(read(base+'tags.ts'))],['./reminders.ts',uri(read(base+'reminders.ts'))],['../event-reminders/logic.ts',uri(read('supabase/functions/event-reminders/logic.ts'))]])source=source.replace(JSON.stringify(path).replaceAll('"',"'"),JSON.stringify(url));
-const {runCalendarCopy,prepareGoogleTransfer,transferReminderAliases,copyShape,googleCopy}=await import(uri(source));
+const {runCalendarCopy,prepareGoogleTransfer,transferReminderAliases,copyShape,googleCopy,googleCalendarChanges}=await import(uri(source));
 const {occurrenceForDate}=await import(native);
 const hid='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222',person='33333333-3333-4333-8333-333333333333';
 const master={id,title:'Family plan',description:'Keep the notes',location:'Home',person:'Family member',person_ids:[person],reminder_minutes:1020,reminder_30_enabled:false,starts_at:'2026-10-25T14:00:00.000Z',ends_at:'2026-10-25T15:00:00.000Z',all_day:false,start_date:null,end_date:null,version:3,recurrence:['RRULE:FREQ=WEEKLY;INTERVAL=1;COUNT=3'],exceptions:{'2026-11-01':null,'2026-11-08':{title:'Moved plan',description:'Keep changed notes',location:'Park',person:'Everyone',person_ids:[],reminder_minutes:15,reminder_30_enabled:true,starts_at:'2026-11-09T20:00:00.000Z',ends_at:'2026-11-09T21:00:00.000Z',all_day:false,start_date:null,end_date:null}}};
@@ -136,4 +136,34 @@ for(const replica of replicas){
  assert.equal(replica.calls.filter(call=>call.action==='check_lease').length,replica.provider.filter(request=>request.method!=='GET').length);
 }
 assert.notEqual(new URL(replicas[0].provider[0].url).pathname,new URL(replicas[1].provider[0].url).pathname);
+const remote={id:'outlook-entry',summary:'Hockey practice',start:{dateTime:'2026-11-20T19:00:00-05:00'},end:{dateTime:'2026-11-20T20:00:00-05:00'}};
+const changes=googleCalendarChanges([remote,changed,oldGoogle,cancelled,{id:'old',status:'cancelled'},{id:'invalid',summary:'Invalid'}]);
+assert.deepEqual(changes.map(c=>[c.googleId,c.kind]),[['outlook-entry','event'],['old','deleted']]);
+assert.equal(changes[0].event.starts_at,'2026-11-21T00:00:00.000Z');
+assert.equal(googleCalendarChanges([{...allDay,recurrence:[]}])[0].event.ends_at,'2026-11-02T05:00:00.000Z');
+
+let deltaCursor={syncToken:'prior',pageToken:null},expired=false;
+const incomingCalls=[];
+const incomingAdmin={rpc:async(name,{action,payload})=>{
+ incomingCalls.push([name,action,payload]);
+ if(action==='claim')return {data:{lease:'new-lease',nativeReady:true,work:[]}};
+ assert.equal(payload.lease,'new-lease');
+ if(action==='credentials')return {data:{calendarId:'outlook-via-google',refreshToken:'test'}};
+ if(action==='cursor')return {data:deltaCursor};
+ return {data:{}};
+}};
+const incomingGoogle=async url=>{
+ if(url==='https://oauth2.googleapis.com/token')return Response.json({access_token:'test'});
+ const u=new URL(url);
+ assert.equal(u.pathname,'/calendar/v3/calendars/outlook-via-google/events');
+ assert.equal(u.searchParams.get('syncToken'),'prior');
+ if(expired)return Response.json({error:'expired'},{status:410});
+ return Response.json({items:[remote],nextSyncToken:'next'});
+};
+await runCalendarCopy(incomingAdmin,hid,{clientId:'test',clientSecret:'test'},incomingGoogle,'member',true);
+assert.equal(incomingCalls.find(([,action])=>action==='apply')[2].nextSync,'next');
+assert.equal(incomingCalls.find(([,action])=>action==='apply')[2].changes[0].event.title,'Hockey practice');
+expired=true;
+await runCalendarCopy(incomingAdmin,hid,{clientId:'test',clientSecret:'test'},incomingGoogle,'member',true);
+assert.ok(incomingCalls.some(([,action])=>action==='reset'),'An expired Google cursor resets without deleting HH events');
 console.log('Google copy checks passed: exact preservation before import, DST/all-day/repeat/exception/tag/reminder conversion, source remains unchanged on failures, etag recheck, notification aliases, outbound-only writes, metadata preservation, durable retries, idempotent inserts and deletes, and independent per-member copy destinations. No real Google or database requests.');
