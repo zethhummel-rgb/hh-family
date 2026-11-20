@@ -124,7 +124,7 @@ const occurrence=(master,date,extra={})=>makeEvent(master+'-'+date,'HH weekly se
  type:'occurrence',occurrenceId:'OID.'+master+'.'+date,
  start:{dateTime:date+'T14:00:00',timeZone:'UTC'},end:{dateTime:date+'T15:00:00',timeZone:'UTC'},...extra
 });
-let networkBreak=false,breakBeforeAck=false,htmlDetail=false,eventsCreated=0;
+let networkBreak=false,breakBeforeAck=false,htmlDetail=false,conflictOnDelete=false,eventsCreated=0;
 const base='/v1.0/me/calendars/'+encodeURIComponent(calendarId);
 const request=async(url,options)=>{
  const address=new URL(url),method=options.method,path=address.pathname,body=options.body?JSON.parse(options.body):null;
@@ -153,6 +153,7 @@ const request=async(url,options)=>{
  if(method==='GET')return item?response(htmlDetail&&id==='from-home-1'?{...item,body:{contentType:'html',content:'<html>Family notes</html>'}}:item):response({},404);
  assert.equal(path,base+'/events/'+id);
  assert.equal(options.headers['If-Match'],item['@odata.etag']);
+ if(method==='DELETE'&&conflictOnDelete){conflictOnDelete=false;return response({},412)}
  writes.push(method);
  if(instance){
   const master=remote.get(instance.master);
@@ -225,13 +226,16 @@ assert.equal(await scalar('select count(*)::int from public.household_events'),2
 networkBreak=false;
 await db.query('delete from public.household_events where id=$1',[homeId]);
 const copyBeforeDelete=remote.get('from-home-1');
-remote.set(copyBeforeDelete.id,{...copyBeforeDelete,changeKey:'edited-outside-hh'});
+remote.set(copyBeforeDelete.id,{...copyBeforeDelete,attendees:[{}],changeKey:'has-guest','@odata.etag':'W/"has-guest"'});
 await sync('review');
-assert.equal(remote.has(copyBeforeDelete.id),true,'Preserve a copy when Outlook changed after the HH deletion');
-remote.set(copyBeforeDelete.id,copyBeforeDelete);
+assert.equal(remote.has(copyBeforeDelete.id),true,'Keep Outlook copies that now have a guest');
+remote.set(copyBeforeDelete.id,{...copyBeforeDelete,subject:'Edited before deletion',changeKey:'edited-outside-hh','@odata.etag':'W/"edited-outside-hh"'});
 htmlDetail=true;
+conflictOnDelete=true;
+await assert.rejects(sync(),/Outlook changed during sync/);
+assert.equal(remote.has(copyBeforeDelete.id),true,'An Outlook edit during deletion is retried using a fresh version');
 await sync();
-assert.equal(remote.has('from-home-1'),false,'A confirmed, unchanged copy can be removed even when Outlook returns HTML notes');
+assert.equal(remote.has('from-home-1'),false,'An HH deletion removes the ordinary Outlook copy even after an Outlook edit');
 assert.equal(await scalar('select count(*)::int from public.household_events'),0);
 assert.deepEqual(writes,['POST','PATCH','DELETE']);
 assert.deepEqual([...remote.keys()],['private','meeting','repeat']);

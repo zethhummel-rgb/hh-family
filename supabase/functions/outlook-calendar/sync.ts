@@ -122,16 +122,14 @@ export async function syncEvents(graph:Graph,call:Call,calendarId:string,initial
    continue;
   }
   if(!local) {
-   // Deleting a known copy needs its unchanged Outlook version and calendar,
-   // but does not require being able to convert its event notes to HH text.
-   if(remote.type!=='singleInstance'||!ordinaryAppointment(remote)||!link.change_key||remote.changeKey!==link.change_key){
-    console.warn('Outlook calendar deletion held: copy changed or is no longer an ordinary appointment');
-    review=true;continue;
-   }
+   // An HH deletion wins over edits to its paired one-time Outlook copy.
+   // Re-read that exact item in the selected calendar, then use its current
+   // version so a new Outlook edit during this request still retries safely.
+   if(!link.outlook_id||remote.id!==link.outlook_id)continue;
    const current=await graph.event(calendarId,remote.id);
    if(!current||current.id!==remote.id||current.type!=='singleInstance'||!ordinaryAppointment(current)||
-    current.changeKey!==link.change_key||!current['@odata.etag']){
-    console.warn('Outlook calendar deletion held: unable to confirm the same appointment version');
+    !current.changeKey||!current['@odata.etag']){
+    console.warn('Outlook calendar deletion held: unable to confirm a paired ordinary appointment');
     review=true;continue;
    }
    if(!await call('current',{eventId,version:null}))continue;
