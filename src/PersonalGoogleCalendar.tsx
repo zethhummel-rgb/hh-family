@@ -14,8 +14,8 @@ const labels={
  off:'Google Calendar is off',pending:'Updating your Google copy',up_to_date:'Google copy is up to date',
  reconnect:'Reconnect to keep syncing',needs_attention:'Some events couldn’t sync',retry:'Waiting to retry sync'
 };
-export default function PersonalGoogleCalendar({householdId,userId,returnResult}:{
- householdId:string;userId:string;returnResult?:'return'|'denied';
+export default function PersonalGoogleCalendar({householdId,userId,returnResult,onSetupComplete,onSetupCancel}:{
+ householdId:string;userId:string;returnResult?:'return'|'denied';onSetupComplete?:()=>void;onSetupCancel?:()=>void;
 }){
  const [connection,setConnection]=useState<Connection|null>(null);
  const [busy,setBusy]=useState(false),[confirmDisconnect,setConfirmDisconnect]=useState(false);
@@ -40,17 +40,20 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
    }
    try{
     const current=await load();
-    if(active&&completed&&!current.choices)setNotice('Google Calendar connected. Your HH events will start syncing.');
+    if(active&&completed&&current.connected&&!current.choices){
+     setNotice(current.twoWay?.enabled?'Google Calendar connected for two-way sync.':'Google Calendar connected. Your HH events will start syncing.');
+     onSetupComplete?.();
+    }
    }catch{if(active)setError(current=>current||'Could not load your Google connection.')}
   };
   void initialLoad();
   const timer=setInterval(()=>{if(!document.hidden)void load().catch(()=>{})},60000);
   return()=>{active=false;clearInterval(timer)};
- },[householdId,userId,returnResult,retry]);
- async function connect(useExisting=false){
+ },[householdId,userId,returnResult,retry,onSetupComplete]);
+ async function connect(action:'start'|'existing_start'|'two_way_copy_start'){
   setBusy(true);setError('');setNotice('');
   try{
-   const data=await request(useExisting?'existing_start':'start');
+   const data=await request(action);
    if(typeof data.url!=='string'||new URL(data.url).origin!=='https://accounts.google.com')throw Error('Could not open Google Calendar.');
    location.assign(data.url);
   }catch(e){setError((e as Error).message);setBusy(false)}
@@ -61,7 +64,8 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
    if(cancel)await request('existing_cancel');
    else await request('existing_connect',{calendarId:selected,acknowledgeShared:share});
    setConnection(await request('status'));setSelected('');setShare(false);
-   if(!cancel)setNotice('Google Calendar connected. Your plans will start syncing.');
+   if(cancel)onSetupCancel?.();
+   else{setNotice('Google Calendar connected for two-way sync.');onSetupComplete?.()}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  async function disconnect(){
@@ -96,7 +100,7 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
   {connection&&!connection.configured&&<p>Personal Google Calendar connections are being prepared.</p>}
   {connection?.choices&&<form className="calendar-setup-picker google-calendar-sync-picker" onSubmit={event=>{event.preventDefault();void finishExisting()}}>
    <p className="settings-connection"><i className="connected"/>Signed in to Google</p>
-   <p>Choose the Google calendar you want to use in both apps.</p>
+   <p>Choose the Google calendar you want to use in both apps, then start two-way sync.</p>
    <label htmlFor={pickerId}>Google calendar</label>
    <select id={pickerId} required disabled={busy} value={selected} onChange={event=>{setSelected(event.target.value);setShare(false)}}>
     <option value="">Choose a calendar</option>
@@ -107,15 +111,14 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
    <button type="submit" className="button primary wide" disabled={busy||!selected||!share}>Start two-way sync</button>
    <button type="button" className="text-button" disabled={busy} onClick={()=>void finishExisting(true)}>Cancel Google connection</button>
   </form>}
-  {connection?.configured&&connection.available&&!confirmDisconnect&&!connection.choices&&(
+  {connection?.configured&&connection.available&&!confirmDisconnect&&!connection.choices&&!(onSetupComplete&&connection.connected)&&(
    testEnvironment&&!connection.connected?
-    <CalendarSetupChoices provider="Google" heading="Choose how to sync your plans. You’ll sign in with Google next."
-     disabled={busy} onChoose={mode=>void connect(mode==='two-way')}/>:
-    <button type="button" className="button soft wide" disabled={busy} onClick={()=>void connect(connection.existingSource)}>
+    <CalendarSetupChoices disabled={busy} onChoose={calendar=>void connect(calendar==='new'?'two_way_copy_start':'existing_start')}/>:
+    <button type="button" className="button soft wide" disabled={busy} onClick={()=>void connect(connection.existingSource?'existing_start':'start')}>
      {connection.connected?'Reconnect my Google Calendar':'Connect my Google Calendar'}
     </button>
   )}
-  {connection?.connected&&connection.twoWay&&!confirmDisconnect&&!connection.choices&&<div className="settings-calendar-sync">
+  {connection?.connected&&connection.twoWay&&!confirmDisconnect&&!connection.choices&&!onSetupComplete&&<div className="settings-calendar-sync">
    {connection.twoWay.enabled?<>
     <p role="status">{connection.twoWay.ready?'Two-way sync is on.':'Preparing two-way sync…'}</p>
     <button type="button" className="button soft" disabled={busy} onClick={()=>void updateTwoWay()}>Sync now</button>{' '}
@@ -125,7 +128,7 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult}
     <button type="button" className="button soft" disabled={busy} onClick={()=>void updateTwoWay(true)}>Enable two-way sync</button>
    </>}
   </div>}
-  {connection?.connected&&!confirmDisconnect&&!connection.choices&&<button type="button" className="text-button" disabled={busy} onClick={()=>setConfirmDisconnect(true)}>Disconnect my Google Calendar</button>}
+  {connection?.connected&&!confirmDisconnect&&!connection.choices&&!onSetupComplete&&<button type="button" className="text-button" disabled={busy} onClick={()=>setConfirmDisconnect(true)}>Disconnect my Google Calendar</button>}
   {confirmDisconnect&&<div>
    <p>{connection?.existingSource?'Events already copied between HH and Google will stay in both calendars.':'Your copy will stop updating. You can remove the old calendar in Google Calendar.'}</p>
    <button type="button" className="button soft" disabled={busy} onClick={disconnect}>Disconnect</button>{' '}

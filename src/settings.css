@@ -26,5 +26,10 @@
 .calendar-setup-picker select{width:100%}
 .calendar-setup-picker .calendar-setup-family{margin-top:4px}
 .calendar-setup-picker .text-button,.outlook-calendar-card .text-button{min-height:44px}
+.settings-backdrop.calendar-finish-backdrop{padding:12px;align-items:center}
+.settings-dialog.calendar-finish-dialog{width:100%;max-width:500px;height:auto;max-height:calc(100dvh - 24px);border:1px solid var(--line);border-radius:22px}
+.calendar-finish-dialog .settings-toolbar h2{font-size:clamp(1rem,4.4vw,1.25rem)}
+.calendar-finish-dialog .settings-content{padding:18px 20px 22px}
+.calendar-finish-dialog .settings-calendar-card{padding:0;margin:0;border:0;background:transparent}
 .google-calendar-sync-picker .google-calendar-sync-consent{display:flex;gap:9px;align-items:flex-start}
 .google-calendar-sync-consent input{width:auto;margin:4px 0 0}

@@ -105,7 +105,7 @@ Deno.serve(async(req:Request)=>{
    return json(await twoWay('status'));
   }
   if(['personal_status','personal_start','personal_complete','personal_disconnect'].includes(b.action)||
-    (isTestProject&&['personal_existing_start','personal_existing_connect','personal_existing_cancel'].includes(b.action))){
+    (isTestProject&&['personal_existing_start','personal_existing_connect','personal_existing_cancel','personal_two_way_copy_start'].includes(b.action))){
    const result=await handlePersonalCalendar(admin,b,auth.data.user.id,personalConfig);
    if(isTestProject&&b.action==='personal_status'&&'connected' in result&&result.connected){
     return json({...result,twoWay:await twoWay('status')});

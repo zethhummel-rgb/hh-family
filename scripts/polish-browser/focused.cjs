@@ -70,10 +70,10 @@ let managedHomes=[
     if(body.action==='personal_status')data={available:true,configured:true,usesExistingCopy:false,connected:personalCalendarConnected,status:personalCalendarConnected?'pending':'off',...(personalCalendarConnected?{twoWay:{enabled:twoWayEnabled,ready:twoWayReady}}:{})};
     if(body.action==='personal_two_way_set'){twoWayEnabled=body.enabled;twoWayReady=false;data={enabled:twoWayEnabled,ready:twoWayReady}}
     if(body.action==='personal_two_way_sync'){assert.equal(twoWayEnabled,true);twoWayReady=true;data={enabled:true,ready:true}}
-    if(body.action==='personal_start')data={url:'https://accounts.google.com/o/oauth2/v2/auth?state='+personalCalendarState};
+    if(body.action==='personal_two_way_copy_start')data={url:'https://accounts.google.com/o/oauth2/v2/auth?state='+personalCalendarState};
     if(body.action==='personal_complete'){
      assert.deepEqual(body,{action:'personal_complete',householdId:home,state:personalCalendarState,code:'fixture-code'});
-     personalCompletions++;personalCalendarConnected=true;data={};
+     personalCompletions++;personalCalendarConnected=true;twoWayEnabled=true;data={};
     }
     if(body.action==='personal_disconnect'){personalCalendarConnected=false;data={};}
    }
@@ -168,12 +168,15 @@ let managedHomes=[
  }));
  await page.getByRole('button',{name:'Open Settings',exact:true}).click();
  await page.getByRole('button',{name:/^Calendar /}).click();
- await page.getByRole('button',{name:'Send HH events to Google',exact:true}).click();
- await page.getByText('Google Calendar connected. Your HH events will start syncing.').waitFor();
+ await page.getByRole('button',{name:'Create an HH calendar in Google',exact:true}).click();
+ const googleConnected=page.getByRole('dialog',{name:'Calendar connected',exact:true});
+ await googleConnected.getByText('Google Calendar connected for two-way sync.').waitFor();
  assert.equal(personalCompletions,1);
  assert.equal(new URL(page.url()).hash,'');
  assert.equal(new URL(page.url()).searchParams.has('personal_calendar'),false);
- await page.getByRole('button',{name:'Enable two-way sync',exact:true}).click();
+ await googleConnected.getByRole('button',{name:'Close',exact:true}).click();
+ await page.getByRole('button',{name:'Open Settings',exact:true}).click();
+ await page.getByRole('button',{name:/^Calendar /}).click();
  await page.getByText('Preparing two-way sync…',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Sync now',exact:true}).click();
  await page.getByText('Two-way sync is on.',{exact:true}).waitFor();
@@ -185,7 +188,7 @@ let managedHomes=[
  await page.getByRole('button',{name:'Disconnect my Google Calendar',exact:true}).click();
  await page.getByRole('button',{name:'Disconnect',exact:true}).click();
  await page.getByText('Google Calendar disconnected.',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Send HH events to Google',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Create an HH calendar in Google',exact:true}).waitFor();
  assert.equal(personalCalendarConnected,false);
  await page.getByRole('button',{name:'Done',exact:true}).click();
  pass('A household member can connect and disconnect their own Google copy, and the OAuth receipt is removed from the URL');

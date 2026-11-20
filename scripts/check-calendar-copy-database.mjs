@@ -255,6 +255,7 @@ await twoWay('set',pilotOwner,{enabled:false});
 assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
 console.log('TEST two-way calendar checks passed: opt-in, authorization, stable links, inbound add/edit/delete, replay, conflict handling, cursor reset, and other-member copies.');
 await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120151600_test_google_existing_calendar.sql',import.meta.url),'utf8'));
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120165407_test_google_two_way_setup.sql',import.meta.url),'utf8'));
 const existing=(action,uid,extra)=>namedService('test_google_existing_calendar',action,uid,extra);
 assert.equal(await scalar("select has_function_privilege('authenticated','public.test_google_existing_calendar(text,jsonb)','execute')"),false);
 assert.equal((await existing('options',pilotOwner)).existingSource,false);
@@ -304,4 +305,30 @@ await namedService('personal_calendar_service','finish',pilotOwner,{lease:existi
 await namedService('personal_calendar_service','disconnect',pilotOwner);
 assert.equal(await scalar("select count(*)::int from vault.decrypted_secrets where decrypted_secret='private-existing-credential'"),0);
 console.log('Existing Google calendar checks passed: staged selection, consent, source isolation, in-place import and refresh credential cleanup.');
+const setupAdmin={rpc:async(name,{action,payload})=>{
+ try{return {data:await namedService(name,action,payload.userId,payload)}}
+ catch(error){return {error}}
+}};
+const setupRequest=(action,extra={},fetcher)=>handlePersonalCalendar(setupAdmin,
+ {action:'personal_'+action,householdId:pilot,...extra},pilotOwner,{...cfg,test:true},fetcher);
+const createTwoWay=async(action)=>{
+ const consent=new URL((await setupRequest(action)).url);
+ assert.equal(consent.searchParams.get('scope'),approvedScope,'An HH-owned calendar uses the limited Google scope');
+ const receipt={state:consent.searchParams.get('state'),code:'test-two-way-copy'};
+ await setupRequest('complete',receipt,google);
+ return receipt;
+};
+const newCopy=await createTwoWay('two_way_copy_start');
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:true,ready:false},'Two-way sync is enabled when connection setup finishes');
+await assert.rejects(setupRequest('complete',newCopy,()=>assert.fail('OAuth setup can only complete once')),/started this connection/);
+await twoWay('set',pilotOwner,{enabled:false});
+const beforeReconnect=calendarCreates;
+await createTwoWay('two_way_copy_start');
+assert.equal(calendarCreates,beforeReconnect,'Reconnect keeps the original Google calendar');
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false},'A reconnect preserves an explicit choice to turn two-way sync off');
+await setupRequest('disconnect');
+await createTwoWay('start');
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false},'A previously cached setup button keeps its original scope');
+await setupRequest('disconnect');
+console.log('New Google setup checks passed: automatic two-way sync, least-privilege Google access, one-use OAuth state and existing preferences.');
 await db.close();console.log('Calendar copy database checks passed: source gating, transactional preservation/rollback, private full backups, member/outsider/anonymous isolation, lease exclusion, checkpoints, concurrent edits, notification cutover deduplication, durable deletes, new connections stay native and complete household cleanup. No live data or Google requests.');

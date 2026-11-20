@@ -43,6 +43,9 @@ function SettingsDialogBody(props:Props){
  const [history,setHistory]=useState<Page[]>(()=>initialPage==='main'?['main']:initialPage==='googleImport'?['main','calendar','googleImport']:['main',initialPage]),[visited,setVisited]=useState<Page[]>(()=>initialPage==='main'?['main']:initialPage==='googleImport'?['main','calendar','googleImport']:['main',initialPage]),[host,setHost]=useState(false),[leaving,setLeaving]=useState(false),[error,setError]=useState('');
  const [profileDirty,setProfileDirty]=useState(false);
  const [feedbackDirty,setFeedbackDirty]=useState(false),[draftRevision,setDraftRevision]=useState(0);
+ const finishingCalendar=testEnvironment&&initialPage==='calendar'&&(personalCalendarReturn==='return'||outlookCalendarReturn==='return');
+ const [calendarSetupComplete,setCalendarSetupComplete]=useState(false);
+ const finishCalendarSetup=useCallback(()=>setCalendarSetupComplete(true),[]);
  const guard=useUnsavedChanges(feedbackDirty||profileDirty||drafts.dirty,leaving||drafts.busy,onClose,drafts.saveAll);
  const clearDrafts=useCallback(()=>{drafts.discardAll();setFeedbackDirty(false);setProfileDirty(false);setDraftRevision(v=>v+1)},[feedbackDirty,profileDirty,drafts.discardAll]);
  const closeSettings=()=>guard.requestClose(()=>{clearDrafts();onClose()});
@@ -60,7 +63,7 @@ function SettingsDialogBody(props:Props){
  useEffect(()=>{
   const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
   const keys=(e:KeyboardEvent)=>{
-   if(e.key==='Escape'){e.preventDefault();if(leavingRef.current)return;if(pageRef.current==='main')closeRef.current();else backRef.current();return}
+   if(e.key==='Escape'){e.preventDefault();if(leavingRef.current)return;if(finishingCalendar||pageRef.current==='main')closeRef.current();else backRef.current();return}
    if(e.key!=='Tab')return;
    const nodes=Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary')||[]).filter(node=>node.getClientRects().length>0);
    const first=nodes[0],last=nodes.at(-1);
@@ -69,12 +72,15 @@ function SettingsDialogBody(props:Props){
   };
   document.addEventListener('keydown',keys);
   return()=>{document.removeEventListener('keydown',keys);if(previous?.isConnected)previous.focus({preventScroll:true})};
- },[]);
+ },[finishingCalendar]);
  useEffect(()=>{content.current?.scrollTo({top:0});heading.current?.focus();if(page==='help'&&initialGuide==='install'){const timer=setTimeout(()=>(content.current?.querySelector('[data-safari-install-guide]')||content.current?.querySelector('[data-install-guide]'))?.scrollIntoView({block:'start'}),0);return()=>clearTimeout(timer)}},[page,initialGuide]);
  const screen=(id:Page,children:ReactNode)=>visited.includes(id)?<div key={id+draftRevision} className={'settings-page settings-page-'+id} hidden={page!==id} inert={page!==id}>{children}</div>:null;
- return <div className="settings-backdrop" onClick={e=>{if(e.target===e.currentTarget&&!leaving)closeSettings()}}><section className="settings-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-title">
-  <header className="settings-toolbar"><div>{page==='main'?<img src="./icon.svg" alt="HH"/>:<button type="button" className="settings-back" disabled={leaving||drafts.busy} onClick={back} aria-label={`Back to ${titles[history.at(-2)||'main']}`}><ChevronLeft size={21}/>Back</button>}</div><h2 ref={heading} tabIndex={-1} id="settings-title">{titles[page]}</h2><button type="button" className="settings-toolbar-done" disabled={leaving||drafts.busy} onClick={closeSettings}>Done</button></header>
+ return <div className={'settings-backdrop'+(finishingCalendar?' calendar-finish-backdrop':'')} onClick={e=>{if(e.target===e.currentTarget&&!leaving)closeSettings()}}><section className={'settings-dialog'+(finishingCalendar?' calendar-finish-dialog':'')} ref={dialog} role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <header className="settings-toolbar"><div>{finishingCalendar?<CalendarDays size={21} aria-hidden="true"/>:page==='main'?<img src="./icon.svg" alt="HH"/>:<button type="button" className="settings-back" disabled={leaving||drafts.busy} onClick={back} aria-label={`Back to ${titles[history.at(-2)||'main']}`}><ChevronLeft size={21}/>Back</button>}</div><h2 ref={heading} tabIndex={-1} id="settings-title">{finishingCalendar?(calendarSetupComplete?'Calendar connected':'Finish calendar setup'):titles[page]}</h2><button type="button" className="settings-toolbar-done" disabled={leaving||drafts.busy} onClick={closeSettings}>{finishingCalendar?'Close':'Done'}</button></header>
   <div className="settings-content" ref={content} inert={leaving||drafts.busy} aria-busy={leaving||drafts.busy}>
+   {finishingCalendar?(outlookCalendarReturn==='return'?
+    <OutlookCalendar householdId={householdId} userId={userId} returned={outlookCalendarReturn} onSetupComplete={finishCalendarSetup} onSetupCancel={closeSettings}/>:
+    <PersonalGoogleCalendar householdId={householdId} userId={userId} returnResult={personalCalendarReturn} onSetupComplete={finishCalendarSetup} onSetupCancel={closeSettings}/>):<>
    {screen('main',<>
     <p className="settings-intro">A little more at home.</p>
     <button type="button" data-tour={canSwitchAccounts?undefined:'settings-profile'} className="settings-account-card" onClick={()=>open(canSwitchAccounts?'accounts':'profile')}><span className="settings-person-avatar">{initials}</span><span><b>{name}</b><small>{email}</small><em>{canSwitchAccounts?'Switch account · Your profile':'Your profile & calendar colour'}</em></span><ChevronRight size={18}/></button>
@@ -97,6 +103,7 @@ function SettingsDialogBody(props:Props){
    {screen('help',<Tutorials initialGuide={initialGuide} onGettingStarted={onGettingStarted} owner={owner} onWelcome={onWelcome} onInteractive={onInteractiveStart} onSettings={target=>open(target)} onCalendar={onOpenCalendar}/>)}
    {host&&email.toLowerCase()==='hummelhomeapp@gmail.com'&&screen('admin',<AdminHouseholds/>)}
    {host&&screen('pilot',<div className="settings-detail-card"><PilotInvites/></div>)}
+   </>}
   </div>
  {guard.confirmation}</section></div>;
 }
