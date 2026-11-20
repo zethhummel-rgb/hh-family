@@ -10,32 +10,36 @@ function remoteVersion(event:OutlookEvent) {
  return {outlookId:event.id,changeKey:event.changeKey};
 }
 
-export async function syncEvents(graph:Graph,call:Call,calendarId:string,since:string,initial:boolean) {
+export async function syncEvents(graph:Graph,call:Call,calendarId:string,initial:boolean) {
  const calendar=await graph.calendar(calendarId);
  if(calendar?.id!==calendarId||calendar.canEdit!==true)
   throw new OutlookProblem('reconnect','The selected Outlook calendar is no longer writable.');
- const remotes=await graph.events(calendarId);
+ const {events,links,importEvents}=await call('snapshot') as {events:LocalEvent[];links:EventLink[];importEvents:boolean};
+ if(events.length>500)throw new OutlookProblem('review','This household calendar is too large for the trial.');
+ const tracked=links.filter(link=>!link.retired);
+ // Outlook provides updates only for HH's own copies. Skip reading the
+ // remote calendar entirely until there are shared or pending events.
+ const remotes=importEvents||tracked.length?await graph.events(calendarId):[];
  const byRemote=new Map(remotes.map(event=>[event.id,event]));
  if(byRemote.size!==remotes.length||remotes.some(event=>!graphId(event.id)))
   throw new OutlookProblem('retry','Microsoft returned an incomplete calendar.');
- const {events,links}=await call('snapshot') as {events:LocalEvent[];links:EventLink[]};
- if(events.length>500)throw new OutlookProblem('review','This household calendar is too large for the trial.');
  const byLocal=new Map(events.map(event=>[event.id,event]));
  const claimedLocal=new Set(links.map(link=>link.event_id));
  const claimedRemote=new Set(links.map(link=>link.outlook_id).filter(Boolean));
  const byTransaction=new Map(remotes.filter(event=>event.transactionId).map(event=>[event.transactionId,event]));
- const cutoff=Date.parse(since);
+ for(const link of links) {
+  const previouslySent=byTransaction.get(link.transaction_id);
+  if(previouslySent)claimedRemote.add(previouslySent.id);
+ }
  let review=false;
 
- for(const link of links) {
+ for(const link of tracked) {
   const remote=link.outlook_id?byRemote.get(link.outlook_id):byTransaction.get(link.transaction_id);
-  if(link.retired){if(remote)claimedRemote.add(remote.id);continue}
   const local=byLocal.get(link.event_id);
   const eventId=link.event_id;
   const version=local?.version??null;
   if(!link.outlook_id&&remote) {
    // A previous create may have completed after the HTTP response was lost.
-   claimedRemote.add(remote.id);
    await call('remember',{eventId,version:link.synced_version,...remoteVersion(remote)});
   }
   if(!remote) {
@@ -82,31 +86,24 @@ export async function syncEvents(graph:Graph,call:Call,calendarId:string,since:s
   }
  }
 
- const fromOutlook=remotes.flatMap(remote=>{
-  if(claimedRemote.has(remote.id))return [];
-  const fields=eventFields(remote);
-  return fields&&Date.parse(fields.ends_at)>=cutoff?[{remote,fields,key:eventKey(fields)}]:[];
- });
- const fromHome=events.filter(event=>!claimedLocal.has(event.id)&&!event.recurrence.length);
- const localMatches=new Map<string,LocalEvent[]>();
- const remoteCounts=new Map<string,number>();
- if(initial) {
-  for(const local of fromHome) {
-   const key=eventKey(local);
-   localMatches.set(key,[...(localMatches.get(key)||[]),local]);
+ const unshared=events.filter(local=>!claimedLocal.has(local.id)&&!local.recurrence.length);
+ if(importEvents) {
+  const unpaired=remotes.flatMap(remote=>{
+   const fields=claimedRemote.has(remote.id)?null:eventFields(remote);
+   return fields?[{remote,fields,key:eventKey(fields)}]:[];
+  });
+  for(const {remote,fields,key} of unpaired) {
+   const exact=initial?unshared.filter(local=>eventKey(local)===key):[];
+   if(exact.length) {
+    for(const local of exact)claimedLocal.add(local.id);
+    if(exact.length===1&&unpaired.filter(item=>item.key===key).length===1) {
+     const {id:eventId,version}=exact[0];
+     await call('match',{eventId,version,...remoteVersion(remote)});
+    }else review=true;
+   }else await call('receive',{event:fields,...remoteVersion(remote)});
   }
-  for(const {key} of fromOutlook)remoteCounts.set(key,(remoteCounts.get(key)||0)+1);
  }
- for(const {remote,fields,key} of fromOutlook) {
-  const matches=localMatches.get(key)||[];
-  if(matches.length) {
-   for(const local of matches)claimedLocal.add(local.id);
-   if(matches.length!==1||remoteCounts.get(key)!==1){review=true;continue}
-   const local=matches[0];
-   await call('match',{eventId:local.id,version:local.version,...remoteVersion(remote)});
-  }else await call('receive',{event:fields,...remoteVersion(remote)});
- }
- for(const local of fromHome)if(!claimedLocal.has(local.id)) {
+ for(const local of unshared)if(!claimedLocal.has(local.id)) {
   const transactionId=await call('reserve',{eventId:local.id,version:local.version});
   if(typeof transactionId==='string')await sendNew(local,transactionId);
  }

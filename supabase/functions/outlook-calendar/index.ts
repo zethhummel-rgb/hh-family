@@ -37,6 +37,8 @@ async function tokens(params:Record<string,string>):Promise<Tokens> {
   body:new URLSearchParams({client_id:clientId!,client_secret:clientSecret!,scope,...params})});
  const data=await response.json();
  if(!response.ok||typeof data.access_token!=='string') {
+  const known=['invalid_grant','invalid_scope','invalid_client','unauthorized_client','interaction_required'];
+  console.warn('Outlook token exchange failed',response.status,known.includes(data.error)?data.error:'other');
   if(data.error==='invalid_grant')throw new OutlookProblem('reconnect','Microsoft sign-in expired. Connect Outlook again.');
   throw new OutlookProblem('retry','Microsoft sign-in is temporarily unavailable.');
  }
@@ -93,16 +95,19 @@ Deno.serve(async request=>{
  }
  const membership=await admin.from('household_members').select('user_id').eq('household_id',householdId).eq('user_id',userId).maybeSingle();
  if(membership.error||!membership.data)return reply({error:'This TEST household is unavailable.'},403);
- const db=async(action:string,payload:Record<string,unknown>={})=>{
-  const result=await admin.rpc('outlook_calendar',{action,payload:{...payload,householdId,userId}});
+ const db=async(action:string,payload:Record<string,unknown>={},name='outlook_calendar')=>{
+  const result=await admin.rpc(name,{action,payload:{...payload,householdId,userId}});
   if(result.error) {
    const message=result.error.message;
    const visible=['Choose a calendar from the list.','Reconnect the same Outlook calendar for this trial.',
-    'This Outlook calendar is already linked to a TEST account.','Calendar sync is running. Try again in a moment.'];
+    'This Outlook calendar is already linked to a TEST account.','Calendar sync is running. Try again in a moment.',
+    'This TEST account already has an Outlook calendar.','Connect Outlook again to choose a calendar.',
+    'An Outlook calendar is already being set up. Try again in a moment.'];
    throw new OutlookProblem('retry',visible.includes(message)?message:'The TEST calendar could not finish this request.');
   }
   return result.data;
  };
+ let stage='';
  try{
   switch(action) {
    case 'status':
@@ -121,20 +126,33 @@ Deno.serve(async request=>{
      return reply({error:'Microsoft sign-in expired. Connect Outlook again.'},400);
     const verifier=await db('claim',{stateHash:await hex(state)});
     if(typeof verifier!=='string')return reply({error:'Microsoft sign-in expired. Connect Outlook again.'},400);
+    stage='token';
     const token=await tokens({grant_type:'authorization_code',code,redirect_uri:callback,code_verifier:verifier});
     const graph=createGraph(token.access_token,Date.now()+20000);
+    stage='profile';
     const identity=await graph.identity();
     if(!identity||!graphId(identity.id)||![identity.mail,identity.userPrincipalName].some(value=>value?.toLowerCase()===tester))
      return reply({error:'Choose the Microsoft account that matches your HH TEST email.'},403);
     if(!token.refresh_token)return reply({error:'Microsoft did not allow background sync. Connect Outlook again.'},400);
+    stage='calendar-list';
     const calendars=await graph.calendars();
-    if(!calendars.length)return reply({error:'There are no writable Outlook calendars on this account.'},400);
+    stage='store-selection';
     await db('choose',{microsoftId:identity.id,refreshToken:token.refresh_token,calendars});
     return reply({calendars});
    }
+   case 'create_family': {
+    const creation=(step:string,fields:Record<string,unknown>={})=>db(step,fields,'outlook_calendar_creation');
+    const pending=await creation('begin_create');
+    const token=await tokens({grant_type:'refresh_token',refresh_token:pending.refreshToken});
+    if(token.refresh_token&&token.refresh_token!==pending.refreshToken)
+     await creation('refresh_creation',{lease:pending.lease,refreshToken:token.refresh_token});
+    const calendar=await createGraph(token.access_token,Date.now()+20000).familyCalendar();
+    await creation('finish_create',{lease:pending.lease,calendar});
+    return reply({calendarId:calendar.id});
+   }
    case 'connect':
     if(!graphId(body.calendarId))return reply({error:'Choose a calendar from the list.'},400);
-    await db('connect',{calendarId:body.calendarId});
+    await db('connect',{calendarId:body.calendarId,importEvents:body.importEvents===true});
     return reply({ok:true});
    case 'disconnect':
    case 'cancel_picker':
@@ -150,7 +168,7 @@ Deno.serve(async request=>{
      const deadline=Date.now()+44000;
      const token=await tokens({grant_type:'refresh_token',refresh_token:lease.refreshToken});
      if(token.refresh_token&&token.refresh_token!==lease.refreshToken)await work('token',{refreshToken:token.refresh_token});
-     problem=await syncEvents(createGraph(token.access_token,deadline),work,lease.calendarId,lease.since,lease.initial);
+     problem=await syncEvents(createGraph(token.access_token,deadline),work,lease.calendarId,lease.initial);
     }catch(error){problem=error instanceof OutlookProblem?error.issue:'retry'}
     await work('finish',{problem});
     return reply({problem});
@@ -158,6 +176,7 @@ Deno.serve(async request=>{
    default:return reply({error:'Unknown Outlook request.'},400);
   }
  }catch(error){
+  if(action==='complete')console.warn('Outlook authorization could not finish',stage,error instanceof OutlookProblem?error.issue:'request');
   return reply({error:error instanceof OutlookProblem?error.message:'Outlook could not complete the TEST request.'},409);
  }
 });

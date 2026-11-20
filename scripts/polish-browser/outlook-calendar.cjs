@@ -38,7 +38,10 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
    }
   },session);
   const calls=[],calendars=[{id:'calendar=existing',name:'Existing family calendar'}];
+  const family={id:'calendar=family',name:'HH Family'},googleChoice={id:'existing-google',name:'Original Google calendar'};
+  const googleCalls=[];
   let status={available:true,active:false};
+  let googleStatus={available:true,configured:true,connected:false,status:'off'};
   setFixtureHandler(async route=>{
    const req=route.request(),target=new URL(req.url()),resource=target.pathname.split('/').pop();
    let data=[];
@@ -51,13 +54,32 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
      assert.deepEqual([payload.state,payload.code],[state,code]);
      status={...status,calendars};
     }
+    if(payload.action==='create_family'){
+     status={...status,calendars:[...calendars,family]};
+     return route.fulfill({status:200,json:{calendarId:family.id}});
+    }
     if(payload.action==='connect'){
-     assert.equal(payload.calendarId,calendars[0].id);
-     status={available:true,active:true,calendarName:calendars[0].name};
+     assert.equal(payload.calendarId,family.id);
+     assert.equal(payload.importEvents,false);
+     status={available:true,active:true,calendarName:family.name};
     }
     if(payload.action==='sync')status={...status,syncedAt:new Date().toISOString()};
     if(payload.action==='disconnect')status={...status,active:false};
     data=payload.action==='status'?status:{ok:true};
+   }else if(resource==='google-calendar'){
+    const payload=req.postDataJSON();
+    if(payload?.action==='personal_complete'){
+     googleCalls.push(payload.action);
+     googleStatus={...googleStatus,choices:[googleChoice]};
+    }
+    if(payload?.action==='personal_existing_connect'){
+     assert.equal(payload.calendarId,googleChoice.id);
+     assert.equal(payload.acknowledgeShared,true);
+     googleCalls.push(payload.action);
+     googleStatus={...googleStatus,choices:null,existingSource:true,calendarName:googleChoice.name,connected:true,status:'pending',
+      twoWay:{enabled:true,ready:false}};
+    }
+    data=payload?.action==='personal_status'?googleStatus:{};
    }else if(target.pathname.startsWith('/auth/'))data=user;
    else if(resource==='household_members')data=[{household_id:householdId,user_id:userId,display_name:'Fixture member',role:'member'}];
    else if(resource==='households')data={calendar_id:'',name:'TEST household'};
@@ -76,15 +98,35 @@ const state='s'.repeat(43),code='synthetic-outlook-code';
   assert.equal(new URL(page.url()).search,'');
   assert.equal(calls.filter(call=>call.action==='complete').length,1);
   assert.equal(calls.some(call=>call.action==='connect'),false);
-  await card.getByLabel('Outlook calendar',{exact:true}).selectOption(calendars[0].id);
+  assert.ok(await card.getByRole('radio',{name:/Share HH events/}).isChecked());
+  await card.getByRole('radio',{name:/Import and keep in sync/}).check();
+  await card.getByRole('button',{name:'Create HH Family calendar',exact:true}).click();
+  await card.getByText('HH Family is ready to connect.',{exact:true}).waitFor();
+  assert.equal(await card.getByLabel('Outlook calendar',{exact:true}).inputValue(),family.id);
+  assert.ok(await card.getByRole('radio',{name:/Share HH events/}).isChecked());
   await connect.click();
-  await card.getByText(calendars[0].name,{exact:true}).waitFor();
+  await card.getByText(family.name,{exact:true}).waitFor();
   await card.getByRole('button',{name:'Sync now',exact:true}).click();
   await card.getByText('Calendar synced.',{exact:true}).waitFor();
   await card.getByRole('button',{name:'Disconnect Outlook',exact:true}).click();
   await card.getByRole('button',{name:'Reconnect Outlook',exact:true}).waitFor();
-  assert.deepEqual(calls.map(call=>call.action).filter(action=>action!=='status'),['complete','connect','sync','disconnect']);
-  console.log('Outlook browser passed: returning from Microsoft, choosing an existing calendar, syncing and disconnecting as a regular member.');
+  assert.deepEqual(calls.map(call=>call.action).filter(action=>action!=='status'),['complete','create_family','connect','sync','disconnect']);
+  console.log('Outlook browser passed: both sync modes, optional HH Family calendar, share by default, manual sync and disconnect.');
+
+  await page.goto(url+'?personal_calendar=return#'+new URLSearchParams({
+   personal_calendar_state:'hhp_'+state,personal_calendar_code:'synthetic-google-code'
+  }).toString());
+  const googleCard=page.locator('.settings-calendar-card').filter({has:page.getByRole('heading',{name:'My Google Calendar',exact:true})});
+  const importGoogle=googleCard.getByRole('button',{name:'Import and connect Google calendar',exact:true});
+  await importGoogle.waitFor();
+  assert.ok(await importGoogle.isDisabled());
+  await googleCard.getByLabel('Google calendar',{exact:true}).selectOption(googleChoice.id);
+  assert.ok(await importGoogle.isDisabled());
+  await googleCard.getByRole('checkbox',{name:/Share ordinary events/}).check();
+  await importGoogle.click();
+  await googleCard.getByText(googleChoice.name,{exact:true}).waitFor();
+  assert.deepEqual(googleCalls,['personal_complete','personal_existing_connect']);
+  console.log('Google browser passed: existing calendar picker and household-sharing consent before connecting.');
  }finally{
   await browser?.close();
   await new Promise(resolve=>server.close(resolve));

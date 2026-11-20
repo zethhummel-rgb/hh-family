@@ -168,7 +168,7 @@ let managedHomes=[
  }));
  await page.getByRole('button',{name:'Open Settings',exact:true}).click();
  await page.getByRole('button',{name:/^Calendar /}).click();
- await page.getByRole('button',{name:'Connect my Google Calendar',exact:true}).click();
+ await page.getByRole('button',{name:'Share HH events',exact:true}).click();
  await page.getByText('Google Calendar connected. Your HH events will start syncing.').waitFor();
  assert.equal(personalCompletions,1);
  assert.equal(new URL(page.url()).hash,'');
@@ -185,7 +185,7 @@ let managedHomes=[
  await page.getByRole('button',{name:'Disconnect my Google Calendar',exact:true}).click();
  await page.getByRole('button',{name:'Disconnect',exact:true}).click();
  await page.getByText('Google Calendar disconnected.',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Connect my Google Calendar',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Share HH events',exact:true}).waitFor();
  assert.equal(personalCalendarConnected,false);
  await page.getByRole('button',{name:'Done',exact:true}).click();
  pass('A household member can connect and disconnect their own Google copy, and the OAuth receipt is removed from the URL');

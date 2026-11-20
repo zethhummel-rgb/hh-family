@@ -18,3 +18,11 @@
 .outlook-calendar-card form label{display:block;margin-top:14px}
 .outlook-calendar-card form select{width:100%}
 .outlook-calendar-card .text-button{min-height:44px}
+.outlook-calendar-modes{margin-top:12px;border:0;padding:0}
+.outlook-calendar-card .outlook-calendar-modes label{display:flex;gap:9px;align-items:flex-start}
+.outlook-calendar-modes input{width:auto;margin:4px 0 0}
+.outlook-calendar-modes .settings-caption{display:block;margin-top:4px}
+.google-calendar-sync-picker label{display:block;margin-top:14px}
+.google-calendar-sync-picker select{width:100%}
+.google-calendar-sync-picker .google-calendar-sync-consent{display:flex;gap:9px;align-items:flex-start}
+.google-calendar-sync-consent input{width:auto;margin:4px 0 0}

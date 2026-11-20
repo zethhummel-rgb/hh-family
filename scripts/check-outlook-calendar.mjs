@@ -29,13 +29,15 @@ await db.exec(`
  alter table public.household_events add column recurrence text[] not null default '{}',
   add column location_place_id text,add column reminder_30_enabled boolean not null default false;
 `);
-await db.exec(read('supabase/migrations/20261120142442_test_outlook_calendar.sql'));
+for(const file of ['20261120142442_test_outlook_calendar.sql','20261120150942_test_outlook_share_hh_events.sql',
+ '20261120151200_test_outlook_create_family_calendar.sql'])await db.exec(read('supabase/migrations/'+file));
 
 const householdId='10000000-0000-4000-8000-000000000001';
 const userId='10000000-0000-4000-8000-000000000002';
 const other='10000000-0000-4000-8000-000000000003';
 const scalar=async(query,values=[])=>Object.values((await db.query(query,values)).rows[0])[0];
 const call=(action,data={})=>scalar('select public.outlook_calendar($1,$2)',[action,JSON.stringify({householdId,userId,...data})]);
+const creation=(action,data={})=>scalar('select public.outlook_calendar_creation($1,$2)',[action,JSON.stringify({householdId,userId,...data})]);
 for(const user of [userId,other])await db.query('insert into auth.users values($1)',[user]);
 await db.query("insert into public.households(id,name,owner_id) values($1,'TEST household',$2)",[householdId,other]);
 await db.query("insert into public.household_members(household_id,user_id,display_name,role) values($1,$2,'Fixture member','member')",[householdId,userId]);
@@ -58,9 +60,29 @@ const calendarId='calendar=existing';
 await call('choose',{microsoftId:'fixture-user',calendars:[{id:calendarId,name:'Existing family'}],refreshToken:'trial-token'});
 assert.deepEqual((await call('status')).calendars,[{id:calendarId,name:'Existing family'}]);
 assert.equal(JSON.stringify(await call('status')).includes('trial-token'),false);
+await assert.rejects(creation('begin_create',{userId:other}),/unavailable/);
+const creating=await creation('begin_create');
+assert.equal(creating.refreshToken,'trial-token');
+await assert.rejects(creation('begin_create'),/already being set up/);
+let calendarCreates=0;
+const catalog=createGraph('fixture-access',Date.now()+20000,async(url,init)=>{
+ assert.equal(new URL(url).pathname,'/v1.0/me/calendars');
+ const family={id:'family-calendar',name:'HH Family',canEdit:true};
+ if(init.method==='GET')return Response.json({value:calendarCreates?[family]:[]});
+ assert.equal(init.method,'POST');assert.deepEqual(JSON.parse(init.body),{name:'HH Family'});
+ calendarCreates++;
+ return Response.json(family,{status:201});
+});
+const family=await catalog.familyCalendar();
+assert.deepEqual(await catalog.familyCalendar(),family);
+assert.equal(calendarCreates,1);
+await creation('finish_create',{lease:creating.lease,calendar:family});
+assert.deepEqual((await call('status')).calendars.map(c=>c.name),['Existing family','HH Family']);
 await assert.rejects(call('connect',{calendarId:'calendar=unlisted'}),/Choose a calendar from the list/);
 await call('connect',{calendarId});
 assert.equal((await call('status')).active,true);
+assert.equal((await call('status')).importEvents,false);
+assert.equal(await call('receive',{outlookId:'forced-import'}),false);
 await db.exec('reset role');
 assert.equal(await scalar("select count(*)::int from vault.secrets where secret='trial-token'"),1);
 
@@ -130,7 +152,7 @@ async function sync(expectedProblem=null){
   const worker=(action,data)=>call(action,{...data,lease:lease.lease});
   await assert.rejects(call('snapshot'),/expired/);
   try{
-   let problem=await syncEvents(createGraph('fixture-access',Date.now()+20000,request),worker,lease.calendarId,lease.since,lease.initial);
+   let problem=await syncEvents(createGraph('fixture-access',Date.now()+20000,request),worker,lease.calendarId,lease.initial);
    assert.equal(problem,expectedProblem);
    tick++;
    await worker('finish',{problem});
@@ -141,6 +163,17 @@ breakBeforeAck=true;
 await assert.rejects(sync(),/Response lost/);
 await sync();
 assert.equal(eventsCreated,1,'A lost response must not duplicate an Outlook event');
+assert.equal(await scalar('select count(*)::int from public.household_events'),1,'Share mode must leave Outlook-only events in Outlook');
+remote.set('from-home-1',{...remote.get('from-home-1'),subject:'Edited a shared HH copy in Outlook',
+ changeKey:'shared-v2','@odata.etag':'W/"shared-v2"'});
+await sync();
+assert.equal(await scalar('select title from public.household_events where id=$1',[homeId]),'Edited a shared HH copy in Outlook');
+
+await call('disconnect');
+await call('choose',{microsoftId:'fixture-user',calendars:[{id:calendarId,name:'Existing family'}],refreshToken:'trial-token'});
+await call('connect',{calendarId,importEvents:true});
+assert.equal((await call('status')).importEvents,true);
+await sync();
 assert.equal(await scalar('select count(*)::int from public.household_events'),2);
 const outlookId=await scalar("select id from public.household_events where title='Created in Outlook'");
 remote.set('existing',makeEvent('existing','Outlook edit',{changeKey:'v2','@odata.etag':'W/"v2"'}));
@@ -166,6 +199,6 @@ assert.equal((await call('status')).active,false);
 assert.equal(await call('lease'),null);
 assert.equal(await scalar("select count(*)::int from vault.secrets where secret='trial-token'"),0);
 assert.equal(await scalar('select count(*)::int from private.outlook_calendar_links where retired'),2);
-assert.equal(tick,3);
+assert.equal(tick,5);
 await db.close();
-console.log('Outlook trial checks passed: owner-independent connection, one-use authorization, calendar selection, two-way create/edit/delete, lost-response recovery, pagination safety, exclusions and credential cleanup.');
+console.log('Outlook trial checks passed: default HH sharing, opt-in import, one-use authorization, safe HH Family calendar creation, two-way edits and deletions, lost-response recovery and credential cleanup.');

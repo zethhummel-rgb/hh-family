@@ -72,11 +72,23 @@ export function createGraph(accessToken:string,expiresAt:number,request=fetch) {
 
  const base=(calendar:string)=>'/v1.0/me/calendars/'+segment(calendar);
  const eventPath=(calendar:string,id:string)=>base(calendar)+'/events/'+segment(id);
+ const calendarPath='/v1.0/me/calendars';
+ async function calendarOptions() {
+  const calendars=await list<CalendarChoice&{canEdit:boolean}>(calendarPath,new URLSearchParams({'$select':'id,name,canEdit','$top':'100'}),100);
+  return calendars.filter(c=>graphId(c.id)&&typeof c.name==='string'&&c.name.trim());
+ }
  return {
   identity:()=>get<{id:string;mail?:string;userPrincipalName?:string}>('/v1.0/me?$select=id,mail,userPrincipalName'),
-  calendars:async()=>{
-   const calendars=await list<CalendarChoice&{canEdit:boolean}>('/v1.0/me/calendars',new URLSearchParams({'$select':'id,name,canEdit','$top':'100'}),100);
-   return calendars.filter(c=>c.canEdit===true&&graphId(c.id)&&typeof c.name==='string'&&c.name.trim()).map(c=>({id:c.id,name:c.name.slice(0,200)}));
+  calendars:async()=>(await calendarOptions()).filter(c=>c.canEdit===true).map(c=>({id:c.id,name:c.name.slice(0,200)})),
+  familyCalendar:async()=>{
+   const existing=(await calendarOptions()).filter(c=>c.name.trim().toLowerCase()==='hh family');
+   if(existing.length>1)throw new OutlookProblem('review','More than one Outlook calendar is named HH Family. Choose the one you want from the list.');
+   if(existing.length===1&&existing[0].canEdit!==true)
+    throw new OutlookProblem('review','An HH Family calendar already exists. Choose an Outlook calendar you can edit.');
+   const calendar=existing[0]??await get<CalendarChoice&{canEdit:boolean}>(calendarPath,'POST',{name:'HH Family'});
+   if(!calendar||!graphId(calendar.id)||calendar.canEdit!==true||calendar.name.trim().toLowerCase()!=='hh family')
+    throw new OutlookProblem('retry','Outlook could not confirm the HH Family calendar.');
+   return {id:calendar.id,name:'HH Family'};
   },
   calendar:(calendar:string)=>get<{id:string;canEdit:boolean}>(base(calendar)+'?$select=id,canEdit'),
   events:(calendar:string)=>list<OutlookEvent>(base(calendar)+'/events',new URLSearchParams({'$select':selectedFields,'$top':'100'}),maxEvents),

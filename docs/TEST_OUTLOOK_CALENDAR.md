@@ -1,6 +1,6 @@
 # Outlook Calendar trial
 
-The trial runs on Hummel Home TEST. A household member connects a personal Microsoft account and chooses one existing writable Outlook calendar. Initial sync includes upcoming one-time events from both calendars. Edits and deletions then sync both ways for paired events. Private events, meetings, attachments and repeating events are excluded. If both copies change before the next sync, both are preserved for review.
+The trial runs on Hummel Home TEST. Choose a writable Outlook calendar or use **Create HH Family calendar** to prepare a dedicated one. **Share HH events** copies upcoming HH events to that calendar and syncs changes to paired events without importing Outlook-only appointments. **Import and keep in sync** also brings eligible Outlook events into the HH household. Private events, meetings, attachments and repeating events are excluded. If both copies change before the next Outlook sync, both are preserved for review.
 
 ## Set up TEST
 
@@ -10,3 +10,7 @@ The trial runs on Hummel Home TEST. A household member connects a personal Micro
 4. Sign in to Hummel Home TEST, open **Settings → Calendar → Connect Outlook**, and approve calendar access in Microsoft. Choose the family calendar after returning to HH. Use **Sync now** to check the connection.
 
 Verify a disposable timed event and an all-day event in both directions before expanding the trial. Check that Microsoft consent returns to the picker, that only the selected calendar changes, and that disconnect stops syncing while leaving events in both calendars.
+
+## Google Calendar choices
+
+**Share HH events** keeps the existing Google copy flow. **Import and keep in sync** asks for Google Calendar list and event-editing permissions. It allows selection of an existing writable calendar and requires explicit agreement to share its ordinary events with the household. Imports keep the original Google event IDs for ongoing edits and deletions. This trial's incoming sync excludes private events, meetings, attachments and repeats. Disconnecting leaves the events already present on each side.

@@ -142,11 +142,12 @@ assert.deepEqual(changes.map(c=>[c.googleId,c.kind]),[['outlook-entry','event'],
 assert.equal(changes[0].event.starts_at,'2026-11-21T00:00:00.000Z');
 assert.equal(googleCalendarChanges([{...allDay,recurrence:[]}])[0].event.ends_at,'2026-11-02T05:00:00.000Z');
 
-let deltaCursor={syncToken:'prior',pageToken:null},expired=false;
+let deltaCursor={syncToken:'prior',pageToken:null},expired=false,existingSource=false;
 const incomingCalls=[];
 const incomingAdmin={rpc:async(name,{action,payload})=>{
  incomingCalls.push([name,action,payload]);
  if(action==='claim')return {data:{lease:'new-lease',nativeReady:true,work:[]}};
+ if(name==='test_google_existing_calendar'&&action==='options')return {data:{existingSource}};
  assert.equal(payload.lease,'new-lease');
  if(action==='credentials')return {data:{calendarId:'outlook-via-google',refreshToken:'test'}};
  if(action==='cursor')return {data:deltaCursor};
@@ -158,11 +159,15 @@ const incomingGoogle=async url=>{
  assert.equal(u.pathname,'/calendar/v3/calendars/outlook-via-google/events');
  assert.equal(u.searchParams.get('syncToken'),'prior');
  if(expired)return Response.json({error:'expired'},{status:410});
- return Response.json({items:[remote],nextSyncToken:'next'});
+ return Response.json({items:existingSource?[remote,{...remote,id:'private-entry',visibility:'private'},
+  {...remote,id:'meeting-entry',attendees:[{email:'synthetic@example.invalid'}]}]:[remote],nextSyncToken:'next'});
 };
 await runCalendarCopy(incomingAdmin,hid,{clientId:'test',clientSecret:'test'},incomingGoogle,'member',true);
 assert.equal(incomingCalls.find(([,action])=>action==='apply')[2].nextSync,'next');
 assert.equal(incomingCalls.find(([,action])=>action==='apply')[2].changes[0].event.title,'Hockey practice');
+existingSource=true;
+await runCalendarCopy(incomingAdmin,hid,{clientId:'test',clientSecret:'test'},incomingGoogle,'member',true);
+assert.deepEqual(incomingCalls.filter(([,action])=>action==='apply').at(-1)[2].changes.map(change=>change.googleId),['outlook-entry']);
 expired=true;
 await runCalendarCopy(incomingAdmin,hid,{clientId:'test',clientSecret:'test'},incomingGoogle,'member',true);
 assert.ok(incomingCalls.some(([,action])=>action==='reset'),'An expired Google cursor resets without deleting HH events');

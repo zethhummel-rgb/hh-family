@@ -254,4 +254,36 @@ await namedService('personal_calendar_service','finish',pilotOwner,{lease:localL
 await twoWay('set',pilotOwner,{enabled:false});
 assert.deepEqual(await twoWay('status',pilotOwner),{enabled:false,ready:false});
 console.log('TEST two-way calendar checks passed: opt-in, authorization, stable links, inbound add/edit/delete, replay, conflict handling, cursor reset, and other-member copies.');
+await db.exec(fs.readFileSync(new URL('../supabase/migrations/20261120151600_test_google_existing_calendar.sql',import.meta.url),'utf8'));
+const existing=(action,uid,extra)=>namedService('test_google_existing_calendar',action,uid,extra);
+assert.equal(await scalar("select has_function_privilege('authenticated','public.test_google_existing_calendar(text,jsonb)','execute')"),false);
+assert.equal((await existing('options',pilotOwner)).existingSource,false);
+const newState='f'.repeat(64),newVerifier='v'.repeat(43);
+await assert.rejects(existing('start',pilotOwner,{hash:newState,verifier:newVerifier}),/disconnect/i);
+await namedService('personal_calendar_service','disconnect',pilotOwner);
+await existing('start',pilotOwner,{hash:newState,verifier:newVerifier});
+assert.equal(await existing('take',pilotMember,{hash:newState}),null);
+assert.equal((await existing('take',pilotOwner,{hash:newState})).existingSource,true);
+assert.equal(await existing('take',pilotOwner,{hash:newState}),null);
+const selectedCalendar={id:'your-original-google-calendar',name:'Your original Google calendar'};
+const stagedChoices=await existing('stage',pilotOwner,{hash:newState,refreshToken:'private-existing-credential',
+ choices:[selectedCalendar,{id:'two-way-fixture-member',name:'Other member’s copy'}]});
+assert.deepEqual(stagedChoices,[selectedCalendar]);
+assert.deepEqual((await existing('options',pilotOwner)).choices,[selectedCalendar]);
+assert.equal(JSON.stringify(await existing('options',pilotOwner)).includes('private-existing-credential'),false);
+await assert.rejects(existing('connect',pilotOwner,{calendarId:'unlisted',acknowledgeShared:true}),/from the list/);
+await assert.rejects(existing('connect',pilotOwner,{calendarId:selectedCalendar.id}),/Confirm sharing/);
+await existing('connect',pilotOwner,{calendarId:selectedCalendar.id,acknowledgeShared:true});
+assert.deepEqual(await existing('options',pilotOwner),{existingSource:true,calendarName:selectedCalendar.name,choices:null});
+assert.deepEqual(await twoWay('status',pilotOwner),{enabled:true,ready:false});
+const existingLease=(await namedService('personal_calendar_service','claim',pilotOwner)).lease;
+assert.deepEqual(await namedService('personal_calendar_service','credentials',pilotOwner,{lease:existingLease}),
+ {calendarId:selectedCalendar.id,refreshToken:'private-existing-credential'});
+const firstImport=await twoWay('apply',pilotOwner,{lease:existingLease,changes:[remote(baseFields)],nextPage:null,nextSync:'existing-cursor'});
+assert.equal(firstImport.changed,1);
+assert.equal((await namedService('personal_calendar_service','status',pilotOwner)).pending,0,'Imported Google events must not echo back as new copies');
+await namedService('personal_calendar_service','finish',pilotOwner,{lease:existingLease});
+await namedService('personal_calendar_service','disconnect',pilotOwner);
+assert.equal(await scalar("select count(*)::int from vault.decrypted_secrets where decrypted_secret='private-existing-credential'"),0);
+console.log('Existing Google calendar checks passed: staged selection, consent, source isolation, in-place import and refresh credential cleanup.');
 await db.close();console.log('Calendar copy database checks passed: source gating, transactional preservation/rollback, private full backups, member/outsider/anonymous isolation, lease exclusion, checkpoints, concurrent edits, notification cutover deduplication, durable deletes, new connections stay native and complete household cleanup. No live data or Google requests.');
