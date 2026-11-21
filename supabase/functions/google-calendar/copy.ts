@@ -5,9 +5,9 @@ import {readReminder} from './reminders.ts';
 import {calendarReminders} from '../event-reminders/logic.ts';
 
 export class CopyError extends Error{
- constructor(public code:'reconnect'|'retry'|'needs_attention'|'missing'|'conflict'|'budget'){super(code)}
+ constructor(public code:'reconnect'|'retry'|'needs_attention'|'missing'|'conflict'|'budget'|'sync_expired'){super(code)}
 }
-type RequestGoogle=(path:string,method?:string,body?:unknown)=>Promise<any>;
+type RequestGoogle=(path:string,method?:string,body?:unknown,etag?:string)=>Promise<any>;
 const iso=(value:string)=>new Date(value).toISOString();
 export function copyShape(e:NativeEvent){return {starts_at:iso(e.starts_at),ends_at:iso(e.ends_at),all_day:e.all_day,start_date:e.start_date,end_date:e.end_date,recurrence:e.recurrence||[]}}
 export function googleCopy(e:NativeEvent){
@@ -96,32 +96,82 @@ export function transferReminderAliases(records:{googleId:string;event:NativeEve
  return aliases;
 }
 
-export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch){
+function canShareGoogleEntry(entry:any){
+ return entry.visibility!=='private'&&entry.visibility!=='confidential'&&
+  !entry.attendees?.length&&!entry.attachments?.length&&!entry.conferenceData;
+}
+
+export function googleCalendarChanges(items:unknown,existingSource=false){
+ if(!Array.isArray(items)||items.length>100)throw new CopyError('retry');
+ const changes=items.flatMap((entry:any)=>{
+  if(!entry||typeof entry.id!=='string'||!entry.id||entry.id.length>1200||entry.eventType&&entry.eventType!=='default')return [];
+  const googleId=entry.id;
+  try{
+   const occurrence=entry.recurringEventId?{
+    kind:'occurrence',googleId:entry.recurringEventId,
+    date:entry.originalStartTime?.date?date(entry.originalStartTime.date):localDate(iso(entry.originalStartTime?.dateTime))
+   }:null;
+   if(occurrence&&(typeof occurrence.googleId!=='string'||occurrence.googleId.length>1200))return [];
+   if(entry.status==='cancelled')return [occurrence?{...occurrence,event:null}:{kind:'deleted',googleId}];
+   if(existingSource&&!canShareGoogleEntry(entry))return [];
+   const {title,description,location,starts_at,ends_at,all_day,start_date,end_date}=nativeFields({
+    summary:entry.summary,description:entry.description,location:entry.location,start:entry.start,end:entry.end
+   });
+   const fields={title,description,location,starts_at,ends_at,all_day,start_date,end_date};
+   if(occurrence)return [{...occurrence,event:fields}];
+   if(entry.recurrence?.length&&!all_day&&!['America/Toronto','America/New_York','Canada/Eastern'].includes(entry.start?.timeZone))return [];
+   const recurrence=importRule(entry.recurrence,start_date??localDate(starts_at),all_day);
+   return [{
+    kind:'event',googleId,hhCopy:entry.extendedProperties?.shared?.hh_source==='native',
+    event:fields,
+    shape:{starts_at,ends_at,all_day,start_date,end_date,recurrence}
+   }];
+  }catch{return [];}
+ });
+ return changes.sort((a,b)=>Number(a.kind==='occurrence')-Number(b.kind==='occurrence'));
+}
+
+export async function runCalendarCopy(admin:any,hid:string,config:{clientId:string;clientSecret:string},fetcher:typeof fetch=fetch,personalUserId?:string,testTwoWay=false){
  const service=async(action:string,extra:Record<string,unknown>={})=>{
-  const r=await admin.rpc('calendar_copy_service',{action,payload:{householdId:hid,...extra}});
+  const r=await admin.rpc(personalUserId?'personal_calendar_service':'calendar_copy_service',{
+   action,payload:{householdId:hid,...(personalUserId?{userId:personalUserId}:{}),...extra}
+  });
   if(r.error)throw new CopyError('retry');return r.data;
  };
  const claim=await service('claim');if(!claim)return {busy:true};
  const lease=claim.lease,deadline=Date.now()+20000;let requests=0,problem:string|null=null,completed=0,transferred=false;
  const rpc=(action:string,extra:Record<string,unknown>={})=>service(action,{lease,...extra});
+ const inbound=async(action:string,extra:Record<string,unknown>={})=>{
+  const r=await admin.rpc('personal_calendar_two_way',{action,payload:{householdId:hid,userId:personalUserId,lease,...extra}});
+  if(r.error)throw new CopyError('retry');return r.data;
+ };
  const budget=()=>{if(Date.now()>deadline||requests>=24)throw new CopyError('budget')};
  try{
-  if(claim.nativeReady&&!claim.work.length)return {completed:0};
-  const c=await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId:hid}});
-  const connection=c.data;if(c.error||!connection?.refreshToken||!config.clientId||!config.clientSecret)throw new CopyError('reconnect');
+  const cursor=personalUserId&&testTwoWay?await inbound('cursor',{includeRepeating:true}):null;
+  let existingSource=false;
+  if(cursor){
+   const mode=await admin.rpc('personal_google_calendar_setup',{action:'options',payload:{householdId:hid,userId:personalUserId}});
+   if(mode.error)throw new CopyError('retry');
+   existingSource=mode.data?.existingSource===true;
+  }
+  if(claim.nativeReady&&!claim.work.length&&!cursor)return {completed:0};
+  const connection=personalUserId?await rpc('credentials'):
+   (await admin.rpc('calendar_service',{action:'connection_get',payload:{householdId:hid}})).data;
+  if(!connection?.refreshToken||!config.clientId||!config.clientSecret)throw new CopyError('reconnect');
   budget();requests++;
   const token=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
    body:new URLSearchParams({client_id:config.clientId,client_secret:config.clientSecret,refresh_token:connection.refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(8000)});
   const credentials=await token.json();
   if(!token.ok||!credentials.access_token)throw new CopyError(token.status>=500?'retry':'reconnect');
-  const request:RequestGoogle=async(path,method='GET',body)=>{
+  const request:RequestGoogle=async(path,method='GET',body,etag)=>{
+   if(personalUserId&&method!=='GET')await rpc('check_lease');
    budget();requests++;
    const url=new URL('https://www.googleapis.com/calendar/v3/'+path);
    if(method!=='GET')url.searchParams.set('sendUpdates','none');
-   const response=await fetcher(url.toString(),{method,headers:{Authorization:'Bearer '+credentials.access_token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(8000)});
+   const response=await fetcher(url.toString(),{method,headers:{Authorization:'Bearer '+credentials.access_token,...(body?{'Content-Type':'application/json'}:{}),...(etag?{'If-Match':etag}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(8000)});
    if(response.status===204)return null;
    const value=await response.json();
-   if(!response.ok){if([401,403].includes(response.status))throw new CopyError('reconnect');if([404,410].includes(response.status))throw new CopyError('missing');if(response.status===409)throw new CopyError('conflict');throw new CopyError(response.status===400?'needs_attention':'retry')}
+   if(!response.ok){if([401,403].includes(response.status))throw new CopyError('reconnect');if(response.status===410&&url.searchParams.has('syncToken'))throw new CopyError('sync_expired');if([404,410].includes(response.status))throw new CopyError('missing');if(response.status===409)throw new CopyError('conflict');throw new CopyError(response.status===400?'needs_attention':'retry')}
    return value;
   };
   const base='calendars/'+encodeURIComponent(connection.calendarId)+'/events';
@@ -149,12 +199,40 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
    budget();await rpc('import',{...incoming,deliveryAliases,snapshotHash:archived.snapshotHash});
    transferred=true;return {transferred:true,imported:incoming.events.length};
   }
+  if(cursor){
+   const q=new URLSearchParams({showDeleted:'true',singleEvents:'false',maxResults:'100'});
+   if(cursor.syncToken)q.set('syncToken',cursor.syncToken);
+   if(cursor.pageToken)q.set('pageToken',cursor.pageToken);
+   try{
+    const delta=await request(base+'?'+q);
+    await inbound('apply',{changes:googleCalendarChanges(delta.items??[],existingSource),nextPage:delta.nextPageToken??null,nextSync:delta.nextSyncToken??null});
+    if(existingSource&&!cursor.syncToken&&delta.nextPageToken)return {completed:0};
+   }catch(e){
+    if(e instanceof CopyError&&e.code==='sync_expired'){
+     await inbound('reset');
+     if(existingSource)return {completed:0};
+    }
+    else throw e;
+   }
+  }
   for(const job of claim.work){
    const args={eventId:job.eventId,revision:job.revision};let rotate=false;
    try{
     budget();const event:NativeEvent|null=job.event,dates=event?Object.keys(event.exceptions||{}):[];
+     if(cursor&&event){
+      await inbound('keep_series_event_id',{...args,shape:copyShape(event)});
+      if(!event.recurrence?.length&&!dates.length)await inbound('keep_single_event_id',{...args,shape:copyShape(event)});
+     }
     let link=await rpc('prepare',{...args,shape:event?copyShape(event):null,dates});if(!link)continue;
-    const remove=async(gid:string)=>{try{await request(base+'/'+encodeURIComponent(gid),'DELETE')}catch(e){if(!(e instanceof CopyError)||e.code!=='missing')throw e}};
+    const remove=async(gid:string)=>{
+     const path=base+'/'+encodeURIComponent(gid);
+     try{
+      const remote=existingSource?await request(path):null;
+      if(remote?.status==='cancelled')return;
+      if(remote&&(!canShareGoogleEntry(remote)||!remote.etag))throw new CopyError('needs_attention');
+      await request(path,'DELETE',undefined,remote?.etag);
+     }catch(e){if(!(e instanceof CopyError)||e.code!=='missing')throw e}
+    };
     for(const gid of link.retired_ids||[]){await remove(gid);await rpc('retired_done',{...args,googleId:gid})}
     if(!event){await remove(link.google_id);await rpc('event_done',{...args,deleted:true});completed++;continue}
     if(!link.base_done){
@@ -164,8 +242,9 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
      if(rotate){link=await rpc('prepare',{...args,shape:copyShape(event),dates,rotate:true});if(!link)continue;
       for(const gid of link.retired_ids||[]){await remove(gid);await rpc('retired_done',{...args,googleId:gid})}existing=null}
      const body=googleCopy(event);
+     if(existingSource&&existing&&(!canShareGoogleEntry(existing)||!existing.etag))throw new CopyError('needs_attention');
      try{
-      if(existing)await request(base+'/'+encodeURIComponent(link.google_id),'PATCH',{...body,extendedProperties:{...existing.extendedProperties,shared:{...existing.extendedProperties?.shared,...body.extendedProperties.shared}}});
+      if(existing)await request(base+'/'+encodeURIComponent(link.google_id),'PATCH',{...body,extendedProperties:{...existing.extendedProperties,shared:{...existing.extendedProperties?.shared,...body.extendedProperties.shared}}},existingSource?existing.etag:undefined);
       else await request(base,'POST',{...body,id:link.google_id});
      }catch(e){
       if(e instanceof CopyError&&e.code==='conflict'){
@@ -187,7 +266,8 @@ export async function runCalendarCopy(admin:any,hid:string,config:{clientId:stri
        const change=event.exceptions?.[day];
        if(change===null){if(instance.status!=='cancelled')await remove(instance.id)}
        else {const body=googleCopy({...original,...(change||{}),recurrence:[]});delete (body as any).recurrence;
-        await request(base+'/'+encodeURIComponent(instance.id),'PATCH',{...body,extendedProperties:{...instance.extendedProperties,shared:{...instance.extendedProperties?.shared,...body.extendedProperties.shared}}})}
+        if(existingSource&&(!canShareGoogleEntry(instance)||!instance.etag))throw new CopyError('needs_attention');
+        await request(base+'/'+encodeURIComponent(instance.id),'PATCH',{...body,extendedProperties:{...instance.extendedProperties,shared:{...instance.extendedProperties?.shared,...body.extendedProperties.shared}}},existingSource?instance.etag:undefined)}
       }else if(event.exceptions?.[day]!==undefined)throw new CopyError('needs_attention');
      }
      await rpc('date_done',{...args,date:day});

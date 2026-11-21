@@ -128,6 +128,12 @@ Apply the `event_address_quota` migration and deploy the `event-addresses` Edge 
 
 The service reserves at most 50 Google Places requests per Pacific-time billing month in TEST and 8,500 in HH. Lookups for saved venues use the same counter and stop once it reaches 4,500 in HH because requesting the current venue name uses a different Google SKU. Keep the billing account’s other Maps usage in mind. HH saves the selected Place ID with the user’s text as a fallback. Manual entry and typed or selected street addresses keep working without a saved Place ID. `node scripts/check-event-addresses.mjs` tests request handling and the caps without contacting Google.
 
+## Two-way calendar sync
+
+Settings → Calendar lets each member connect their own supported calendars. Google offers a dedicated HH calendar and an existing Google calendar. Outlook supports personal Microsoft accounts and lets the member choose an existing Outlook calendar or create HH Family. After authorization, HH opens the finish-setup dialog. Eligible additions, edits, deletions and standard repeats can sync both ways. Each connected calendar uses its own credentials, cursor and worker lease. Existing owner-managed Google copies continue through their original flow.
+
+Use the deployment and smoke test steps in [Calendar sync deployment](docs/CALENDAR_SYNC.md). The automated checks use fictional calendars and never access provider accounts.
+
 ## One-time import from an existing Google calendar
 
 Settings → Calendar → Import a Google calendar lets a current household member grant separate read-only consent, pick a source calendar and review/select supported events or series. Skip tagging for this entire import is the default; members can instead assign people or Everyone once for all selected events. New events retain their normal family-tagging defaults. Skip tagging creates a calendar-only event with no person dots and no notifications, visible in the unfiltered household calendar. It remains unassigned when edited; people and reminders can be added later. Person tags affect filtering and reminders, not visibility: all household members can see the imported content. The confirmation explains this before saving. The default 30-minute reminder can be disabled for the import.
