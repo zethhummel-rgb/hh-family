@@ -20,7 +20,7 @@ assert.equal(context.exports.authNamespace,'');
 assert.equal(context.exports.publicConfig.url,'https://njpdqiwrwgoothkstoql.supabase.co');
 assert.equal(context.exports.publicConfig.key,'sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq');
 assert(fs.readFileSync('src/main.tsx','utf8').includes('testEnvironment&&<aside className="test-environment-banner"'),'TEST banner must be gated by the selected environment');
-assert(!/HH Test|Hummel Home/.test(html),'TEST branding in production HTML');
+assert(!/HH Test|(?:Hummel Home|Humble Home App) TEST/.test(html),'TEST branding in production HTML');
 for(const file of ['manifest.webmanifest','icon.svg','favicon.svg'])assert(fs.readFileSync('dist/'+file).equals(fs.readFileSync('public/'+file)),file+' changed during production build');
 assert(!fs.existsSync('dist/test-guide.html'),'TEST guide in production output');
 for (const file of ['home.html','about.html','request-invitation.html']) {
@@ -33,4 +33,4 @@ assert(fs.existsSync('dist/homepage/request-invitation.js'),'Invitation form scr
 const about=fs.readFileSync('dist/about.html','utf8');
 assert(/<header\b[^>]*\bid="start"/.test(about),'Keep the old event email fragment available when JavaScript is disabled');
 assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
-console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, original branding, offline shell and no TEST guide.');
+console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, branding, offline shell and no TEST guide.');
