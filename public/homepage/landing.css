@@ -61,6 +61,13 @@ button, input { font: inherit; }
   white-space: nowrap;
 }
 .wordmark img { flex: none; border: 1px solid #dfc9a4; border-radius: 13px; }
+.wordmark small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font: 600 .69rem/1.2 system-ui, sans-serif;
+  letter-spacing: .06em;
+}
 .main-nav { display: flex; align-items: center; gap: clamp(16px, 2.6vw, 34px); }
 .main-nav > a:not(.action) {
   display: inline-flex;
