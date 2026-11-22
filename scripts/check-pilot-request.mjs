@@ -52,7 +52,8 @@ try{
  const response=await request({...answers,to:'arbitrary@example.invalid'});
  assert.equal(response.status,200);
  assert.equal((await response.json()).sent,true);
- assert.equal(sent[0].to,'hummelhomeapp@gmail.com');
+ assert.equal(sent[0].to,'humblehomeapp@gmail.com');
+ assert.equal(sent[0].from,'hummelhomeapp@gmail.com');
  assert.equal(sent[0].replyTo,'alex@example.invalid');
  assert.equal(sent[0].subject,'[HH] Invitation request');
  assert.match(sent[0].text,/An event invite/);
