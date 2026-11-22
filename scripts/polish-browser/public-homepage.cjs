@@ -232,7 +232,48 @@ async function run() {
     await page.getByRole('link', {name: 'Sign in', exact: true}).click();
     assert.equal(page.url(), app);
     await page.getByRole('heading', {name: 'Welcome home.'}).waitFor();
-    assert.equal(await page.getByRole('link', {name: 'About HH', exact: true}).getAttribute('href'), './about.html');
+    const aboutLink = page.getByRole('link', {name: 'About HH', exact: true});
+    assert.equal(await aboutLink.getAttribute('href'), './about.html?from=app');
+    assert.equal(await aboutLink.getAttribute('target'), '_blank');
+    const [aboutWindow] = await Promise.all([context.waitForEvent('page', {timeout: 10_000}), aboutLink.click()]);
+    await aboutWindow.waitForURL(app + 'about.html?from=app');
+    await aboutWindow.getByRole('link', {name: 'Return to app', exact: true}).click();
+    await aboutWindow.waitForURL(app);
+    await aboutWindow.getByRole('heading', {name: 'Welcome home.'}).waitFor();
+    await aboutWindow.close();
+    assert.equal(page.url(), app);
+
+    const installed = await browser.newContext({
+      viewport: {width: 320, height: 720}, hasTouch: true, serviceWorkers: 'block', reducedMotion: 'reduce',
+    });
+    try {
+      await installed.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await installed.addInitScript(() => Object.defineProperty(navigator, 'standalone', {value: true, configurable: true}));
+      const phone = await installed.newPage();
+      phone.setDefaultTimeout(10_000);
+      await phone.goto(app);
+      const phoneAbout = phone.getByRole('link', {name: 'About HH', exact: true});
+      assert.equal(await phoneAbout.getAttribute('target'), null);
+      await phoneAbout.click();
+      await phone.waitForURL(app + 'about.html?from=app');
+      const back = phone.getByRole('link', {name: 'Return to app', exact: true});
+      const backBox = await back.boundingBox();
+      assert(backBox && backBox.height >= 44 && backBox.x + backBox.width <= 320);
+      assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await back.click();
+      await phone.waitForURL(app);
+      await phone.getByRole('heading', {name: 'Welcome home.'}).waitFor();
+
+      for (const legalPage of ['privacy.html', 'terms.html']) {
+        await phone.goto(app + legalPage);
+        assert.equal(await phone.locator('meta[name="theme-color"]').getAttribute('content'), '#f7f9f5');
+        assert.equal(await phone.locator('body').evaluate(body => getComputedStyle(body).backgroundColor), 'rgb(247, 249, 245)');
+        assert.equal(await phone.locator('.open-app').evaluate(link => getComputedStyle(link).backgroundColor), 'rgb(69, 99, 77)');
+        assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      }
+    } finally {
+      await installed.close();
+    }
     assert.deepEqual(errors, []);
 
     for (const [width, height, reducedMotion] of [
