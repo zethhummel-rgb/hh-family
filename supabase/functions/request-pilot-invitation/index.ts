@@ -6,7 +6,7 @@ import {pilotAnswers,pilotRequestMessage,pilotRequestRecipient} from './message.
 const backend=Deno.env.get('SUPABASE_URL')||'';
 const test=backend==='https://ybizqfghnplcxlmlhvyn.supabase.co';
 const origin='https://zethhummel-rgb.github.io';
-const from=Deno.env.get('HH_EMAIL_FROM')||pilotRequestRecipient;
+const from=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const password=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
 const configured=(test||backend==='https://njpdqiwrwgoothkstoql.supabase.co')&&validMailAddress(from)&&password.length===16;
 const admin=createClient(backend,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});

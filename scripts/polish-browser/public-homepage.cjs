@@ -190,7 +190,7 @@ async function run() {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Request page fits width ' + width);
       const sendRequest = page.getByRole('button', {name: 'Send request', exact: true});
       await sendRequest.waitFor();
-      assert.equal(await page.getByRole('link', {name: 'hummelhomeapp@gmail.com'}).getAttribute('href'), 'mailto:hummelhomeapp@gmail.com');
+      assert.equal(await page.getByRole('link', {name: 'humblehomeapp@gmail.com'}).getAttribute('href'), 'mailto:humblehomeapp@gmail.com');
       if (width === 390) {
         await page.screenshot({path: path.join(out, 'public-invitation-request-390.png'), fullPage: true});
         await sendRequest.click();
