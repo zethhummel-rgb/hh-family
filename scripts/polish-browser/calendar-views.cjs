@@ -12,7 +12,9 @@ const note={id:'55555555-5555-4555-8555-555555555555',household_id:home,title:'P
 const meal={id:'66666666-6666-4666-8666-666666666666',household_id:home,title:'Camp chili',instructions:'Simmer the beans.',ingredients:[],source_url:'',version:1,meal_date:'2026-09-01',meal_type:'supper',created_at:'2026-01-01',updated_at:'2026-01-01'};
 const event={id:'77777777-7777-4777-8777-777777777777',household_id:home,title:'Camp registration',description:'Family day',location:'Cornwall',person:'Everyone',starts_at:'2026-12-01T15:00:00Z',ends_at:'2026-12-01T16:00:00Z',all_day:false,start_date:null,end_date:null,recurrence:[],exceptions:{},version:1};
 
-const agendaToday=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+// Keep the relative agenda dates separate from the month-boundary fixtures.
+const calendarClock=new Date('2026-11-20T17:00:00Z');
+const agendaToday=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(calendarClock);
 const agendaShift=(day,offset)=>{const d=new Date(day+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)};
 const calendarEvents=[
  {...event,id:'10000000-0000-4000-8000-000000000001',title:'Midnight finish',starts_at:'2026-12-01T03:07:00Z',ends_at:'2026-12-01T05:00:00Z'},
@@ -75,6 +77,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false,failHolidaySave=fal
    await route.fulfill({status:200,json:data});
  });
  page=await context.newPage();page.setDefaultTimeout(10000);
+ await page.clock.setFixedTime(calendarClock);
  await page.addInitScript(({session})=>{Object.defineProperty(navigator,"onLine",{get:()=>localStorage.getItem("fixture-offline")!=="1"});if(!sessionStorage.getItem('shop-fixture')){localStorage.setItem('hh-test:hh-test:home-together-auth',JSON.stringify(session));sessionStorage.setItem('shop-fixture','1')}},{session});
 
 
@@ -204,8 +207,7 @@ let server,browser,page,serve=true,writes=0,failWrites=false,failHolidaySave=fal
  await page.getByRole('button',{name:'Previous week',exact:true}).click();assert.match(await page.locator('.month-move h3').innerText(),/Dec 31, 2026.*Jan 6, 2027/);pass('Agenda advances and returns by seven days across New Year');
  await view.getByRole('button',{name:'3 Day',exact:true}).click();
  await page.getByRole('button',{name:'Today',exact:true}).click();
- const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- assert.equal(await days.first().getAttribute('data-date'),today);pass('Today resets three day view to the current Eastern date');
+ assert.equal(await days.first().getAttribute('data-date'),agendaToday);pass('Today resets three day view to the current Eastern date');
  await page.setViewportSize({width:390,height:844});
  for(const chosen of ['Month','Agenda','3 Day']){
   await view.getByRole('button',{name:chosen,exact:true}).click();
