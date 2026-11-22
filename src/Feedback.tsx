@@ -6,7 +6,7 @@ import {feedbackAreas,feedbackLimit,feedbackRecipient} from '../shared/feedback'
 import {feedbackAvailability,sendFeedback} from './feedbackData';
 import './feedback.css';
 
-export default function Feedback({userId,householdId,email,onBusy,onDirty}:{userId:string;householdId:string;email:string;onBusy:(busy:boolean)=>void;onDirty:(dirty:boolean)=>void}){
+export default function Feedback({userId,householdId,onBusy,onDirty}:{userId:string;householdId:string;onBusy:(busy:boolean)=>void;onDirty:(dirty:boolean)=>void}){
  const tutorial=useTutorialPractice();
  const [area,setArea]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[sent,setSent]=useState(false),[error,setError]=useState('');
  useEffect(()=>{onDirty(!!(area||message.trim())&&!sent)},[area,message,sent,onDirty]);
@@ -33,7 +33,7 @@ export default function Feedback({userId,householdId,email,onBusy,onDirty}:{user
    <label htmlFor="feedback-comment">Your comment</label>
    <textarea id="feedback-comment" value={message} required maxLength={feedbackLimit} rows={7} disabled={busy} aria-describedby="feedback-count feedback-privacy" placeholder={area==='New Feature Suggestion'?'What would you like HH to do? Tell us how it would help your family.':'Tell us what happened, what you expected, or what could work better.'} onChange={e=>{setMessage(e.target.value);setError('')}}/>
    <small id="feedback-count" className="feedback-count">{message.length.toLocaleString()} / {feedbackLimit.toLocaleString()}</small>
-   <p id="feedback-privacy" className="feedback-caption">Sent directly to <strong>{feedbackRecipient}</strong>, with your account email ({email}) so we can reply. Please leave out passwords and sensitive family details.</p>
+   <p id="feedback-privacy" className="feedback-caption">Sent directly to <strong>{feedbackRecipient}</strong>. We use your account email to reply. Please leave out passwords and sensitive family details.</p>
    {available===false&&<p className="feedback-caption" role="status">Sending feedback is temporarily unavailable. Please try again later.</p>}
    {error&&<p className="error" role="alert">{error}</p>}
    <button type="submit" className="button primary wide" disabled={busy||available===false||!area||!message.trim()}><Send size={17}/>{busy?'Sending…':'Send Feedback'}</button>
