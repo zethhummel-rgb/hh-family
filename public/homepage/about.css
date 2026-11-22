@@ -1,3 +1,11 @@
+.about-page .main-nav .return-to-app {
+  min-height: 44px;
+  padding: 8px 13px;
+}
+@media (max-width: 680px) {
+  .about-from-app .main-nav .about-home-link { display: none; }
+}
+
 .about-intro {
   padding-top: clamp(28px, 4.6vw, 66px);
   margin-bottom: clamp(19px, 3.4vw, 39px);
