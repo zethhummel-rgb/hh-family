@@ -1,6 +1,10 @@
 [functions.google-calendar]
 verify_jwt = false
 
+# TEST-only. Signed-in actions validate an HH session. OAuth and cron have dedicated checks.
+[functions.outlook-calendar]
+verify_jwt = false
+
 [functions.event-reminders]
 verify_jwt = false
 

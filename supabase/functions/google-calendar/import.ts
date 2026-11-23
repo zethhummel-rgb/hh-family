@@ -1,4 +1,5 @@
 import {prepareExternalImport} from './externalImport.ts';
+import {excludePersonalCopies} from './personal.ts';
 const scopes=['https://www.googleapis.com/auth/calendar.calendarlist.readonly','https://www.googleapis.com/auth/calendar.events.readonly'];
 type Config={clientId:string;clientSecret:string;callback:string;app:string};
 const hash=async(value:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -42,7 +43,8 @@ export async function handleImportCallback(admin:any,url:URL,config:Config){
   }while(next);
   // Store only a short-lived access token. Never persist or reuse a refresh token.
   const completion=random();
-  await service(admin,'authorized',{...actor,completionHash:await hash(completion),sessionId:record.id,accessToken:token.access_token,expiresIn:Math.min(token.expires_in-30,1800),calendars});
+  const originals=await excludePersonalCopies(admin,actor,calendars);
+  await service(admin,'authorized',{...actor,completionHash:await hash(completion),sessionId:record.id,accessToken:token.access_token,expiresIn:Math.min(token.expires_in-30,1800),calendars:originals});
   return redirect(config,true,'',completion);
  }catch(e){if(actor)try{await service(admin,'cancel',actor)}catch{}return redirect(config,false,e instanceof Error?e.message:'Google import could not be completed.');}
 }
