@@ -6,7 +6,7 @@ const URL=Deno.env.get('SUPABASE_URL')||'';
 const isTest=URL==='https://ybizqfghnplcxlmlhvyn.supabase.co';
 const supported=isTest||URL==='https://njpdqiwrwgoothkstoql.supabase.co';
 const ORIGIN='https://zethhummel-rgb.github.io';
-const FROM=Deno.env.get('HH_EMAIL_FROM')||feedbackRecipient;
+const FROM=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const PASSWORD=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
 const configured=supported&&validMailAddress(FROM)&&PASSWORD.length===16;
 const admin=createClient(URL,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});

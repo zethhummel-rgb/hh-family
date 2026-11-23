@@ -209,4 +209,3 @@ begin
  end if;
  return jsonb_build_object('changed',changed);
 end;$$;
-

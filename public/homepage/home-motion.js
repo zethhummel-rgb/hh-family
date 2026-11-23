@@ -1,50 +1,72 @@
-const motion = matchMedia('(prefers-reduced-motion: no-preference)');
-const carousel = document.querySelector('[data-meal-carousel]');
-const track = carousel.querySelector('.meal-track');
-const slides = [...track.querySelectorAll('.meal-slide')];
-const controls = carousel.querySelector('[data-meal-controls]');
-const previous = carousel.querySelector('[data-meal-prev]');
-const next = carousel.querySelector('[data-meal-next]');
-const position = carousel.querySelector('[data-meal-position]');
-const announcement = carousel.querySelector('[data-meal-status]');
-let currentIndex = 0;
-let requestedIndex = null;
-
-function showPosition() {
-  previous.setAttribute('aria-disabled', String(currentIndex === 0));
-  next.setAttribute('aria-disabled', String(currentIndex === slides.length - 1));
-  position.textContent = (currentIndex + 1) + ' / ' + slides.length;
-  announcement.textContent = 'Preview ' + (currentIndex + 1) + ' of ' + slides.length + '. ' +
-    slides[currentIndex].querySelector('h3').textContent;
+const appReturn = document.querySelector('[data-app-return]');
+if (appReturn && new URLSearchParams(location.search).get('from') === 'app') {
+  appReturn.textContent = 'Return to app';
 }
 
-function syncPosition() {
-  const nearest = slides.reduce((closest, slide, index) =>
-    Math.abs(slide.offsetLeft - track.scrollLeft) < Math.abs(slides[closest].offsetLeft - track.scrollLeft) ? index : closest, 0);
-  if (nearest !== currentIndex) {
-    currentIndex = nearest;
-    showPosition();
+const story = document.querySelector('[data-feature-story]');
+
+if (story) {
+  const steps = [...story.querySelectorAll('.feature-preview')];
+  const copy = steps.map(step => step.querySelector('.feature-copy'));
+  const art = steps.map(step => step.querySelector('[data-highlight-art]'));
+  const stage = story.querySelector('.feature-stage');
+  const motion = matchMedia('(prefers-reduced-motion: no-preference)');
+  const wide = matchMedia('(min-width: 820px)');
+
+  let active = -1;
+  let animationFrame = 0;
+
+  const inlineObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+    for (const {isIntersecting, target} of entries) {
+      if (!isIntersecting) continue;
+      target.classList.add('has-entered');
+      inlineObserver.unobserve(target);
+    }
+  }, {threshold: .18}) : null;
+
+  function updateActivePreview() {
+    animationFrame = 0;
+    if (stage.hidden) return;
+
+    const readingLine = window.innerHeight * .57;
+    let next = -1;
+    copy.forEach((heading, index) => {
+      if (heading.getBoundingClientRect().top <= readingLine) next = index;
+    });
+    // On tall screens the last heading can stay below the reading line at the end of the page.
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 48) next = copy.length - 1;
+
+    if (next === active) return;
+    art[active]?.classList.remove('is-current');
+    art[next]?.classList.add('is-current');
+    active = next;
   }
-  if (requestedIndex !== null && Math.abs(slides[requestedIndex].offsetLeft - track.scrollLeft) <= 1) requestedIndex = null;
-}
 
-function selectSlide(index) {
-  requestedIndex = Math.max(0, Math.min(slides.length - 1, index));
-  track.scrollTo({left: slides[requestedIndex].offsetLeft, behavior: motion.matches ? 'smooth' : 'instant'});
-  syncPosition();
-}
+  function schedulePreviewUpdate() {
+    if (!stage.hidden && !animationFrame) animationFrame = requestAnimationFrame(updateActivePreview);
+  }
 
-previous.addEventListener('click', () => selectSlide((requestedIndex ?? currentIndex) - 1));
-next.addEventListener('click', () => selectSlide((requestedIndex ?? currentIndex) + 1));
-track.addEventListener('scroll', syncPosition, {passive: true});
-track.addEventListener('pointerdown', () => { requestedIndex = null; });
-track.addEventListener('wheel', () => { requestedIndex = null; }, {passive: true});
-track.addEventListener('keydown', event => {
-  const index = requestedIndex ?? currentIndex;
-  const target = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: slides.length - 1}[event.key];
-  if (typeof target !== 'number') return;
-  event.preventDefault();
-  selectSlide(target);
-});
-showPosition();
-controls.hidden = false;
+  function arrangePreviews() {
+    const staged = wide.matches && motion.matches;
+    const inlineReveal = !staged && motion.matches && inlineObserver !== null;
+    story.classList.toggle('is-staged', staged);
+    story.classList.toggle('can-reveal-inline', inlineReveal);
+    stage.hidden = !staged;
+    active = -1;
+    inlineObserver?.disconnect();
+
+    art.forEach((figure, index) => {
+      figure.classList.remove('is-current');
+      const parent = staged ? stage : steps[index];
+      if (figure.parentElement !== parent) parent.append(figure);
+      if (inlineReveal && !figure.classList.contains('has-entered')) inlineObserver.observe(figure);
+    });
+    schedulePreviewUpdate();
+  }
+
+  motion.addEventListener('change', arrangePreviews);
+  wide.addEventListener('change', arrangePreviews);
+  window.addEventListener('scroll', schedulePreviewUpdate, {passive: true});
+  window.addEventListener('resize', schedulePreviewUpdate, {passive: true});
+  arrangePreviews();
+}

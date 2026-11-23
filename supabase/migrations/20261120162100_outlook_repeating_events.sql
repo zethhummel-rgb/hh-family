@@ -195,4 +195,3 @@ begin
  end if;
  return 'true'::jsonb;
 end;$$;
-

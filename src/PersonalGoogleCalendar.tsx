@@ -117,6 +117,7 @@ export default function PersonalGoogleCalendar({householdId,userId,returnResult,
      {connection.connected?'Reconnect my Google Calendar':'Connect my Google Calendar'}
     </button>
   )}
+  {connection?.twoWayAvailable&&<a className="text-button" href="https://hhfamily.ca/privacy.html#google-calendar" target="_blank" rel="noopener">How HH uses Google Calendar data</a>}
   {connection?.connected&&connection.twoWay&&!confirmDisconnect&&!connection.choices&&!onSetupComplete&&<div className="settings-calendar-sync">
    {connection.twoWay.enabled?<>
     <p role="status">{connection.twoWay.ready?'Two-way sync is on.':'Preparing two-way sync…'}</p>
