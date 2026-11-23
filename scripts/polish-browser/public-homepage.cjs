@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
-const {setTimeout: delay} = require('node:timers/promises');
 const {launchBrowser} = require('./browser.cjs');
 
 const root = path.resolve('dist');
@@ -58,11 +57,11 @@ async function run() {
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
     const errors = [];
-    const demoRequests = [];
+    const unexpectedRequests = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
       if (request.url() === requestEndpoint) return;
-      if (new URL(request.url()).origin !== origin || request.method() !== 'GET') demoRequests.push(request.url());
+      if (new URL(request.url()).origin !== origin || request.method() !== 'GET') unexpectedRequests.push(request.url());
     });
     const out = path.resolve(process.env.HH_POLISH_OUTPUT || 'artifacts/polish');
     await fs.mkdir(out, {recursive: true});
@@ -75,25 +74,25 @@ async function run() {
       assert.match(await page.locator('meta[name=robots]').getAttribute('content'), /\bnoindex\b/);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Homepage fits width ' + width);
       assert.equal(await page.getByRole('link', {name: 'Sign in', exact: true}).isVisible(), true);
-      const heroExplore = page.locator('.hero').getByRole('link', {name: 'Explore HH'});
-      assert.equal(await heroExplore.getAttribute('href'), './about.html');
-      assert.equal(await page.getByRole('link', {name: 'Try the demos'}).getAttribute('href'), './about.html#everyday');
+      assert.equal(await page.locator('.home-header').evaluate(header => {
+        const {left, right} = header.getBoundingClientRect();
+        return left === 0 && Math.abs(right - document.documentElement.clientWidth) < 1;
+      }), true, 'Header spans the page');
+      assert.equal(await page.getByRole('link', {name: 'Try the demos'}).count(), 0);
 
       const highlights = page.locator('#explore .feature-preview');
-      assert.equal(await highlights.count(), 3);
       assert.deepEqual(await highlights.getByRole('heading', {level: 3}).allTextContents(), [
         'See who’s going where', 'Turn meal plans into groceries', 'Know who’s coming',
+        'To Do & Reminders', 'Family notes', 'Colour palettes',
       ]);
       const screens = page.locator('main img');
-      assert.equal(await screens.count(), 4, 'Homepage has one hero image and three feature images');
+      assert.equal(await screens.count(), 7, 'Homepage has one hero image and six feature images');
       for (const screen of await screens.all()) {
         await screen.scrollIntoViewIfNeeded();
         assert.ok(await screen.evaluate(async image => { await image.decode(); return image.naturalWidth > 0; }));
       }
-      assert.equal(await page.locator('.feature-art').first().evaluate(art => getComputedStyle(art).animationName), 'none');
-      assert.equal(await highlights.first().evaluate(card => getComputedStyle(card).position), 'static');
-      assert.equal(await page.getByRole('checkbox', {name: 'Eggs'}).count(), 0, 'Hands-on demos belong on Explore');
-      assert.equal(await page.locator('[data-meal-carousel]').count(), 0, 'Meal walkthrough belongs on Explore');
+      await page.getByRole('img', {name: /Sage & Linen selected/}).waitFor();
+      assert.equal(await page.locator('.feature-stage').evaluate(stage => stage.hidden), true, 'Reduced motion keeps previews inline');
 
       if (width === 390 || width === 1440) {
         await page.evaluate(() => scrollTo(0, 0));
@@ -101,92 +100,29 @@ async function run() {
         await page.screenshot({path: path.join(out, 'public-home-' + width + '.png'), fullPage: true});
       }
       const syncLink = page.locator('.hero').getByRole('link', {name: 'Using Google Calendar with HH'});
-      assert.equal(await syncLink.getAttribute('href'), './about.html#google');
+      assert.equal(await syncLink.getAttribute('href'), '#google');
       if (width === 390) {
         await syncLink.click();
-        await page.waitForURL(app + 'about.html#google');
-        await page.locator('#google summary').click();
+        await page.waitForURL(app + 'home.html#google');
         assert.match(await page.locator('#google').innerText(), /connect a dedicated Google calendar to see a copy of your HH plans/);
-        await page.goBack({waitUntil: 'load'});
-      }
-      await heroExplore.click();
-      await page.waitForURL(app + 'about.html');
-      await page.getByRole('heading', {name: 'Explore HH', exact: true}).waitFor();
-      assert.match(await page.locator('meta[name=robots]').getAttribute('content'), /\bnoindex\b/);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Explore fits width ' + width);
-      assert.equal(await page.locator('.demo-section img').evaluateAll(async images => {
-        await Promise.all(images.map(image => image.decode()));
-        return images.length === 2 && images.every(image => image.naturalWidth > 0);
-      }), true);
-      if (width === 390 || width === 1440) {
-        await page.screenshot({path: path.join(out, 'public-about-first-' + width + '.png')});
+        await page.getByRole('link', {name: 'Read about Google access and privacy'}).click();
+        await page.waitForURL(app + 'privacy.html#google-calendar');
+        await page.locator('#google-calendar').waitFor();
+        await page.goto(app + 'home.html');
       }
 
-      const originalSubmissions = submissions.length;
-      const eggs = page.getByRole('checkbox', {name: 'Eggs'});
-      await eggs.focus();
-      await page.keyboard.press('Space');
-      assert.equal(await eggs.isChecked(), true);
-      await eggs.uncheck();
-      assert.equal(await eggs.isChecked(), false);
-      for (const reply of ['Yes', 'Maybe', 'No']) {
-        await page.getByText(reply, {exact: true}).click();
-        assert.equal(await page.getByRole('radio', {name: reply, exact: true}).isChecked(), true);
-        assert.equal(await page.getByRole('status').textContent(), 'Sample reply: ' + reply);
+      await page.locator('.hero').getByRole('link', {name: 'See how it works'}).click();
+      await page.waitForURL(app + 'home.html#explore');
+      await page.getByRole('heading', {name: 'A day with HH'}).waitFor();
+      if (width === 1440) {
+        await page.getByRole('navigation', {name: 'Main'}).getByRole('link', {name: 'How it works'}).click();
+        assert.equal(page.url(), app + 'home.html#explore');
       }
-      assert.equal(submissions.length, originalSubmissions, 'Explore has no live RSVP or invitation submissions');
-
-      const track = page.getByRole('group', {name: 'Meal planner previews'});
-      const position = page.locator('[data-meal-position]');
-      const previousMeal = page.getByRole('button', {name: 'Previous meal preview'});
-      const nextMeal = page.getByRole('button', {name: 'Next meal preview'});
-      assert.equal(await previousMeal.getAttribute('aria-disabled'), 'true');
-      await nextMeal.click();
-      assert.equal(await position.textContent(), '2 / 3');
-      await track.focus();
-      await page.keyboard.press('End');
-      assert.equal(await position.textContent(), '3 / 3');
-      assert.equal(await nextMeal.getAttribute('aria-disabled'), 'true');
-      const ingredients = track.getByRole('img', {name: /eggs and blueberries selected/});
-      assert.equal(await ingredients.evaluate(async img => {
-        await img.decode();
-        const image = img.getBoundingClientRect();
-        const track = img.closest('.meal-track').getBoundingClientRect();
-        return img.naturalWidth > 0 && image.left >= track.left && image.right <= track.right + 1;
-      }), true, 'The last preview snaps fully into view');
-      await previousMeal.click();
-      assert.equal(await position.textContent(), '2 / 3');
-      await track.focus();
-      await page.keyboard.press('Home');
-      assert.equal(await position.textContent(), '1 / 3');
-
-      const extraFeatures = page.locator('.feature-details details');
-      assert.equal(await extraFeatures.count(), 4);
-      for (const feature of await extraFeatures.all()) {
-        assert.equal(await feature.getAttribute('open'), null);
-        await feature.locator('summary').click();
-        const preview = feature.getByRole('img');
-        await preview.scrollIntoViewIfNeeded();
-        // A lazy image can be visible before Firefox starts its request.
-        await page.waitForFunction(() => {
-          const image = document.querySelector('.feature-details details[open] img');
-          return image?.complete && image.naturalWidth > 0;
-        });
-        await feature.locator('summary').click();
-      }
-      await page.getByText('Using Google Calendar with HH', {exact: true}).click();
-      assert.equal(await page.getByRole('link', {name: 'Read about Google access and privacy'}).getAttribute('href'), './privacy.html#google-calendar');
-      await page.getByText('Using Google Calendar with HH', {exact: true}).click();
-      if (width === 390 || width === 1440) {
-        await page.evaluate(() => scrollTo(0, 0));
-        await page.screenshot({path: path.join(out, 'public-about-' + width + '.png'), fullPage: true});
-      }
-
-      await page.getByRole('link', {name: 'Request an invitation', exact: true}).click();
+      await page.locator('.hero').getByRole('link', {name: 'Request an invitation'}).click();
       await page.getByRole('heading', {name: 'Request an invitation', exact: true}).waitFor();
       assert.equal(page.url(), app + 'request-invitation.html');
       assert.match(await page.locator('meta[name=robots]').getAttribute('content'), /\bnoindex\b/);
-      assert.equal(await page.getByRole('link', {name: 'Explore HH', exact: true}).getAttribute('href'), './about.html');
+      assert.equal(await page.getByRole('link', {name: 'How it works', exact: true}).getAttribute('href'), './home.html#explore');
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Request page fits width ' + width);
       const sendRequest = page.getByRole('button', {name: 'Send request', exact: true});
       await sendRequest.waitFor();
@@ -216,7 +152,18 @@ async function run() {
       await page.waitForLoadState('load');
       assert.equal(await page.locator('.hero').getByRole('link', {name: 'Request an invitation'}).getAttribute('href'), './request-invitation.html');
     }
-    assert.deepEqual(demoRequests, [], 'Public demos never contact a backend or submit data');
+    assert.deepEqual(unexpectedRequests, [], 'Browsing the homepage and issuing navigation never contact a backend');
+
+    // Previously shared feature and calendar links keep their destinations.
+    for (const [oldFragment, newFragment] of [
+      ['#everyday', '#explore'], ['#google', '#google'],
+      ['#meal-planner', '#meal-planner'], ['#request', '#request'],
+    ]) {
+      await page.goto(app + 'about.html' + oldFragment, {waitUntil: 'commit'});
+      await page.waitForURL(app + 'home.html' + newFragment);
+      await page.locator(newFragment).waitFor();
+    }
+
 
     // Previously sent event emails still link to this fragment.
     const legacyEmail = app + '__legacy-email';
@@ -236,7 +183,7 @@ async function run() {
     assert.equal(await aboutLink.getAttribute('href'), './about.html?from=app');
     assert.equal(await aboutLink.getAttribute('target'), '_blank');
     const [aboutWindow] = await Promise.all([context.waitForEvent('page', {timeout: 10_000}), aboutLink.click()]);
-    await aboutWindow.waitForURL(app + 'about.html?from=app');
+    await aboutWindow.waitForURL(app + 'home.html?from=app');
     await aboutWindow.getByRole('link', {name: 'Return to app', exact: true}).click();
     await aboutWindow.waitForURL(app);
     await aboutWindow.getByRole('heading', {name: 'Welcome home.'}).waitFor();
@@ -255,7 +202,7 @@ async function run() {
       const phoneAbout = phone.getByRole('link', {name: 'About HH', exact: true});
       assert.equal(await phoneAbout.getAttribute('target'), null);
       await phoneAbout.click();
-      await phone.waitForURL(app + 'about.html?from=app');
+      await phone.waitForURL(app + 'home.html?from=app');
       const back = phone.getByRole('link', {name: 'Return to app', exact: true});
       const backBox = await back.boundingBox();
       assert(backBox && backBox.height >= 44 && backBox.x + backBox.width <= 320);
@@ -295,54 +242,41 @@ async function run() {
         const motionPage = await motionContext.newPage();
         motionPage.on('pageerror', error => errors.push(error.message));
         await motionPage.goto(app + 'home.html');
-        const art = motionPage.locator('[data-highlight-art]');
-        for (const item of await art.all()) {
-          await item.evaluate(element => element.scrollIntoView({block: 'center'}));
-          if (reducedMotion === 'no-preference') {
-            await item.and(motionPage.locator('.has-entered')).waitFor();
-            assert.equal(await item.evaluate(element => getComputedStyle(element).animationName), 'highlight-in');
-          } else {
-            assert.equal(await item.evaluate(element => getComputedStyle(element).animationName), 'none');
+        const stage = motionPage.locator('.feature-stage');
+        const previews = motionPage.locator('[data-highlight-art]');
+        if (width >= 820 && reducedMotion === 'no-preference') {
+          await stage.waitFor();
+          assert.equal(await stage.evaluate(element => getComputedStyle(element).position), 'sticky');
+          const stepCopy = await motionPage.locator('.feature-copy').all();
+          await motionPage.waitForFunction(() => document.querySelectorAll('.feature-stage > [data-highlight-art]').length === 6);
+          for (const index of [0, 1, 2, 3, 4, 5, 2]) {
+            await stepCopy[index].evaluate(element => {
+              scrollTo(0, scrollY + element.getBoundingClientRect().top - innerHeight * .42);
+            });
+            await motionPage.waitForFunction(index => {
+              const current = document.querySelectorAll('.feature-stage .is-current');
+              const selected = document.querySelectorAll('.feature-stage > [data-highlight-art]')[index];
+              return current.length === 1 && current[0] === selected;
+            }, index);
+            const currentImage = stage.locator('.is-current img');
+            assert.ok(await currentImage.evaluate(async image => { await image.decode(); return image.naturalWidth > 0; }));
+          }
+        } else {
+          await stage.waitFor({state: 'hidden'});
+          for (const item of await previews.all()) {
+            await item.evaluate(element => element.scrollIntoView({block: 'center'}));
+            if (reducedMotion === 'no-preference') {
+              await item.and(motionPage.locator('.has-entered')).waitFor();
+              assert.match(await item.evaluate(element => getComputedStyle(element).transitionProperty), /opacity/);
+            } else {
+              assert.equal(await item.evaluate(element => getComputedStyle(element).transitionDuration), '0s');
+            }
           }
         }
         assert.equal(await motionPage.locator('.feature-preview').evaluateAll(cards => {
           const boxes = cards.map(card => card.getBoundingClientRect());
-          // Fractional layout can differ by less than a CSS pixel across engines.
           return boxes.every((box, index) => index === 0 || boxes[index - 1].bottom <= box.top + 1);
         }), true, 'Feature previews stay in reading order at all motion settings');
-
-        if (width === 390 && height === 844) {
-          await motionPage.goto(app + 'about.html');
-          const track = motionPage.getByRole('group', {name: 'Meal planner previews'});
-          await track.evaluate(async element => {
-            element.scrollIntoView({block: 'center'});
-            // Let the browser commit the viewport scroll before sending touch input.
-            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          });
-          const browserName = process.env.HH_BROWSER || 'chromium';
-          if (browserName === 'chromium') {
-            const session = await motionContext.newCDPSession(motionPage);
-            const box = await track.boundingBox();
-            const y = Math.round(box.y + box.height / 2);
-            const touch = (type, x) => session.send('Input.dispatchTouchEvent', {
-              type, touchPoints: type === 'touchEnd' ? [] : [{x, y, id: 0}],
-            });
-            await touch('touchStart', box.x + box.width * .87);
-            for (let step = 1; step <= 12; step += 1) {
-              await delay(24);
-              await touch('touchMove', box.x + box.width * (.87 - step * .065));
-            }
-            await touch('touchEnd');
-          } else {
-            await track.evaluate(track => track.scrollTo({left: track.children[1].offsetLeft}));
-          }
-          await motionPage.waitForFunction(() => {
-            const track = document.querySelector('.meal-track');
-            return Math.abs(track.scrollLeft - track.children[1].offsetLeft) < 2 &&
-              document.querySelector('[data-meal-position]').textContent === '2 / 3';
-          }, undefined, {timeout: 8_000});
-          await motionPage.screenshot({path: path.join(out, 'public-about-meal-carousel-390.png')});
-        }
       } finally {
         await motionContext.close();
       }
@@ -352,16 +286,19 @@ async function run() {
     try {
       const staticPage = await staticContext.newPage();
       await staticPage.goto(app + 'home.html');
-      assert.equal(await staticPage.locator('.feature-preview').count(), 3);
-      await staticPage.locator('.hero').getByRole('link', {name: 'Explore HH'}).click();
-      await staticPage.getByRole('checkbox', {name: 'Eggs'}).check();
-      assert.equal(await staticPage.getByRole('checkbox', {name: 'Eggs'}).isChecked(), true);
-      assert.equal(await staticPage.getByRole('heading', {name: 'Explore the meal planner'}).isVisible(), true);
+      assert.equal(await staticPage.locator('.feature-preview').count(), 6);
+      assert.equal(await staticPage.locator('.feature-stage').evaluate(stage => stage.hidden), true);
+      await staticPage.locator('.hero').getByRole('link', {name: 'See how it works'}).click();
+      await staticPage.waitForURL(app + 'home.html#explore');
+      await staticPage.getByRole('heading', {name: 'Colour palettes'}).waitFor();
+      await staticPage.goto(app + 'about.html#start', {waitUntil: 'commit'});
+      await staticPage.waitForURL(app + 'home.html');
+      await staticPage.getByRole('heading', {name: 'See what’s coming up for everyone.', exact: true}).waitFor();
     } finally {
       await staticContext.close();
     }
     assert.deepEqual(errors, []);
-    console.log('Public homepage, Explore demos, meal previews, mobile fit, invitation request, noindex, and legacy email landing passed.');
+    console.log('Public homepage, interactive feature previews, no-JS fallback, invitation request, noindex, and legacy links passed.');
   } finally {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));

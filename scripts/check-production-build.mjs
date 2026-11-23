@@ -30,7 +30,10 @@ for (const file of ['home.html','about.html','request-invitation.html']) {
 const requestPage=fs.readFileSync('dist/request-invitation.html','utf8');
 assert(requestPage.includes('data-endpoint="'+context.exports.publicConfig.url+'/functions/v1/request-pilot-invitation"'),'Invitation form must use the production backend');
 assert(fs.existsSync('dist/homepage/request-invitation.js'),'Invitation form script missing from production output');
+const home=fs.readFileSync('dist/home.html','utf8');
+assert(home.includes('id="google"')&&home.includes('connect a dedicated Google calendar to see a copy of your HH plans'),'Production homepage must describe the currently available Google Calendar connection');
+assert(!home.includes('Outlook sync'),'TEST-only Outlook sync appears on the production homepage');
 const about=fs.readFileSync('dist/about.html','utf8');
-assert(/<header\b[^>]*\bid="start"/.test(about),'Keep the old event email fragment available when JavaScript is disabled');
+assert(about.includes('<noscript><meta http-equiv="refresh" content="0; url=./home.html">'),'Older About links must reach the homepage when JavaScript is disabled');
 assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
 console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, branding, offline shell and no TEST guide.');

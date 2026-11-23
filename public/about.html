@@ -4,152 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
-  <meta name="theme-color" content="#f7f9f5">
-  <meta name="description" content="Try the HH Family grocery and RSVP demos, and see the meal planner in action.">
-  <title>Explore HH Family</title>
+  <title>HH Family · Humble Home App</title>
   <script>
-    if (location.hash === '#start') location.replace('./home.html');
+    const homepage = new URL('./home.html', location.href);
+    const sections = {
+      '#content': '#main',
+      '#everyday': '#explore',
+      '#google': '#google',
+      '#meal-planner': '#meal-planner',
+      '#request': '#request',
+    };
+    if (new URLSearchParams(location.search).get('from') === 'app') homepage.searchParams.set('from', 'app');
+    homepage.hash = sections[location.hash] ?? '';
+    location.replace(homepage.href);
   </script>
-  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./homepage/landing.css?v=humble-home">
-  <link rel="stylesheet" href="./homepage/about.css?v=return-to-app">
-  <script src="./homepage/demo.js?v=return-to-app" defer></script>
-  <script src="./homepage/meal-preview.js" defer></script>
+  <noscript><meta http-equiv="refresh" content="0; url=./home.html"></noscript>
 </head>
-<body class="about-page">
-  <a class="skip-link" href="#content">Skip to content</a>
-  <header class="site-header frame" id="start">
-    <a class="wordmark" href="./home.html" aria-label="HH Family home">
-      <img src="./icons/hh-180.png" alt="" width="48" height="48">
-      <span>HH Family<small>Humble Home App</small></span>
-    </a>
-    <nav class="main-nav" aria-label="Main">
-      <a class="about-home-link" href="./home.html">Home</a>
-      <a href="./" data-app-return>Sign in</a>
-    </nav>
-  </header>
-
-  <main id="content">
-    <section class="about-intro frame" aria-labelledby="about-title">
-      <h1 id="about-title">Explore HH</h1>
-      <p>Try a few everyday tasks with a sample household.</p>
-    </section>
-
-    <section class="demo-section frame" id="everyday" aria-label="Try a grocery list or RSVP">
-      <article class="demo-card grocery-demo">
-        <h2>Check off groceries</h2>
-        <fieldset class="grocery-items">
-          <legend class="sr-only">Sample grocery list</legend>
-          <label><input type="checkbox"><span>Eggs</span></label>
-          <label><input type="checkbox"><span>Apples</span></label>
-        </fieldset>
-        <img src="./homepage/groceries.webp" alt="" width="420" height="280">
-      </article>
-      <article class="demo-card dinner-demo">
-        <h2>Reply to Sunday dinner</h2>
-        <p class="event-time">Sunday at 6 p.m. · Alex’s place</p>
-        <fieldset class="rsvp-options" data-rsvp-demo>
-          <legend class="sr-only">Sample RSVP for Sunday dinner</legend>
-          <label><input type="radio" name="dinner-reply" value="Yes"><span>Yes</span></label>
-          <label><input type="radio" name="dinner-reply" value="Maybe"><span>Maybe</span></label>
-          <label><input type="radio" name="dinner-reply" value="No"><span>No</span></label>
-        </fieldset>
-        <p class="rsvp-result" role="status" data-rsvp-result></p>
-        <img src="./homepage/dinner.webp" alt="" width="420" height="280">
-      </article>
-    </section>
-
-    <section class="meal-tour frame" id="meal-planner" aria-labelledby="meal-tour-title" data-meal-carousel>
-      <div class="meal-tour-copy">
-        <h2 id="meal-tour-title">Explore the meal planner</h2>
-        <p>See how a planned meal becomes a shopping list.</p>
-        <div class="meal-controls" data-meal-controls hidden>
-          <button type="button" aria-label="Previous meal preview" aria-controls="meal-previews" data-meal-prev><span aria-hidden="true">←</span></button>
-          <button type="button" aria-label="Next meal preview" aria-controls="meal-previews" data-meal-next><span aria-hidden="true">→</span></button>
-          <span class="meal-position" data-meal-position aria-hidden="true">1 / 3</span>
-          <span class="sr-only" aria-live="polite" data-meal-status></span>
-        </div>
-      </div>
-      <div class="meal-track" id="meal-previews" role="group" aria-label="Meal planner previews" tabindex="0">
-        <article class="meal-slide">
-          <div class="meal-art meal-art-week">
-            <div class="meal-crop">
-              <img src="./homepage/screens/meals.webp" alt="A seven-day strip with Saturday selected in the HH meal planner." width="780" height="910" loading="lazy" decoding="async">
-            </div>
-          </div>
-          <h3>Pick a day</h3>
-          <p>Jump through the week to see what’s planned.</p>
-        </article>
-        <article class="meal-slide">
-          <div class="meal-art meal-art-today">
-            <div class="meal-crop">
-              <img src="./homepage/screens/meals.webp" alt="The breakfast card shows berry pancakes and an option to add another meal." width="780" height="910" loading="lazy" decoding="async">
-            </div>
-          </div>
-          <h3>See what’s cooking</h3>
-          <p>Keep breakfast, lunch, and supper in one place.</p>
-        </article>
-        <article class="meal-slide">
-          <div class="meal-art meal-art-ingredients">
-            <img src="./homepage/screens/meal-ingredients.webp" alt="The berry pancakes ingredient picker shows eggs and blueberries selected." width="664" height="444" loading="lazy" decoding="async">
-          </div>
-          <h3>Shop the ingredients</h3>
-          <p>Choose what you need and send it to shared groceries.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="more-features frame" aria-labelledby="more-title">
-      <h2 id="more-title">More ways to use HH</h2>
-      <div class="feature-details">
-        <details>
-          <summary>To-dos &amp; reminders</summary>
-          <p>Assign family tasks and set reminders for the things that come up every week.</p>
-          <div class="detail-screen"><img src="./homepage/screens/reminders.webp" alt="HH shows a shared to-do list with the hockey bag and library returns assigned to family members." width="780" height="910" loading="lazy" decoding="async"></div>
-        </details>
-        <details>
-          <summary>Family notes</summary>
-          <p>Pin the details everyone needs, from a rink bag checklist to the school pickup routine.</p>
-          <div class="detail-screen"><img src="./homepage/screens/notes.webp" alt="The HH family notes screen shows a pinned rink bag checklist." width="780" height="910" loading="lazy" decoding="async"></div>
-        </details>
-        <details>
-          <summary>Colour palettes</summary>
-          <p>Pick a palette for your own view of HH.</p>
-          <div class="detail-screen"><img src="./homepage/screens/appearance.webp" alt="HH Appearance settings let you choose from several colour palettes." width="780" height="910" loading="lazy" decoding="async"></div>
-        </details>
-        <details>
-          <summary>Add HH to your iPhone Home Screen</summary>
-          <p>Use the step-by-step guide in Settings to put HH a tap away.</p>
-          <div class="detail-screen home-install-preview"><img src="./homepage/screens/home-screen.webp" alt="The HH iPhone guide shows where to find the Home Screen icon." width="780" height="910" loading="lazy" decoding="async"></div>
-        </details>
-      </div>
-      <details class="calendar-info" id="google">
-        <summary>Using Google Calendar with HH</summary>
-        <p>Your household owner can connect a dedicated Google calendar to see a copy of your HH plans. Make changes in HH to keep the copy up to date. HH requests access only to the calendar it creates. Your personal and work calendars stay separate. Google access is limited to approved users while the Google app is in Testing mode.</p>
-        <a href="./privacy.html#google-calendar">Read about Google access and privacy</a>
-      </details>
-    </section>
-
-    <section class="closing frame" id="request" aria-labelledby="start-title">
-      <div>
-        <h2 id="start-title">Make yourself at home.</h2>
-        <p>Each person has their own login. Each household has its own private space.</p>
-        <p>Already invited? Open the link in your invitation to join your household.</p>
-      </div>
-      <div class="closing-actions">
-        <a class="action primary" href="./request-invitation.html">Request an invitation</a>
-        <a class="text-action" href="./">Sign in</a>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer frame">
-    <span>HH Family · Humble Home App</span>
-    <nav aria-label="Information">
-      <a href="./privacy.html">Privacy</a>
-      <a href="./terms.html">Terms</a>
-      <a href="mailto:hummelhomeapp@gmail.com">Contact</a>
-    </nav>
-  </footer>
+<body>
+  <p><a href="./home.html">Open the HH Family homepage</a></p>
+  <p><a href="./home.html#google">Using Google Calendar with HH</a></p>
 </body>
 </html>
