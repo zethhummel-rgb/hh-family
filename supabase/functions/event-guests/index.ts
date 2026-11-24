@@ -14,9 +14,7 @@ const from=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const password=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
 const publishableKey=Deno.env.get('SUPABASE_ANON_KEY')!;
 const admin=createClient(backend,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const cors={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
-const json=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
-const unavailable=()=>json({error:'This event invitation is unavailable or has expired.'},404);
+const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const tokenPattern=/^[a-f0-9]{64}$/;
 const hex=(bytes:Uint8Array)=>Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
@@ -31,7 +29,13 @@ async function service(action:string,payload:Record<string,unknown>){
 }
 
 Deno.serve(async(req:Request)=>{
- if(req.headers.get('origin')!==origin)return json({error:'Invalid request origin.'},403);
+ const requestOrigin=req.headers.get('origin');
+ const fromAppAddress=Boolean(appAddress&&requestOrigin===appAddress);
+ const allowed=requestOrigin===origin||fromAppAddress;
+ const cors={...(allowed&&requestOrigin?{'Access-Control-Allow-Origin':requestOrigin}:{}),'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const json=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
+ const unavailable=()=>json({error:'This event invitation is unavailable or has expired.'},404);
+ if(!allowed)return json({error:'Invalid request origin.'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
  if(req.method!=='POST')return json({error:'Method not allowed.'},405);
  if(!test&&!live)return json({error:'Event invitations are unavailable.'},503);

@@ -6,15 +6,19 @@ const app=backend==='https://ybizqfghnplcxlmlhvyn.supabase.co'
  :Deno.env.get('APP_URL')||'https://zethhummel-rgb.github.io/hh-family/';
 const origin=new URL(app).origin;
 const admin=createClient(backend,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const headers={'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
-const reply=(value:unknown,status=200)=>Response.json(value,{status,headers});
+const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const invalid='This invitation is invalid, expired or already used. Ask for a new invitation.';
 const safe=new Set([invalid,'Too many attempts. Wait an hour before trying this invitation again.']);
 
 // The 256-bit invitation is the capability, not a client-supplied email or user ID.
 // No email is sent here. Ordinary Auth email confirmation remains enabled.
 Deno.serve(async(req:Request)=>{
- if(req.headers.get('origin')!==origin)return reply({error:'Invalid request origin'},403);
+ const requestOrigin=req.headers.get('origin');
+ const fromAppAddress=Boolean(appAddress&&requestOrigin===appAddress);
+ const allowed=requestOrigin===origin||fromAppAddress;
+ const headers={...(allowed&&requestOrigin?{'Access-Control-Allow-Origin':requestOrigin}:{}),'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const reply=(value:unknown,status=200)=>Response.json(value,{status,headers});
+ if(!allowed)return reply({error:'Invalid request origin'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  if(req.method!=='POST')return reply({error:'Method not allowed'},405);
  try{

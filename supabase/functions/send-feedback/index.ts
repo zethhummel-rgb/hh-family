@@ -10,11 +10,15 @@ const FROM=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const PASSWORD=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
 const configured=supported&&validMailAddress(FROM)&&PASSWORD.length===16;
 const admin=createClient(URL,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const cors={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
-const json=(body:unknown,status=200)=>Response.json(body,{status,headers:cors});
+const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const uuid=(value:unknown)=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 Deno.serve(async(req:Request)=>{
- if(req.headers.get('origin')!==ORIGIN)return json({error:'Invalid request origin'},403);
+ const requestOrigin=req.headers.get('origin');
+ const fromAppAddress=Boolean(appAddress&&requestOrigin===appAddress);
+ const allowed=requestOrigin===ORIGIN||fromAppAddress;
+ const cors={...(allowed&&requestOrigin?{'Access-Control-Allow-Origin':requestOrigin}:{}),'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'GET, POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const json=(body:unknown,status=200)=>Response.json(body,{status,headers:cors});
+ if(!allowed)return json({error:'Invalid request origin'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
  if(req.method==='GET')return json({configured});
  if(req.method!=='POST')return json({error:'Method not allowed'},405);

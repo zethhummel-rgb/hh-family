@@ -13,8 +13,7 @@ const ID=Deno.env.get('GOOGLE_CALENDAR_CLIENT_ID')||'';
 const SECRET=Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET')||'';
 const CALLBACK=PROJECT+'/functions/v1/google-calendar/callback';
 const admin=createClient(PROJECT,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const cors={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
-const json=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
+const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(b=>b.toString(16).padStart(2,'0')).join('');
 const base64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const random=()=>base64(crypto.getRandomValues(new Uint8Array(32)));
@@ -41,9 +40,15 @@ function toGoogle(e:any){
  return {summary:e.title.trim(),description:e.description,location:e.location,start:e.all_day?{date:e.start_date}:{dateTime:e.starts_at,timeZone:'America/Toronto'},end:e.all_day?{date:e.end_date}:{dateTime:e.ends_at,timeZone:'America/Toronto'},extendedProperties:{shared:{hummel_person:e.person,...(e.reminder_30_enabled!==undefined?{hummel_reminder_30:e.reminder_30_enabled?'on':'off'}:{}),...(e.reminder_minutes!==undefined?{hummel_reminder:String(reminderMinutes(e.reminder_minutes)??'')} : {}),...(e.person_ids!=null?{hummel_people:encodePersonIds(e.person_ids)}:{})}},...(e.recurrence!==undefined?{recurrence:validateRecurrence(e.recurrence,e.all_day?e.start_date:new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(e.starts_at)),e.all_day)}:{})};
 }
 function fromGoogle(e:any){const all_day=!!e.start?.date;return {id:e.id,title:e.summary||'(Untitled event)',description:e.description||'',location:e.location||'',person:e.extendedProperties?.shared?.hummel_person||'Everyone',person_ids:decodePersonIds(e.extendedProperties?.shared?.hummel_people),reminder_minutes:readReminder(e.extendedProperties?.shared?.hummel_reminder),reminder_30_enabled:e.extendedProperties?.shared?.hummel_reminder_30!=='off',starts_at:e.start?.dateTime||e.start?.date+'T00:00:00Z',ends_at:e.end?.dateTime||e.end?.date+'T00:00:00Z',all_day,start_date:e.start?.date||null,end_date:e.end?.date||null,etag:e.etag,source:'google',recurring:!!(e.recurringEventId||e.recurrence?.length),series_id:e.recurringEventId||null,recurrence:e.recurrence||undefined};}
-const redirect=(ok:boolean,message='')=>{const u=new URL(APP);u.searchParams.set('calendar_connection',ok?'connected':'error');if(message)u.searchParams.set('calendar_message',message.slice(0,200));return Response.redirect(u,303)};
+const redirect=(app:string,ok:boolean,message='')=>{const u=new URL(app);u.searchParams.set('calendar_connection',ok?'connected':'error');if(message)u.searchParams.set('calendar_message',message.slice(0,200));return Response.redirect(u,303)};
 Deno.serve(async(req:Request)=>{
+ const requestOrigin=req.headers.get('origin');
+ const fromAppAddress=Boolean(appAddress&&requestOrigin===appAddress);
+ const allowed=requestOrigin===ORIGIN||fromAppAddress;
+ const cors={...(allowed&&requestOrigin?{'Access-Control-Allow-Origin':requestOrigin}:{}),'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const json=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
  const url=new URL(req.url);
+ if(req.method==='OPTIONS'&&!allowed)return json({error:'Invalid request origin'},403);
  if(req.method==='OPTIONS')return new Response(null,{headers:cors});
  if(req.method==='POST'&&req.headers.has('x-hummel-cron')){
   try{
@@ -57,33 +62,35 @@ Deno.serve(async(req:Request)=>{
   }catch{return json({error:'The Google copy could not finish. HH plans are preserved.'},400)}
  }
  if(req.method==='GET'&&url.pathname.endsWith('/callback')){
-  if(url.searchParams.get('state')?.startsWith('hhi_'))return handleImportCallback(admin,url,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app:APP});
+  const state=url.searchParams.get('state');
+  const app=appAddress&&state&&/^(?:hhi_)?hhapp_[A-Za-z0-9_-]{43}$/.test(state)?appAddress+'/':APP;
+  if(state?.startsWith('hhi_'))return handleImportCallback(admin,url,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app});
   try{
-   const state=url.searchParams.get('state');if(!state||state.length>200)return redirect(false,'Google connection expired. Please try connecting again.');
-   const record=await service('state_take',{hash:await hash(state)});if(!record)return redirect(false,'Google connection expired. Please try connecting again.');
-   if(url.searchParams.has('error'))return redirect(false,'Google Calendar permission was not granted.');
-   const code=url.searchParams.get('code');if(!code||!ID||!SECRET)return redirect(false,'Google connection is not configured yet.');
-   const member=await admin.from('households').select('owner_id,name').eq('id',record.household_id).single();if(member.error||member.data.owner_id!==record.user_id)return redirect(false,'Only the current household owner can connect Google.');
+   if(!state||state.length>200)return redirect(app,false,'Google connection expired. Please try connecting again.');
+   const record=await service('state_take',{hash:await hash(state)});if(!record)return redirect(app,false,'Google connection expired. Please try connecting again.');
+   if(url.searchParams.has('error'))return redirect(app,false,'Google Calendar permission was not granted.');
+   const code=url.searchParams.get('code');if(!code||!ID||!SECRET)return redirect(app,false,'Google connection is not configured yet.');
+   const member=await admin.from('households').select('owner_id,name').eq('id',record.household_id).single();if(member.error||member.data.owner_id!==record.user_id)return redirect(app,false,'Only the current household owner can connect Google.');
    const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:ID,client_secret:SECRET,code,code_verifier:record.verifier,redirect_uri:CALLBACK,grant_type:'authorization_code'})});
-   const tokens=await response.json();if(!response.ok||!tokens.access_token||!tokens.refresh_token)return redirect(false,'Google did not grant an ongoing connection. Please reconnect and allow calendar access.');
+   const tokens=await response.json();if(!response.ok||!tokens.access_token||!tokens.refresh_token)return redirect(app,false,'Google did not grant an ongoing connection. Please reconnect and allow calendar access.');
    const old=await service('connection_get',{householdId:record.household_id});let calendar;
-   if(old){try{calendar=await google(tokens.access_token,'calendars/'+encodeURIComponent(old.calendarId))}catch{return redirect(false,'Reconnect using the Google account that owns your existing family calendar.');}}
+   if(old){try{calendar=await google(tokens.access_token,'calendars/'+encodeURIComponent(old.calendarId))}catch{return redirect(app,false,'Reconnect using the Google account that owns your existing family calendar.');}}
    if(!calendar)calendar=await google(tokens.access_token,'calendars','POST',{summary:member.data.name+' · Family',description:'Family plans shared through HH.',timeZone:'America/Toronto'});
    await service('connection_set',{householdId:record.household_id,userId:record.user_id,calendarId:calendar.id,refreshToken:tokens.refresh_token});
    // Google is an outbound copy. Legacy Google homes are preserved and
    // verified by the background worker before the source switches to HH.
-   await service('migration_done',{householdId:record.household_id});return redirect(true);
-  }catch{return redirect(false,'Google Calendar could not finish connecting. Your existing household events are preserved.');}
+   await service('migration_done',{householdId:record.household_id});return redirect(app,true);
+  }catch{return redirect(app,false,'Google Calendar could not finish connecting. Your existing household events are preserved.');}
  }
  if(req.method!=='POST')return json({error:'Not found'},404);
- if(req.headers.get('origin')!==ORIGIN)return json({error:'Invalid request origin'},403);
+ if(!allowed)return json({error:'Invalid request origin'},403);
  let legacyLease='',legacyHousehold='';
  try{
   const bearer=req.headers.get('authorization')?.replace(/^Bearer /i,'');if(!bearer)return json({error:'Sign in first'},401);
   const auth=await admin.auth.getUser(bearer);if(auth.error||!auth.data.user)return json({error:'Sign in again to open the calendar'},401);
   const raw=await req.text();if(raw.length>160000)return json({error:'Request too large'},400);const b=JSON.parse(raw);if(typeof b.householdId!=='string'||!/^[a-f0-9-]{36}$/.test(b.householdId))return json({error:'Invalid household'},400);
   const membership=await admin.from('household_members').select('role').eq('household_id',b.householdId).eq('user_id',auth.data.user.id).maybeSingle();if(membership.error||!membership.data)return json({error:'This household is not available to your account'},403);
-  if(typeof b.action==='string'&&b.action.startsWith('import_'))return json(await handleImportAction(admin,b,auth.data.user.id,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app:APP}));
+  if(typeof b.action==='string'&&b.action.startsWith('import_'))return json(await handleImportAction(admin,b,auth.data.user.id,{clientId:ID,clientSecret:SECRET,callback:CALLBACK,app:APP,fromAppAddress}));
   const cutover=await transitionState(admin,b.householdId);
   if(transitionWriteBlocked(cutover)&&['start','sync','create','update','delete','transition_change'].includes(b.action))return json({error:'Your household transfer is in progress. Please wait a moment and refresh HH.'},409);
   const transition=await transitionConfig(admin,b.householdId);
@@ -101,7 +108,7 @@ Deno.serve(async(req:Request)=>{
   if(b.action==='start'){
    if(membership.data.role!=='owner')return json({error:'Only the household owner can connect Google'},403);
    if(!ID||!SECRET)return json({error:'Google connection needs its one-time Google Cloud setup. Your HH calendar already works and saves family events.'},409);
-   const state=random(),verifier=random(),challenge=base64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
+   const state=(fromAppAddress?'hhapp_':'')+random(),verifier=random(),challenge=base64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
    await service('state_create',{hash:await hash(state),verifier,userId:auth.data.user.id,householdId:b.householdId});
    const googleUrl=new URL('https://accounts.google.com/o/oauth2/v2/auth');googleUrl.search=new URLSearchParams({client_id:ID,redirect_uri:CALLBACK,response_type:'code',scope:'https://www.googleapis.com/auth/calendar.app.created',access_type:'offline',prompt:'consent',state,code_challenge:challenge,code_challenge_method:'S256'}).toString();return json({url:googleUrl.toString()});
   }
