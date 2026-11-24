@@ -35,14 +35,24 @@ let connected=false;await assert.rejects(smtp.sendGmail({...settings,to:'x\r\nBc
 let timeoutClosed=false;await assert.rejects(smtp.sendGmail(settings,async()=>({read:()=>new Promise(()=>{}),write:async()=>1,close(){timeoutClosed=true}}),5),/timed out/);assert.equal(timeoutClosed,true);
 let lateClosed=false;await assert.rejects(smtp.sendGmail(settings,()=>new Promise(resolve=>setTimeout(()=>resolve({close(){lateClosed=true}}),10)),1));await new Promise(resolve=>setTimeout(resolve,15));assert.equal(lateClosed,true);
 
-function server({configured=true,user=true,claim={status:'claimed',claimId:id,deliveryId:id,email:invite.email,senderName:'Host',householdName:'Home',expiresAt:invite.expiresAt},sendError=null,finishError=false,claimError=null}={}){
- let handler;const calls=[],sent=[];const env={APP_URL:app,SUPABASE_URL:'https://backend.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-private-key',...(configured?{HH_EMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'}:{})};
+function server({project='https://backend.invalid',appUrl=app,configured=true,user=true,claim={status:'claimed',claimId:id,deliveryId:id,email:invite.email,senderName:'Host',householdName:'Home',expiresAt:invite.expiresAt},sendError=null,finishError=false,claimError=null}={}){
+ let handler;const calls=[],sent=[];const env={APP_URL:appUrl,SUPABASE_URL:project,SUPABASE_SERVICE_ROLE_KEY:'synthetic-private-key',...(configured?{HH_EMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'}:{})};
  compile('supabase/functions/invitation-email/index.ts',{
   'npm:@supabase/supabase-js@2.118.0':{createClient:()=>({auth:{getUser:async()=>({data:{user:user?{id}:null},error:null})},rpc:async(name,args)=>{calls.push({name,...args});return{data:args.action==='claim'?claim:{updated:true},error:args.action==='claim'?claimError:finishError?{message:'private failure'}:null}}})},
   './message.ts':message,'./smtp.ts':{sendGmail:async value=>{sent.push(value);if(sendError)throw sendError}}
  },{Deno:{env:{get:key=>env[key]},serve:fn=>{handler=fn}}});
  const request=async(body={action:'send',kind:'family',token},{origin='https://example.invalid',auth='Bearer session',method='POST'}={})=>handler(new Request(app,{method,headers:{Origin:origin,...(auth?{Authorization:auth}:{}),'Content-Type':'application/json'},...(method==='POST'?{body:typeof body==='string'?body:JSON.stringify(body)}:{})}));
  return{calls,sent,request};
+}
+for(const [kind,param] of [['family','invite'],['pilot','pilot']]){
+ for(const origin of ['https://app.hhfamily.ca','https://zethhummel-rgb.github.io']){
+  const production=server({project:'https://njpdqiwrwgoothkstoql.supabase.co',appUrl:'https://zethhummel-rgb.github.io/hh-family/'});
+  const result=await production.request({action:'send',kind,token},{origin});
+  assert.equal(result.status,200);
+  assert.equal(production.sent.length,1);
+  const expected='https://app.hhfamily.ca/?'+param+'='+token;
+  assert.ok(production.sent[0].text.includes(expected));assert.ok(production.sent[0].html.includes('href="'+expected+'"'));
+ }
 }
 let f=server();let response=await f.request({...invite,action:'send',email:'attacker@example.invalid',url:'https://attacker.invalid'});assert.equal(response.status,200);assert.equal(f.sent.length,1);assert.equal(f.sent[0].to,invite.email);assert.ok(f.sent[0].text.includes(app+'?invite='+token));assert.ok(!f.sent[0].text.includes('attacker'));assert.equal(f.calls[1].action,'finish');assert.equal(f.calls[1].payload.status,'sent');assert.equal(f.sent[0].password,'abcdefghijklmnop');assert.ok(!(await response.text()).includes('abcdefghijklmnop'));
 for(const [options,status] of [[{auth:''},401],[{origin:'https://other.invalid'},403],[{method:'GET'},405]]){f=server();assert.equal((await f.request(undefined,options)).status,status);assert.equal(f.calls.length,0);assert.equal(f.sent.length,0)}
