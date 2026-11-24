@@ -1,6 +1,6 @@
 import {prepareExternalImport} from './externalImport.ts';
 const scopes=['https://www.googleapis.com/auth/calendar.calendarlist.readonly','https://www.googleapis.com/auth/calendar.events.readonly'];
-type Config={clientId:string;clientSecret:string;callback:string;app:string};
+type Config={clientId:string;clientSecret:string;callback:string;app:string;fromAppAddress?:boolean};
 const hash=async(value:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))).map(b=>b.toString(16).padStart(2,'0')).join('');
 const base64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const random=()=>base64(crypto.getRandomValues(new Uint8Array(32)));
@@ -55,7 +55,7 @@ export async function handleImportAction(admin:any,body:any,userId:string,config
  }
  if(body.action==='import_start'){
   if(!config.clientId||!config.clientSecret)throw Error('Google import needs its Google setup before it is available.');
-  const state='hhi_'+random(),verifier=random(),challenge=base64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
+  const state=(config.fromAppAddress?'hhi_hhapp_':'hhi_')+random(),verifier=random(),challenge=base64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
   await service(admin,'start',{...actor,hash:await hash(state),verifier});
   const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');url.search=new URLSearchParams({client_id:config.clientId,redirect_uri:config.callback,response_type:'code',scope:scopes.join(' '),access_type:'online',prompt:'consent select_account',include_granted_scopes:'false',state,code_challenge:challenge,code_challenge_method:'S256'}).toString();return {url:url.toString()};
  }

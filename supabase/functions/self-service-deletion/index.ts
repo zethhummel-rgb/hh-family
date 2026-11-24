@@ -1,11 +1,15 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.118.0';
 const ORIGIN='https://zethhummel-rgb.github.io';
 const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const headers={'Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
-const json=(value:unknown,status=200)=>Response.json(value,{status,headers});
+const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const safe=new Set(['Sign in with a confirmed account','Pilot administrator accounts are protected','Household owners must use Delete home and all accounts','Type your email address to confirm','Only the household owner can delete this home','Type the exact household name to confirm','Pilot administrator households are protected','A member owns another household','Unsupported deletion request']);
 Deno.serve(async(req:Request)=>{
- if(req.headers.get('origin')!==ORIGIN)return json({error:'Invalid request origin'},403);
+ const requestOrigin=req.headers.get('origin');
+ const fromAppAddress=Boolean(appAddress&&requestOrigin===appAddress);
+ const allowed=requestOrigin===ORIGIN||fromAppAddress;
+ const headers={...(allowed&&requestOrigin?{'Access-Control-Allow-Origin':requestOrigin}:{}),'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const json=(value:unknown,status=200)=>Response.json(value,{status,headers});
+ if(!allowed)return json({error:'Invalid request origin'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  if(req.method!=='POST')return json({error:'Method not allowed'},405);
  try{

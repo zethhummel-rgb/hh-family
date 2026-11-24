@@ -9,6 +9,7 @@ const admin=createClient(project,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{aut
 // The two project caps total 8,550 requests even if they share a Google billing account.
 Deno.serve(eventAddressHandler(admin,{
  origin:'https://zethhummel-rgb.github.io',
+ alternateOrigin:live?'https://app.hhfamily.ca':undefined,
  apiKey:Deno.env.get('HH_GOOGLE_PLACES_API_KEY')||'',
  monthlyLimit:test?50:live?8500:0
 }));

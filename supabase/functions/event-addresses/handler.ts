@@ -4,7 +4,7 @@ type SupabaseService={
  auth:{getUser:(token:string)=>PromiseLike<{data:{user:{id:string;email_confirmed_at?:string}|null};error:unknown}>};
  rpc:(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
 };
-type Config={origin:string;apiKey:string;monthlyLimit:number};
+type Config={origin:string;alternateOrigin?:string;apiKey:string;monthlyLimit:number};
 type TextValue={text?:unknown};
 type Prediction={placeId?:unknown;text?:TextValue;structuredFormat?:{mainText?:TextValue;secondaryText?:TextValue}};
 type ProviderResponse={suggestions?:{placePrediction?:Prediction}[]};
@@ -14,15 +14,16 @@ const validPlaceId=(value:unknown):value is string=>typeof value==='string'&&/^[
 const nameWords=(value:string)=>value.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'').match(/[\p{L}\p{N}]+/gu)||[];
 
 export function eventAddressHandler(admin:SupabaseService,config:Config,fetcher:typeof fetch=fetch){
+ return async(req:Request)=>{
+ const origin=req.headers.get('origin');
+ if(origin!==config.origin&&origin!==config.alternateOrigin)return Response.json({status:'forbidden',suggestions:[]},{status:403});
  const headers={
-  'Access-Control-Allow-Origin':config.origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info',
+  'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info',
   'Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin','Cache-Control':'no-store'
  };
  const json=(status:string,suggestions:string[]=[],code=200,venues?:Venue[])=>Response.json(
   {status,suggestions,...(venues?{venues}:{})},{status:code,headers}
  );
- return async(req:Request)=>{
-  if(req.headers.get('origin')!==config.origin)return json('forbidden',[],403);
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
   if(req.method!=='POST')return json('invalid',[],405);
   try{

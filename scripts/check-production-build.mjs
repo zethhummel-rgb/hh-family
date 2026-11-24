@@ -19,6 +19,33 @@ assert.equal(context.exports.testEnvironment,false);
 assert.equal(context.exports.authNamespace,'');
 assert.equal(context.exports.publicConfig.url,'https://njpdqiwrwgoothkstoql.supabase.co');
 assert.equal(context.exports.publicConfig.key,'sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq');
+const configCode=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const custom={exports:{},location:{hostname:'app.hhfamily.ca',pathname:'/'}};
+vm.runInNewContext(configCode,custom);
+assert.equal(custom.exports.publicConfig.url,context.exports.publicConfig.url);
+assert.equal(custom.exports.authNamespace,context.exports.authNamespace);
+assert.throws(()=>vm.runInNewContext(configCode,{exports:{},location:{hostname:'test.hhfamily.ca',pathname:'/'}}));
+const testSource=fs.readFileSync('src/config.ts','utf8').replace('import.meta.env',JSON.stringify({VITE_APP_ENV:'test'}));
+const testCode=ts.transpileModule(testSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+assert.throws(()=>vm.runInNewContext(testCode,{exports:{},location:custom.location}));
+const oldOrigin='https://zethhummel-rgb.github.io',newOrigin='https://app.hhfamily.ca';
+const handlers=['admin-households','event-addresses','event-guests','event-reminders','google-calendar','invitation-email',
+ 'invitation-registration','request-pilot-invitation','self-service-deletion','send-feedback'];
+const transpile=content=>ts.transpileModule(content,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const helper={exports:{},Response,fetch};
+vm.runInNewContext(transpile(fs.readFileSync('supabase/functions/event-addresses/handler.ts','utf8')),helper);
+for(const name of handlers){
+ let handle;
+ const mock={URL,Response,Request,exports:{},require:id=>id==='./handler.ts'?helper.exports:{createClient:()=>({}),validMailAddress:()=>true},
+  Deno:{env:{get:key=>key==='SUPABASE_URL'?context.exports.publicConfig.url:''},serve:fn=>{handle=fn}}};
+ vm.runInNewContext(transpile(fs.readFileSync('supabase/functions/'+name+'/index.ts','utf8')),mock);
+ for(const origin of [oldOrigin,newOrigin,'https://test.hhfamily.ca','https://app.hhfamily.ca.example.invalid']){
+  const response=await handle(new Request(context.exports.publicConfig.url+'/functions/v1/'+name,{method:'OPTIONS',headers:{Origin:origin}}));
+  const allowed=origin===oldOrigin||origin===newOrigin;
+  assert.equal(response.ok,allowed,name+' '+origin);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'),allowed?origin:null,name+' '+origin);
+ }
+}
 assert(fs.readFileSync('src/main.tsx','utf8').includes('testEnvironment&&<aside className="test-environment-banner"'),'TEST banner must be gated by the selected environment');
 assert(!/HH Test|(?:Hummel Home|Humble Home App) TEST/.test(html),'TEST branding in production HTML');
 for(const file of ['manifest.webmanifest','icon.svg','favicon.svg'])assert(fs.readFileSync('dist/'+file).equals(fs.readFileSync('public/'+file)),file+' changed during production build');
