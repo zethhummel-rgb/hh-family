@@ -33,7 +33,7 @@ Deno.serve(async(req:Request)=>{
   if(record.status==='cooldown')return json({error:'Wait one minute before retrying this invitation, or copy the link.'},429);
   if(record.status!=='claimed'||typeof record.claimId!=='string')throw Error('Invitation email storage is unavailable. Share the link or try again later.');
   claimId=record.claimId;
-  const message=invitationMessage({kind:body.kind as InviteKind,token:body.token,email:record.email,deliveryId:record.deliveryId,senderName:record.senderName,householdName:record.householdName,expiresAt:record.expiresAt},APP);
+  const message=invitationMessage({kind:body.kind as InviteKind,token:body.token,email:record.email,deliveryId:record.deliveryId,senderName:record.senderName,householdName:record.householdName,expiresAt:record.expiresAt},appAddress?appAddress+'/':APP);
   await sendGmail({from:FROM,to:record.email,password:PASSWORD,deliveryId:record.deliveryId,...message});
   try{await service('finish',{actorId,claimId,status:'sent'})}catch{/* Gmail accepted the email. Do not invite an automatic resend. */}
   return json({sent:true});
