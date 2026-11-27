@@ -646,6 +646,48 @@ try{
  console.log('HH admin policy checks passed: MFA required by default and on missing settings, explicit TEST opt-out, private setting, and exact identity authorization.');
  console.log('HH admin database checks passed: exact identity grants, existing host access and separate MFA, shared pilot seats and mail claims, old and new invitation redemption, atomic request capture, preview, deduplication and expiry.');
  console.log('HH content checks passed: confirmed household-reader scope, explicit admin publication, idempotent retries, archives, seasonal availability, and restricted database grants.');
+
+ await db.exec(`reset role;
+  update private.hh_admin_auth_policy set require_mfa=true;
+  alter table auth.users add column last_sign_in_at timestamptz;
+  create table public.household_activity(household_id uuid,created_at timestamptz);`);
+ for(const name of ['20261022190515_hh_admin_accounts','20261115201430_hh_household_last_used']){
+  await db.exec(read(`supabase/migrations/${name}.sql`));
+ }
+ const ownershipMigration=read('supabase/migrations/20261127104911_hh_live_owner_admin.sql');
+ const currentHostHome=await value('select household_id from public.household_members where user_id=$1',[roles.host]);
+ await db.query("update auth.users set email='zethhummel@gmail.com' where id=$1",[roles.admin]);
+ await db.query("update auth.users set email='hummelhomeapp@gmail.com' where id=$1",[roles.host]);
+ await db.query("update auth.users set email='humblehomeapp@gmail.com' where id=$1",[roles.secondAdmin]);
+ await db.query("update private.pilot_hosts set email='hummelhomeapp@gmail.com' where email=$1",[email('host')]);
+ await assert.rejects(db.exec(ownershipMigration),/Unexpected admin account/);
+ await db.exec('delete from private.hh_site_admins');
+ await db.exec(ownershipMigration);
+ assert.deepEqual((await db.query('select user_id,pilot_host_user_id from private.hh_site_admins')).rows,
+  [{user_id:roles.admin,pilot_host_user_id:roles.host}]);
+ const manage=()=>value("select public.admin_households('list',$1)",[{actorId:roles.admin}]);
+ const usage=()=>db.query('select * from public.admin_household_usage()');
+ for(const role of ['host','secondAdmin','owner']){
+  await as(role,'aal2');
+  assert.deepEqual(await status(),{is_admin:false,requires_mfa:false});
+  await assert.rejects(dashboard('snapshot'),/Admin access required/);
+  await assert.rejects(manage(),/Admin access required/);
+  await assert.rejects(usage(),/Admin access required/);
+ }
+ await as('host');
+ assert.equal((await value('select public.pilot_status()')).is_host,true);
+ await as('admin');
+ assert.deepEqual(await status(),{is_admin:true,requires_mfa:true});
+ await assert.rejects(manage(),/Admin access required/);
+ await assert.rejects(usage(),/Admin access required/);
+ await as('admin','aal2');
+ assert.equal((await manage()).find(entry=>entry.id===currentHostHome)?.protected,true);
+ assert.ok((await usage()).rows.some(entry=>entry.household_id===currentHostHome));
+ assert.deepEqual(await status(),{is_admin:true,requires_mfa:false});
+ await assert.rejects(value("select public.admin_households('delete',$1)",[{householdId:currentHostHome,confirmation:'Test Home'}]),/A pilot admin household cannot be deleted/);
+ await asService();
+ await assert.rejects(manage(),/permission denied/);
+ console.log('Live admin cutover passed: sole verified owner, authenticator required, both app-mail identities denied, and original pilot host retained.');
 }finally{
  await db.close();
 }

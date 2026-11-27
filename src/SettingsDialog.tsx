@@ -58,9 +58,9 @@ function SettingsDialogBody(props:Props){
  const canSwitchAccounts=accountSwitchEligible(email);
  const [pairedAccount,setPairedAccount]=useState(()=>canSwitchAccounts&&hasSavedSwitchAccount(userId,email));
  const authClient=supabase;
- const [adminAccount,setAdminAccount]=useState<{client:typeof authClient;userId:string}|null>(null);
+ const [adminAccount,setAdminAccount]=useState<{client:typeof authClient;userId:string;requiresMfa:boolean}|null>(null);
  const canOpenAdmin=adminAccount?.client===authClient&&adminAccount.userId===userId&&isCurrentAuthClient(authClient);
- const canManageHouseholds=host&&email.toLowerCase()==='hummelhomeapp@gmail.com';
+ const canManageHouseholds=canOpenAdmin&&adminAccount.requiresMfa===false;
  function open(next:Page){if(leaving||drafts.busy)return;guard.requestClose(()=>{clearDrafts();setVisited(old=>old.includes(next)?old:[...old,next]);setHistory(old=>old.at(-1)===next?old:[...old,next])})}
  function back(){guard.requestClose(()=>{clearDrafts();setHistory(old=>old.length>1?old.slice(0,-1):old)})}
  const backRef=useRef(back);backRef.current=back;
@@ -76,7 +76,7 @@ function SettingsDialogBody(props:Props){
    const {data:auth,error:sessionError}=await authClient.auth.getSession();
    if(!active||!isCurrentAuthClient(authClient)||sessionError||auth.session?.user.id!==userId||!auth.session.user.email_confirmed_at)return;
    const {data,error}=await authClient.rpc('hh_admin_status');
-   if(active&&isCurrentAuthClient(authClient)&&!error&&data?.is_admin===true)setAdminAccount({client:authClient,userId});
+   if(active&&isCurrentAuthClient(authClient)&&!error&&data?.is_admin===true)setAdminAccount({client:authClient,userId,requiresMfa:data.requires_mfa!==false});
   }
   void checkAdminAccess().catch(()=>{});
   return()=>{active=false;subscription.unsubscribe()};
@@ -104,8 +104,8 @@ function SettingsDialogBody(props:Props){
     <button type="button" data-tour={canSwitchAccounts?undefined:'settings-profile'} className="settings-account-card" onClick={()=>open(canSwitchAccounts?'accounts':'profile')}><span className="settings-person-avatar">{initials}</span><span><b>{name}</b><small>{email}</small><em>{canSwitchAccounts?'Switch account · Your profile':'Your profile & calendar colour'}</em></span><ChevronRight size={18}/></button>
     <section className="settings-group" aria-labelledby="settings-personal"><h3 id="settings-personal">Personal</h3><div className="settings-group-rows">{canSwitchAccounts&&<Row icon={<UserRound size={19}/>} title="Your profile" detail="Your calendar colour" onClick={()=>open('profile')}/>}<Row icon={<Palette size={19}/>} title="Appearance" detail={palette.name} onClick={()=>open('appearance')}/><Row icon={<Bell size={19}/>} title="Notifications" detail="Reminders on this device" onClick={()=>open('notifications')}/></div></section>
     <section className="settings-group" aria-labelledby="settings-home"><h3 id="settings-home">Your home</h3><div className="settings-group-rows"><Row icon={<Users size={19}/>} title="Your household" detail={`${householdName} · ${peopleCount} ${peopleCount===1?'person':'people'}`} onClick={()=>open('household')}/><Row icon={<CalendarDays size={19}/>} title="Calendar" detail={calendarTransition?'Moving from the original HH app':calendarLegacy?'Google transfer pending':calendarConnected?'HH calendar · Google copy':'Your shared family calendar'} onClick={()=>open('calendar')}/>{host&&<Row icon={<MailPlus size={19}/>} title="Pilot invitations" detail="Invite a separate household" onClick={()=>open('pilot')}/>}</div></section>
-    {(canOpenAdmin||canManageHouseholds)&&<section className="settings-group" aria-labelledby="settings-admin"><h3 id="settings-admin">Admin</h3><div className="settings-group-rows">
-     {canOpenAdmin&&<a className="settings-row settings-navigation-link" href="./admin.html" onClick={event=>{if(!isCurrentAuthClient(authClient))event.preventDefault()}}><span className="settings-row-icon" aria-hidden="true"><ShieldCheck size={19}/></span><span className="settings-row-copy"><b>Admin Dashboard</b><small>Manage pilot requests and invitations</small></span><ChevronRight size={17} aria-hidden="true"/></a>}
+    {canOpenAdmin&&<section className="settings-group" aria-labelledby="settings-admin"><h3 id="settings-admin">Admin</h3><div className="settings-group-rows">
+     <a className="settings-row settings-navigation-link" href="./admin.html" onClick={event=>{if(!isCurrentAuthClient(authClient))event.preventDefault()}}><span className="settings-row-icon" aria-hidden="true"><ShieldCheck size={19}/></span><span className="settings-row-copy"><b>Admin Dashboard</b><small>{canManageHouseholds?'Manage pilot requests and invitations':'Verify to manage pilot access and households'}</small></span><ChevronRight size={17} aria-hidden="true"/></a>
      {canManageHouseholds&&<Row icon={<Users size={19}/>} title="Manage households" detail="Review and delete pilot households" onClick={()=>open('admin')}/>}
     </div></section>}
     <section className="settings-group" aria-labelledby="settings-help"><h3 id="settings-help">A helping hand</h3><div className="settings-group-rows"><Row icon={<BookOpen size={19}/>} title="Help & tutorials" detail="Phone guides & the quick tour" onClick={()=>open('help')}/><Row icon={<MessageSquare size={19}/>} title="Send Feedback" detail="Share a comment or suggest a new feature" onClick={()=>open('feedback')}/></div></section>

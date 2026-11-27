@@ -75,7 +75,7 @@ export default function AdminHouseholds(){
    const isSelected=selected?.id===home.id;
    return <Fragment key={home.id}>
     <div className="admin-household-row">
-     <span><strong>{home.name}</strong><small>{home.memberCount} {home.memberCount===1?'account':'accounts'}{home.protected?' · Your admin household':''}</small><LastHouseholdUse usage={usage?.get(home.id)} unavailable={!usage}/></span>
+     <span><strong>{home.name}</strong><small>{home.memberCount} {home.memberCount===1?'account':'accounts'}{home.protected?' · Protected household':''}</small><LastHouseholdUse usage={usage?.get(home.id)} unavailable={!usage}/></span>
      <button type="button" className="text-button" disabled={busy||home.protected} aria-expanded={isSelected} aria-controls={isSelected?'admin-household-confirm':undefined} onClick={e=>{
       if(isSelected){cancelDelete();return}
       deleteButton.current=e.currentTarget;setSelected(home);setConfirmation('');setDeleteError('');setNotice('');
