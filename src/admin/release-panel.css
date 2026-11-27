@@ -1,0 +1,26 @@
+.release-layout { display: grid; grid-template-columns: minmax(235px, .9fr) minmax(0, 1.7fr); align-items: start; gap: 1rem; }
+.release-list ul { display: grid; gap: .45rem; padding: 0; margin: .75rem 0 0; list-style: none; }
+.release-list li > button { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: .55rem; text-align: left; }
+.release-list li > button[aria-pressed="true"] { border-color: #a8bbac; background: #e5eee3; }
+.release-list li strong, .release-list li code { display: block; }
+.release-list li code { color: var(--muted); font-size: .75rem; }
+.release-status { inline-size: fit-content; padding: .15rem .48rem; border-radius: .8rem; background: #edf2e9; color: #3f503e; font-size: .76rem; font-weight: 700; }
+.release-status[data-status="queued"], .release-status[data-status="deploying"] { color: #685520; background: #f3eddb; }
+.release-status[data-status="failed"] { color: #743f29; background: #fff1e9; }
+.release-status[data-status="verified"], .release-status[data-status="published"] { color: #1f5236; background: #d8ebdc; }
+.release-summary { margin: .45rem 0; color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; }
+.release-proof { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .85rem; padding: .7rem .85rem; margin: .9rem 0 1rem; border: 1px solid var(--line); border-radius: .65rem; }
+.release-proof dt { color: var(--muted); font-size: .76rem; }
+.release-proof dd { margin: 0; font-size: .875rem; overflow-wrap: anywhere; }
+.release-fields { display: grid; min-width: 0; gap: .7rem; padding: 0; margin: 0; border: 0; }
+.release-fields legend { padding: 0; margin-block-end: .45rem; font-weight: 650; }
+.release-message { color: #244632; background: #e5eee3; }
+.release-preview-actions { margin: .65rem 0; }
+.release-editor .member-notice-preview { width: min(100%, 420px); margin: .55rem auto; box-shadow: 0 8px 24px #21362d16; }
+.release-controls { margin-top: 1rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.release-confirmation { padding: .8rem; border: 1px solid #a8bbac; border-radius: .7rem; background: #eef4eb; }
+.release-confirmation h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.release-confirmation p { margin-bottom: .55rem; font-size: .9rem; }
+
+@media (max-width: 760px) { .release-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 450px) { .release-proof { grid-template-columns: minmax(0, 1fr); } }

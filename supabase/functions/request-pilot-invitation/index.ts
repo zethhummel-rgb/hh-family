@@ -9,8 +9,9 @@ const origin='https://zethhummel-rgb.github.io';
 const from=Deno.env.get('HH_EMAIL_FROM')||'hummelhomeapp@gmail.com';
 const password=(Deno.env.get('HH_EMAIL_APP_PASSWORD')||'').replaceAll(' ','');
 const configured=(test||backend==='https://njpdqiwrwgoothkstoql.supabase.co')&&validMailAddress(from)&&password.length===16;
+const preview=test&&!configured;
 const admin=createClient(backend,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
-const appAddress=Deno.env.get('SUPABASE_URL')==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
+const appAddress=test?'https://test.hhfamily.ca':backend==='https://njpdqiwrwgoothkstoql.supabase.co'?'https://app.hhfamily.ca':'';
 const invalid='Enter your name, a valid email address, and both answers.';
 const uncertain='Delivery could not be confirmed. Your answers are still here. You can email HH directly if you need to follow up.';
 
@@ -46,26 +47,29 @@ Deno.serve(async(request:Request)=>{
  const json=(body:unknown,status=200)=>Response.json(body,{status,headers:cors});
  if(!allowed)return json({error:'Invalid request origin.'},403);
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
- if(request.method==='GET')return json({configured,preview:test&&!configured});
+ if(request.method==='GET')return json({configured,preview});
  if(request.method!=='POST')return json({error:'Method not allowed.'},405);
  const input=await readForm(request);
  if(!input||input.website)return json({error:invalid},400);
  const answers=pilotAnswers(input);
  if(!answers)return json({error:invalid},400);
- if(test&&!configured)return json({preview:true});
- if(!configured)return json({error:'The form is temporarily unavailable. Your answers are still here, or you can email HH directly.'},503);
+ if(!configured&&!preview)return json({error:'The form is temporarily unavailable. Your answers are still here, or you can email HH directly.'},503);
 
  const id=answers.requestId;
  let claimed=false;
  try{
   const [emailHash,contentHash]=await Promise.all([digest(answers.email),digest(JSON.stringify(answers))]);
-  const claim=await admin.rpc('pilot_request_mail_service',{action:'claim',payload:{id,emailHash,contentHash}});
+  const claim=await admin.rpc('pilot_request_mail_service',{action:'claim',payload:{
+   id,emailHash,contentHash,...(preview?{preview:true}:{}),
+   answers:{name:answers.name,email:answers.email,heardFrom:answers.source,pilotInterest:answers.interest,message:answers.message},
+  }});
   if(claim.error)throw Error('Could not claim invitation request');
+  if(claim.data==='preview')return json({preview:true});
   if(claim.data==='sent')return json({sent:true});
   if(claim.data==='limited')return json({error:'Too many requests right now. Please wait and try again.'},429);
   if(claim.data==='sending')return json({error:'Your request is still being processed. Please check again shortly.'},409);
   if(claim.data==='uncertain')return json({error:uncertain},409);
-  if(claim.data!=='claimed')return json({error:'Could not verify this request. Reload the page or email HH directly.'},409);
+  if(preview||claim.data!=='claimed')return json({error:'Could not verify this request. Reload the page or email HH directly.'},409);
   claimed=true;
   await sendGmail({from,to:pilotRequestRecipient,replyTo:answers.email,password,deliveryId:id,...pilotRequestMessage(answers,test)});
   try{await admin.rpc('pilot_request_mail_service',{action:'finish',payload:{id,status:'sent'}})}catch{}

@@ -71,9 +71,10 @@ export function createAccountSwitchStorage(login:LoginStorage,newGeneration=()=>
    throw error;
   }
  }
+ const selectedTab=()=>validChoice(parse(login.visit.getItem(choiceKey)));
  function initial(blockSelection:boolean){
   const fallback=base();
-  const tab=validChoice(parse(login.visit.getItem(choiceKey)));
+  const tab=selectedTab();
   const saved=fallback.remember?validChoice(parse(store(true).getItem(defaultKey))):null;
   const selected=!blockSelection&&(tab||saved);
   const choice=selected&&selected.remember===fallback.remember?selected:fallback;
@@ -92,5 +93,5 @@ export function createAccountSwitchStorage(login:LoginStorage,newGeneration=()=>
   backing.removeItem('shopping:v2:'+ref.key);
   backing.removeItem(ref.key);backing.removeItem(ref.key+'-user');backing.removeItem(ref.key+'-code-verifier');
  }
- return {base,options,keyFor,normalLoginKey,entryKey,record,readRegistry,removeReference,hasToken,storedIdentityMatches,assertDurable,activate,initial,pinBase,pinChoice,clearSelection,blockAndRemove,store};
+ return {base,options,keyFor,normalLoginKey,entryKey,record,readRegistry,removeReference,hasToken,storedIdentityMatches,assertDurable,activate,initial,selectedTab,pinBase,pinChoice,clearSelection,blockAndRemove,store};
 }

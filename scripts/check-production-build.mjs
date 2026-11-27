@@ -2,15 +2,18 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import ts from 'typescript';
+import {inspectLiveBuild} from './hh-live-release.mjs';
 const html=fs.readFileSync('dist/index.html','utf8');
 const script=html.match(/src="\.\/assets\/([^" ]+\.js)"/);
 assert(script,'Built application script missing');
-const js=fs.readFileSync('dist/assets/'+script[1],'utf8');
 // Both environment fallbacks are intentionally present in the shared source.
 // Verify the environment actually embedded in the bundle, not string absence.
-const embedded=js.match(/\b(?:var|let|const) [\w$]+=(\{BASE_URL:[^}]+\})/);
-assert(embedded,'Built environment object missing');
-const env=vm.runInNewContext('('+embedded[1]+')');
+const assetDirectory='dist/assets';
+const configuredChunks=fs.readdirSync(assetDirectory).filter(name=>name.endsWith('.js'))
+ .flatMap(name=>[...fs.readFileSync(assetDirectory+'/'+name,'utf8').matchAll(/=\s*(\{BASE_URL:[^}]+\})/g)])
+ .filter(match=>match[1].includes('VITE_APP_ENV'));
+assert.equal(configuredChunks.length,1,'One built environment object is required');
+const env=vm.runInNewContext('('+configuredChunks[0][1]+')');
 assert.equal(env.VITE_APP_ENV,'production');
 const context={exports:{},location:{hostname:'zethhummel-rgb.github.io',pathname:'/hh-family/'}};
 const source=fs.readFileSync('src/config.ts','utf8').replace('import.meta.env',JSON.stringify(env));
@@ -62,5 +65,10 @@ assert(home.includes('id="google"')&&home.includes('connect a dedicated Google c
 assert(!home.includes('Outlook sync'),'TEST-only Outlook sync appears on the production homepage');
 const about=fs.readFileSync('dist/about.html','utf8');
 assert(about.includes('<noscript><meta http-equiv="refresh" content="0; url=./home.html">'),'Older About links must reach the homepage when JavaScript is disabled');
-assert(!fs.readFileSync('dist/sw.js','utf8').includes("version:'dev'"),'Offline shell was not built');
+const offlineShell=fs.readFileSync('dist/sw.js','utf8');
+assert(!offlineShell.includes("version:'dev'"),'Offline shell was not built');
+assert(html.includes('href="./icons/hh-apple-touch-v2.png"'),'The live app must use the centered iPhone icon');
+assert(offlineShell.includes('icons/hh-apple-touch-v2.png'),'The updated iPhone icon is missing from the installed app cache');
+const version=fs.readFileSync('src/releaseVersion.ts','utf8').match(/^export const appReleaseVersion = '([^']+)';$/m)?.[1];
+inspectLiveBuild('dist',{id:'11111111-1111-4111-8111-111111111111',version,commit_sha:'a'.repeat(40)});
 console.log('Production build verified: selected HH backend/key, existing login namespace, production mode, branding, offline shell and no TEST guide.');

@@ -240,7 +240,7 @@ let managedHomes=[
  await page.getByRole('button',{name:/Send Feedback/}).click();
  const feedbackDialog=page.getByRole('dialog',{name:'Send Feedback',exact:true});
  assert.equal((await feedbackDialog.innerText()).includes(user.email),false);
- assert.match(await feedbackDialog.locator('#feedback-privacy').innerText(),/We use your account email to reply/);
+ assert.match(await feedbackDialog.locator('#feedback-privacy').innerText(),/may use your account email to reply/);
  await page.getByLabel('Your comment').fill('Unsent feedback draft');await protect(()=>page.getByRole('button',{name:'Done',exact:true}).first().click(),page.getByLabel('Your comment'),'Unsent feedback draft');pass('Feedback Done protects draft without sending email');
  await nav('Groceries');await page.getByRole('button',{name:'Filters',exact:true}).click();assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'SELECT');await page.getByLabel('Filter groceries by store').selectOption('none');await page.getByRole('button',{name:'Close filters'}).click();await page.locator('.active-grocery-filter').waitFor();await page.locator('.active-grocery-filter button').click();assert.equal(await page.locator('.active-grocery-filter').count(),0);pass('Active store filter stays visible and can be cleared');
  const sizes=await page.locator('.grocery-row>.checkbox,.grocery-row>.delete,.grocery-row>.grocery-edit').evaluateAll(es=>es.map(e=>({w:e.getBoundingClientRect().width,h:e.getBoundingClientRect().height})));assert(sizes.length>=9&&sizes.every(x=>x.w>=44&&x.h>=44));pass('Grocery row controls have 44px tap targets');

@@ -14,11 +14,11 @@ exports.serveFixture=async(req,res)=>{
  }catch(error){console.error('Fixture API failure:',error);if(!res.headersSent)res.writeHead(500);res.end(JSON.stringify({message:'Fixture API failed'}))}
  return true;
 };
-exports.redirectFixtureAPI=()=>{
+exports.redirectFixtureAPI=(fixtureOrigin='https://ybizqfghnplcxlmlhvyn.supabase.co')=>{
  const nativeFetch=window.fetch.bind(window);
  window.fetch=(input,init)=>{
   const url=new URL(input instanceof Request?input.url:String(input),location.href);
-  if(url.origin==='https://ybizqfghnplcxlmlhvyn.supabase.co'){
+  if(url.origin===fixtureOrigin){
    const target=location.origin+'/__fixture_api'+url.pathname+url.search;
    return nativeFetch(input instanceof Request?new Request(target,input):target,init);
   }
