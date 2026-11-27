@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {ArrowLeft,ArrowRight,ArrowUpRight,Bell,BookOpen,CalendarDays,Check,House,ListChecks,Mail,Palette,Plus,RefreshCw,ShoppingCart,Users,X} from 'lucide-react';
 import PaletteSettings from './PaletteSettings';
+import type {SeasonalPaletteId} from './palettes';
 import NotificationSettings from './NotificationSettings';
 import SafariInstallTutorial from './SafariInstallTutorial';
 import {installedApp,needsHomeScreen} from './push';
@@ -22,7 +23,7 @@ const memberSteps=[
  {scene:'calendar',title:'Share the family plans.',icon:CalendarDays,copy:'Tap Calendar, then Add event. Pick the people involved, or choose Everyone. Tap an event to see its details.',detail:'Use Edit to change a plan. Settings → Calendar lets you import selected Google plans once. Everyone in your home can see imported plans. Your owner handles the optional Google copy.'},
  {scene:'lists',title:'Lists you share.',icon:ListChecks,copy:'Add what you need to Groceries. Use To Do for tasks and reminders. Your family sees the same lists.',detail:'Staples saves your usual groceries for another trip. More → Family notes holds useful information everyone can read and edit. Pin important notes, or search to find one again.'},
 ];
-export default function WelcomeTour({initials,owner,householdId,userId,paletteId,paletteMessage,onPaletteChange,onFinish,onInteractive}:{initials:string;owner:boolean;householdId:string;userId:string;paletteId:string;paletteMessage:string;onPaletteChange:(id:string)=>void;onFinish:()=>void;onInteractive?:()=>void}){
+export default function WelcomeTour({initials,owner,householdId,userId,paletteId,paletteMessage,seasonalPalettes,onPaletteChange,onFinish,onInteractive}:{initials:string;owner:boolean;householdId:string;userId:string;paletteId:string;paletteMessage:string;seasonalPalettes:readonly SeasonalPaletteId[];onPaletteChange:(id:string)=>void;onFinish:()=>void;onInteractive?:()=>void}){
  const steps=owner?ownerSteps:memberSteps;
  const [index,setIndex]=useState(0),dialog=useRef<HTMLElement>(null),heading=useRef<HTMLHeadingElement>(null);
  const step=steps[index],Icon=step.icon,last=index===steps.length-1;
@@ -58,7 +59,7 @@ export default function WelcomeTour({initials,owner,householdId,userId,paletteId
     <div className="welcome-family-options"><div><ShoppingCart size={23}/><span>Groceries<small>Milk, fruit, the essentials…</small></span><Check size={17}/></div><div><ListChecks size={23}/><span>To Do &amp; Reminders<small>One-off tasks or repeating reminders</small></span></div></div>}
   </div>}
   <div className="welcome-content"><span className="welcome-step" role="status" aria-live="polite">{index+1} of {steps.length}</span><div className="welcome-heading"><Icon size={23}/><h2 ref={heading} tabIndex={-1} id="welcome-title">{step.title}</h2></div><p id="welcome-copy">{step.copy}</p>
-   {step.scene==='appearance'&&<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage}/>}
+   {step.scene==='appearance'&&<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage} seasons={seasonalPalettes}/>}
    {notifications&&<div className="welcome-device-actions">
     {installFirst?<p className="setup-note">Add HH to your Home Screen in Safari, then open the new icon. HH will offer to enable notifications there.</p>:
      <NotificationSettings householdId={householdId} userId={userId} setup onEnabling={onEnabling} onEnabledChange={setEnabled}/>}

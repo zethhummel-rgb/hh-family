@@ -6,14 +6,15 @@ import {createEmailInvitation,deliverInvitation,type EmailInvitation} from './in
 import InvitationDelivery from './InvitationDelivery';
 import HouseholdProfiles from './HouseholdProfiles';
 import PaletteSettings from './PaletteSettings';
+import type {SeasonalPaletteId} from './palettes';
 import {type FamilySetupStep} from './familySetup';
 import './family-setup.css';
 
 type Invite={id:string;email:string};
-export default function FamilySetup({householdName,householdId,members,people,initialStep,paletteFirst,onStep,onSaved,onFinish,paletteId,onPaletteChange,paletteMessage}:{
+export default function FamilySetup({householdName,householdId,members,people,initialStep,paletteFirst,onStep,onSaved,onFinish,paletteId,onPaletteChange,paletteMessage,seasonalPalettes}:{
  householdName:string;householdId:string;members:Member[];people:HouseholdPerson[];initialStep:FamilySetupStep;
  paletteFirst:boolean;onStep:(step:FamilySetupStep)=>void;onSaved:()=>unknown;onFinish:()=>void;
- paletteId:string;onPaletteChange:(id:string)=>void;paletteMessage:string;
+ paletteId:string;onPaletteChange:(id:string)=>void;paletteMessage:string;seasonalPalettes:readonly SeasonalPaletteId[];
 }){
  const [step,setStep]=useState(initialStep),[email,setEmail]=useState(''),[delivery,setDelivery]=useState<EmailInvitation|null>(null);
  const [invites,setInvites]=useState<Invite[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[profileBusy,setProfileBusy]=useState(false),[addRequest,setAddRequest]=useState(1);
@@ -74,7 +75,7 @@ export default function FamilySetup({householdName,householdId,members,people,in
     <HouseholdProfiles people={people} members={members} householdId={householdId} onSaved={profileSaved} addRequest={addRequest} onBusyChange={setProfileBusy} onDraftChange={setProfileDraft}/>
     {profileDraft&&<p className="family-setup-note">Save this profile to continue, or skip this step to leave it for later.</p>}
     <button className="text-button family-setup-add" type="button" disabled={blocked} onClick={()=>setAddRequest(n=>n+1)}><Plus size={16}/>Add another profile</button>
-   </>:<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage}/>}
+   </>:<PaletteSettings value={paletteId} onChange={onPaletteChange} message={paletteMessage} seasons={seasonalPalettes}/>}
   </div>
   <div className="family-setup-footer">
    <p>{step==='palette'?'Change your palette anytime in Settings → Appearance.':'You can add more later in Settings → Your household → Family profiles.'}</p>

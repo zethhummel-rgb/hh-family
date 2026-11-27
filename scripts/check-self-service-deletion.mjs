@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import ts from 'typescript';
-const source=fs.readFileSync(new URL('../supabase/functions/self-service-deletion/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,'');
+const source=fs.readFileSync(new URL('../supabase/functions/self-service-deletion/index.ts',import.meta.url),'utf8').replace(/^import [^\r\n]*\r?\n/,'');
 let handler,calls=[];
 const client={auth:{async getUser(token){return token==='member'?{data:{user:{id:'verified-member',email:'member@example.invalid',email_confirmed_at:'2026-01-01'}}}:{error:{message:'Invalid'},data:{user:null}}}},async rpc(name,args){calls.push({name,args});return {data:{deleted:true}}}};
 vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText,{createClient:()=>client,Deno:{env:{get:()=>''},serve(fn){handler=fn}},Response});

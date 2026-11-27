@@ -1,6 +1,6 @@
 import PasswordField from './PasswordField';
 import {useEffect,useRef,useState} from 'react';
-import {ArrowLeftRight,ArrowRight,Check,House,ShieldCheck,UserRound} from 'lucide-react';
+import {ArrowLeftRight,ArrowRight,Check,House,UserRound} from 'lucide-react';
 import {accountSwitchEligible,getAccountSwitchOptions,switchAccount} from './accountSwitch';
 import {staySignedIn} from './supabase';
 import './account-switcher.css';
@@ -37,11 +37,11 @@ export default function AccountSwitcher({userId,email,onBusy,onProfile,onSavedSt
  }
  function askForPassword(){setError('');setPassword('');setPasswordOpen(true)}
  return <section className="account-switcher" aria-label="Switch between your accounts">
-  <div className="settings-page-intro"><ArrowLeftRight size={24}/><p>Choose the account to open. Your family and HH admin each keep their own home and settings.</p></div>
+  <div className="settings-page-intro"><ArrowLeftRight size={24}/><p>Choose the account to open. Each account has its own home and settings.</p></div>
   {loading?<p className="account-switch-loading" role="status">Checking your saved sign-ins…</p>:loadError?<div className="account-switch-load-error" role="alert"><p>{loadError}</p><button type="button" className="text-button" onClick={()=>void load()}>Try again</button></div>:options&&<>
    <div className="account-switch-list">
-    <div className="account-switch-card is-current"><span className="account-switch-icon">{options.current.label==='HH admin'?<ShieldCheck size={22}/>:<House size={22}/>}</span><span className="account-switch-copy"><b>{options.current.label}</b><small>{options.current.email}</small><em><Check size={13}/>Current account</em></span></div>
-    <button ref={otherAccount} type="button" className="account-switch-card" disabled={busy||passwordOpen} onClick={()=>options.other.saved?void choose():askForPassword()} aria-label={`${options.other.saved?'Switch to':'Sign in to'} ${options.other.label}`}><span className="account-switch-icon">{options.other.label==='HH admin'?<ShieldCheck size={22}/>:<House size={22}/>}</span><span className="account-switch-copy"><b>{options.other.label}</b><small>{options.other.email}</small><em>{busy?'Opening account…':options.other.saved?'Switch account':'Sign in once'}</em></span><ArrowRight size={18}/></button>
+    <div className="account-switch-card is-current"><span className="account-switch-icon"><House size={22}/></span><span className="account-switch-copy"><b>{options.current.label}</b><small>{options.current.email}</small><em><Check size={13}/>Current account</em></span></div>
+    <button ref={otherAccount} type="button" className="account-switch-card" disabled={busy||passwordOpen} onClick={()=>options.other.saved?void choose():askForPassword()} aria-label={`${options.other.saved?'Switch to':'Sign in to'} ${options.other.label}`}><span className="account-switch-icon"><House size={22}/></span><span className="account-switch-copy"><b>{options.other.label}</b><small>{options.other.email}</small><em>{busy?'Opening account…':options.other.saved?'Switch account':'Sign in once'}</em></span><ArrowRight size={18}/></button>
    </div>
    {passwordOpen&&<form className="account-switch-form" onSubmit={event=>{event.preventDefault();void choose(password)}}>
     <h3>Sign in to {options.other.label}</h3><p>Enter this account’s password once to add it here. You’ll stay in your current account if sign-in fails.</p>

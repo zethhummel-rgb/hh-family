@@ -27,19 +27,28 @@ try{
  }
  await db.exec('set role service_role');
  const env={SUPABASE_URL:'https://njpdqiwrwgoothkstoql.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'synthetic',HH_EMAIL_APP_PASSWORD:'abcdefghijklmnop'};
- let handler,failDelivery=false;
+ let failDelivery=false;
  const sent=[];
- compile('supabase/functions/request-pilot-invitation/index.ts',{
-  'npm:@supabase/supabase-js@2.118.0':{createClient:()=>({rpc:async(name,{action,payload})=>{
-   assert.equal(name,'pilot_request_mail_service');
-   return {data:await service(action,payload),error:null};
-  }})},
-  '../invitation-email/smtp.ts':{sendGmail:async mail=>{sent.push(mail);if(failDelivery)throw Error('Private SMTP detail')}},
-  '../invitation-email/message.ts':address,
-  './message.ts':message,
- },{Deno:{env:{get:key=>env[key]},serve:fn=>{handler=fn}}});
+ function server(environment,rpc){
+  let handler;
+  compile('supabase/functions/request-pilot-invitation/index.ts',{
+   'npm:@supabase/supabase-js@2.118.0':{createClient:()=>({rpc:async(name,{action,payload})=>{
+    assert.equal(name,'pilot_request_mail_service');
+    return {data:await rpc(action,payload),error:null};
+   }})},
+   '../invitation-email/smtp.ts':{sendGmail:async mail=>{sent.push(mail);if(failDelivery)throw Error('Private SMTP detail')}},
+   '../invitation-email/message.ts':address,
+   './message.ts':message,
+  },{Deno:{env:{get:key=>environment[key]},serve:fn=>{handler=fn}}});
+  return handler;
+ }
+ const claims=[];
+ const handler=server(env,(action,payload)=>{
+  if(action==='claim')claims.push(payload);
+  return service(action,payload);
+ });
  const answers={requestId:crypto.randomUUID(),name:'Alex & Sam',email:'ALEX@example.invalid',source:'An event invite',interest:'yes',message:'Hello <script> 🏡'};
- const request=(payload=answers,origin='https://zethhummel-rgb.github.io',method='POST')=>handler(new Request('https://fixture.invalid',{
+ const request=(payload=answers,origin='https://zethhummel-rgb.github.io',method='POST',handle=handler)=>handle(new Request('https://fixture.invalid',{
   method,headers:{Origin:origin},...(method==='POST'?{body:typeof payload==='string'?payload:JSON.stringify(payload)}:{}),
  }));
  assert.equal((await request(answers,'https://wrong.invalid')).status,403);
@@ -52,6 +61,8 @@ try{
  const response=await request({...answers,to:'arbitrary@example.invalid'});
  assert.equal(response.status,200);
  assert.equal((await response.json()).sent,true);
+ assert.deepEqual({...claims[0].answers},{name:answers.name,email:'alex@example.invalid',heardFrom:answers.source,pilotInterest:'yes',message:answers.message});
+ assert.equal(claims[0].preview,undefined);
  assert.equal(sent[0].to,'humblehomeapp@gmail.com');
  assert.equal(sent[0].from,'hummelhomeapp@gmail.com');
  assert.equal(sent[0].replyTo,'alex@example.invalid');
@@ -75,10 +86,30 @@ try{
  assert.equal((await request({...answers,requestId:crypto.randomUUID()})).status,429);
  assert.equal(sent.length,3);
 
+ const previewClaims=[];
+ let previewResult='preview';
+ const previewHandler=server({...env,SUPABASE_URL:'https://ybizqfghnplcxlmlhvyn.supabase.co',HH_EMAIL_APP_PASSWORD:''},(action,payload)=>{
+  assert.equal(action,'claim');
+  previewClaims.push(payload);
+  return previewResult;
+ });
+ const testOrigin='https://test.hhfamily.ca';
+ assert.deepEqual(await (await request(answers,testOrigin,'GET',previewHandler)).json(),{configured:false,preview:true});
+ assert.equal((await request({...answers,website:'spam'},testOrigin,'POST',previewHandler)).status,400);
+ assert.equal(previewClaims.length,0);
+ assert.deepEqual(await (await request(answers,testOrigin,'POST',previewHandler)).json(),{preview:true});
+ assert.equal(previewClaims[0].preview,true);
+ assert.equal(previewClaims[0].answers.email,'alex@example.invalid');
+ previewResult='limited';
+ assert.equal((await request({...answers,requestId:crypto.randomUUID()},testOrigin,'POST',previewHandler)).status,429);
+ previewResult='claimed';
+ assert.equal((await request({...answers,requestId:crypto.randomUUID()},testOrigin,'POST',previewHandler)).status,409);
+ assert.equal(sent.length,3);
+
  await db.exec('reset role');
  const rows=(await db.query('select * from private.pilot_request_delivery')).rows;
  assert.equal(rows.length,3);
  assert.ok(!JSON.stringify(rows).includes('alex@example.invalid'));
  assert.ok(!JSON.stringify(rows).includes('An event invite'));
 }finally{await db.close()}
-console.log('Pilot request checks passed: public form validation, fixed recipient, safe reply address, private delivery records, duplicate prevention, rate limits and uncertain delivery.');
+console.log('Pilot request checks passed: validated admin inbox capture, TEST preview without email, fixed recipient, safe reply address, private delivery records, duplicate prevention, rate limits and uncertain delivery.');

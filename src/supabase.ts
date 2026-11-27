@@ -10,14 +10,19 @@ let localSignOutWarning='';
 const loginStorage=createLoginStorage(()=>localStorage,()=>sessionStorage,()=>crypto.randomUUID(),notify,authNamespace);
 export const accountStorage=createAccountSwitchStorage(loginStorage,()=>crypto.randomUUID(),authNamespace);
 const authUrl=new URL(location.href),authFragment=new URLSearchParams(authUrl.hash.slice(1));
-export const recoveryEntry=authUrl.searchParams.has('code')||authUrl.searchParams.get('type')==='recovery'||authFragment.get('type')==='recovery';
-export const accountAuthReturn=authUrl.searchParams.has('code')||authFragment.has('access_token')||authFragment.has('refresh_token')||authFragment.get('type')==='recovery';
-export const accountSwitchBlocked=authUrl.searchParams.has('reset')||accountAuthReturn;
+// An admin page can use a family session from this tab. Only the family
+// entry point may accept sign-in or recovery details from a URL.
+const adminEntry=/\/admin(?:\.html)?\/?$/.test(authUrl.pathname);
+const recoveryMarker=authUrl.searchParams.has('code')||authUrl.searchParams.get('type')==='recovery'||authFragment.get('type')==='recovery';
+const authReturnMarker=authUrl.searchParams.has('code')||authFragment.has('access_token')||authFragment.has('refresh_token')||authFragment.get('type')==='recovery';
+export const recoveryEntry=!adminEntry&&recoveryMarker;
+export const accountAuthReturn=!adminEntry&&authReturnMarker;
+export const accountSwitchBlocked=authUrl.searchParams.has('reset')||authReturnMarker||(adminEntry&&recoveryMarker);
 let activeChoice=accountStorage.initial(accountAuthReturn);
 let activeOptions=accountStorage.options(activeChoice);
 const client=(storage=activeOptions,detectSessionInUrl=true,autoRefreshToken=true)=>createClient(publicConfig.url,publicConfig.key,{auth:{persistSession:true,autoRefreshToken,detectSessionInUrl,...storage}});
 let activeStorageKey=activeChoice.key;
-export let supabase=recoveryEntry?createClient(publicConfig.url,publicConfig.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:true,storageKey:'hh-recovery-entry:v1'}}):client();
+export let supabase=recoveryEntry?createClient(publicConfig.url,publicConfig.key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:true,storageKey:'hh-recovery-entry:v1'}}):client(activeOptions,!adminEntry);
 const recoveryClient=recoveryEntry?supabase:null;
 export const isRecoveryEntryClient=()=>supabase===recoveryClient;
 export const currentAccountStorage=()=>activeChoice;

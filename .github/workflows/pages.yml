@@ -1,17 +1,16 @@
-name: Publish HH
+name: Publish HH on GitHub Pages for setup or recovery
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: hh-live-site-publishing
+  cancel-in-progress: false
 jobs:
   build:
+    if: github.repository == 'zethhummel-rgb/hh-family' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -31,3 +31,7 @@ verify_jwt = false
 # Visitors use the public request form before they have an HH account.
 [functions.request-pilot-invitation]
 verify_jwt = false
+
+# Checks the signed-in admin and the separate server-to-server release credential.
+[functions.hh-release-dispatch]
+verify_jwt = false

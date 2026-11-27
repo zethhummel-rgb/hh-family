@@ -53,5 +53,5 @@ function holdPage(){
  let released=false;
  return()=>{if(released)return;released=true;if(--scrollLocks===0){releasePage?.();releasePage=null}};
 }
-export function useModalScrollLock(){useLayoutEffect(holdPage,[])}
+export function useModalScrollLock(enabled=true){useLayoutEffect(()=>enabled?holdPage():undefined,[enabled])}
 

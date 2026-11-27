@@ -37,6 +37,7 @@ jobs:
       - name: Run all 36 configurations and focused checks
         run: |
           node scripts/polish-browser/public-homepage.cjs
+          node scripts/polish-browser/admin-menu.cjs
           node scripts/polish-browser/event-guests.cjs
           node scripts/polish-browser/interactive-tutorials.cjs
           node scripts/polish-browser/selected-usability.cjs
@@ -69,6 +70,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run test:calendar
       - run: npm run test:database
+      - run: node scripts/check-hh-admin-releases-database.mjs
+      - run: node scripts/check-hh-release-dispatch.mjs
       - run: node scripts/check-invitation-reissue.mjs
       - run: npm run test:invitations
       - run: node scripts/check-event-guests.mjs
@@ -84,3 +87,11 @@ jobs:
           VITE_SUPABASE_URL: https://njpdqiwrwgoothkstoql.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq
       - run: node scripts/check-production-build.mjs
+      - name: Verify admin sign-in and the live release interface
+        env:
+          HH_ADMIN_MENU_TARGET: live
+          HH_ADMIN_MENU_SCENARIOS: signed-out,callback,ordinary,admin-mfa,admin-releases,admin-release-disconnected,member-notice-history
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          npx --no-install playwright install --with-deps chromium
+          node scripts/polish-browser/admin-menu.cjs

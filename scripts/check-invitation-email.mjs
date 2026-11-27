@@ -35,15 +35,59 @@ let connected=false;await assert.rejects(smtp.sendGmail({...settings,to:'x\r\nBc
 let timeoutClosed=false;await assert.rejects(smtp.sendGmail(settings,async()=>({read:()=>new Promise(()=>{}),write:async()=>1,close(){timeoutClosed=true}}),5),/timed out/);assert.equal(timeoutClosed,true);
 let lateClosed=false;await assert.rejects(smtp.sendGmail(settings,()=>new Promise(resolve=>setTimeout(()=>resolve({close(){lateClosed=true}}),10)),1));await new Promise(resolve=>setTimeout(resolve,15));assert.equal(lateClosed,true);
 
-function server({configured=true,user=true,claim={status:'claimed',claimId:id,deliveryId:id,email:invite.email,senderName:'Host',householdName:'Home',expiresAt:invite.expiresAt},sendError=null,finishError=false,claimError=null}={}){
- let handler;const calls=[],sent=[];const env={APP_URL:app,SUPABASE_URL:'https://backend.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-private-key',...(configured?{HH_EMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'}:{})};
- compile('supabase/functions/invitation-email/index.ts',{
-  'npm:@supabase/supabase-js@2.118.0':{createClient:()=>({auth:{getUser:async()=>({data:{user:user?{id}:null},error:null})},rpc:async(name,args)=>{calls.push({name,...args});return{data:args.action==='claim'?claim:{updated:true},error:args.action==='claim'?claimError:finishError?{message:'private failure'}:null}}})},
+function server({project='https://backend.invalid',configured=true,user=true,claim={status:'claimed',claimId:id,deliveryId:id,email:invite.email,senderName:'Host',householdName:'Home',expiresAt:invite.expiresAt},sendError=null,finishError=false,claimError=null,jwtClaims={sub:id,aal:'aal1'},claimsError=null}={}){
+ let handler;const calls=[],sent=[];const env={APP_URL:app,SUPABASE_URL:project,SUPABASE_SERVICE_ROLE_KEY:'synthetic-private-key',...(configured?{HH_EMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'}:{})};
+ const {invitationApp}=compile('supabase/functions/invitation-email/index.ts',{
+  'npm:@supabase/supabase-js@2.118.0':{createClient:()=>({auth:{
+   getUser:async()=>({data:{user:user?{id}:null},error:null}),
+   getClaims:async bearer=>{assert.equal(bearer,'session');return {data:jwtClaims?{claims:jwtClaims}:null,error:claimsError}},
+  },rpc:async(name,args)=>{calls.push({name,...args});return{data:args.action==='claim'?claim:{updated:true},error:args.action==='claim'?claimError:finishError?{message:'private failure'}:null}}})},
   './message.ts':message,'./smtp.ts':{sendGmail:async value=>{sent.push(value);if(sendError)throw sendError}}
  },{Deno:{env:{get:key=>env[key]},serve:fn=>{handler=fn}}});
  const request=async(body={action:'send',kind:'family',token},{origin='https://example.invalid',auth='Bearer session',method='POST'}={})=>handler(new Request(app,{method,headers:{Origin:origin,...(auth?{Authorization:auth}:{}),'Content-Type':'application/json'},...(method==='POST'?{body:typeof body==='string'?body:JSON.stringify(body)}:{})}));
- return{calls,sent,request};
+ return{calls,sent,request,invitationApp};
 }
+const testServer=server({project:'https://ybizqfghnplcxlmlhvyn.supabase.co'});
+for(const [kind,param] of [['family','invite'],['pilot','pilot']]){
+ const preview=message.invitationMessage({...invite,kind},testServer.invitationApp);
+ const expected='https://test.hhfamily.ca/?'+param+'='+token;
+ assert.ok(preview.text.includes(expected));assert.ok(preview.html.includes('href="'+expected+'"'));
+ for(const origin of ['https://test.hhfamily.ca','https://zethhummel-rgb.github.io']){
+  assert.equal((await testServer.request({action:'send',kind,token},{origin})).status,409);
+ }
+}
+assert.equal(testServer.sent.length,0);
+const dashboardInvite={action:'send',kind:'pilot',token,siteAdmin:true};
+for(const setup of [{},{jwtClaims:{sub:'different-user',aal:'aal2'}},{jwtClaims:null,claimsError:{message:'invalid token'}}]){
+ const denied=server(setup);
+ assert.equal((await denied.request({...dashboardInvite,actorId:id,aal:'aal2'})).status,403);
+ assert.equal(denied.calls.length,0);
+ assert.equal(denied.sent.length,0);
+}
+const elevated={jwtClaims:{sub:id,aal:'aal2'}};
+const dashboardTestServer=server({project:'https://ybizqfghnplcxlmlhvyn.supabase.co',...elevated});
+assert.equal((await dashboardTestServer.request(dashboardInvite,{origin:'https://test.hhfamily.ca'})).status,409);
+assert.equal(dashboardTestServer.calls.length,0);
+assert.equal(dashboardTestServer.sent.length,0);
+let dashboard=server(elevated);
+assert.equal((await dashboard.request({...dashboardInvite,kind:'family'})).status,400);
+assert.equal(dashboard.calls.length,0);
+assert.equal((await dashboard.request({...dashboardInvite,actorId:'untrusted',email:'attacker@example.invalid'})).status,200);
+assert.equal(dashboard.calls[0].payload.actorId,id);
+assert.equal(dashboard.calls[0].payload.siteAdmin,true);
+assert.equal(dashboard.calls[1].payload.actorId,id);
+assert.equal(dashboard.calls[1].payload.siteAdmin,true);
+assert.equal(dashboard.sent[0].to,invite.email);
+assert.ok(dashboard.sent[0].text.includes(app+'?pilot='+token));
+dashboard=server({...elevated,claimError:{message:'This invitation is unavailable, expired, or not yours to send'}});
+assert.equal((await dashboard.request(dashboardInvite)).status,400);
+assert.equal(dashboard.calls.length,1);
+assert.equal(dashboard.calls[0].payload.siteAdmin,true);
+assert.equal(dashboard.sent.length,0);
+dashboard=server({...elevated,sendError:Error('synthetic SMTP failure')});
+assert.equal((await dashboard.request(dashboardInvite)).status,400);
+assert.equal(dashboard.calls[1].payload.status,'failed');
+assert.equal(dashboard.calls[1].payload.siteAdmin,true);
 let f=server();let response=await f.request({...invite,action:'send',email:'attacker@example.invalid',url:'https://attacker.invalid'});assert.equal(response.status,200);assert.equal(f.sent.length,1);assert.equal(f.sent[0].to,invite.email);assert.ok(f.sent[0].text.includes(app+'?invite='+token));assert.ok(!f.sent[0].text.includes('attacker'));assert.equal(f.calls[1].action,'finish');assert.equal(f.calls[1].payload.status,'sent');assert.equal(f.sent[0].password,'abcdefghijklmnop');assert.ok(!(await response.text()).includes('abcdefghijklmnop'));
 for(const [options,status] of [[{auth:''},401],[{origin:'https://other.invalid'},403],[{method:'GET'},405]]){f=server();assert.equal((await f.request(undefined,options)).status,status);assert.equal(f.calls.length,0);assert.equal(f.sent.length,0)}
 f=server({user:false});assert.equal((await f.request()).status,401);assert.equal(f.sent.length,0);

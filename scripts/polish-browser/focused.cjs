@@ -3,7 +3,7 @@ const {launchBrowser}=require('./browser.cjs');
 const {setFixtureHandler,serveFixture,redirectFixtureAPI}=require('./fixture-api.cjs');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const dir=path.resolve('dist'),home='11111111-1111-4111-8111-111111111111',uid='22222222-2222-4222-8222-222222222222';
-const user={id:uid,email:'hummelhomeapp@gmail.com',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
+const user={id:uid,email:'zethhummel@gmail.com',aud:'authenticated',role:'authenticated',user_metadata:{},app_metadata:{provider:'email'},email_confirmed_at:'2026-01-01'};
 const member={user_id:uid,display_name:'Alex Morgan',role:'member',household_id:home};
 const products=['Milk','Bread','Eggs'].map((title,i)=>({id:'33333333-3333-4333-8333-33333333333'+i,title,category:'Dairy & eggs',kind:'grocery',done:false,household_id:home,reminder_version:1,person:'Everyone',created_at:'2026-01-01',grocery_store:'Test market'}));
 products.push({id:'44444444-4444-4444-8444-444444444444',household_id:home,kind:'task',title:'Book camp tickets',category:'Other',person:'Everyone',done:true,due:'2026-10-01',reminder_version:1,created_at:'2026-01-01'});
@@ -47,6 +47,7 @@ let managedHomes=[
    if (u.pathname.startsWith('/auth/'))data=user;
    else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
    else if(table==='pilot_status')data={is_host:true};
+   else if(table==='hh_admin_status')data={is_admin:true,requires_mfa:false};
    else if(table==='event-addresses'){
     const {query,placeId}=req.postDataJSON();if(query)addressLookups.push(query);
     data=query==='999 Limit'?{status:'paused',suggestions:[]}:
@@ -240,7 +241,7 @@ let managedHomes=[
  await page.getByRole('button',{name:/Send Feedback/}).click();
  const feedbackDialog=page.getByRole('dialog',{name:'Send Feedback',exact:true});
  assert.equal((await feedbackDialog.innerText()).includes(user.email),false);
- assert.match(await feedbackDialog.locator('#feedback-privacy').innerText(),/We use your account email to reply/);
+ assert.match(await feedbackDialog.locator('#feedback-privacy').innerText(),/may use your account email to reply/);
  await page.getByLabel('Your comment').fill('Unsent feedback draft');await protect(()=>page.getByRole('button',{name:'Done',exact:true}).first().click(),page.getByLabel('Your comment'),'Unsent feedback draft');pass('Feedback Done protects draft without sending email');
  await nav('Groceries');await page.getByRole('button',{name:'Filters',exact:true}).click();assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'SELECT');await page.getByLabel('Filter groceries by store').selectOption('none');await page.getByRole('button',{name:'Close filters'}).click();await page.locator('.active-grocery-filter').waitFor();await page.locator('.active-grocery-filter button').click();assert.equal(await page.locator('.active-grocery-filter').count(),0);pass('Active store filter stays visible and can be cleared');
  const sizes=await page.locator('.grocery-row>.checkbox,.grocery-row>.delete,.grocery-row>.grocery-edit').evaluateAll(es=>es.map(e=>({w:e.getBoundingClientRect().width,h:e.getBoundingClientRect().height})));assert(sizes.length>=9&&sizes.every(x=>x.w>=44&&x.h>=44));pass('Grocery row controls have 44px tap targets');

@@ -1,0 +1,101 @@
+:root[data-palette='spring'] {
+  --seasonal-hero: linear-gradient(114deg, #fffafd 10%, #fde5f1 61%, #daeaff);
+  --seasonal-art: linear-gradient(145deg, #a9d6fa, #f1cde9 80%);
+  --seasonal-ribbon: linear-gradient(90deg, #bc548a, #e698bc 48%, #5c9bd7 81%, #92b2df);
+  --seasonal-frame: #e3a0c5;
+}
+
+:root[data-palette='summer'] {
+  --seasonal-hero: linear-gradient(113deg, #fffdfa 8%, #e1f5ff 60%, #b8e5fd);
+  --seasonal-art: linear-gradient(156deg, #6bc8ef, #b4eafa 75%);
+  --seasonal-ribbon: linear-gradient(90deg, #0c75b1 0% 41%, #36aed7 41% 59%, #efb347 59% 79%, #da6b57 79%);
+  --seasonal-frame: #8acbe9;
+}
+
+:root[data-palette='easter'] {
+  --seasonal-hero: linear-gradient(115deg, #fffafb 9%, #f1e3ff 61%, #ffe7ac);
+  --seasonal-art: radial-gradient(ellipse at 58% 70%, #fceaff, #d8aaf2 86%);
+  --seasonal-ribbon: linear-gradient(90deg, #9363c9 0% 31%, #ec89b7 31% 57%, #f1c95f 57% 80%, #67b58f 80%);
+  --seasonal-frame: #ceaae9;
+}
+
+:root[data-palette='halloween'] {
+  --seasonal-hero: linear-gradient(112deg, #fffaf6 4%, #f5defb 58%, #ffd9ad);
+  --seasonal-art: radial-gradient(ellipse at 70% 25%, #794573, #321849 70%);
+  --seasonal-ribbon: repeating-linear-gradient(112deg, #452459 0 22px, #b74a21 22px 42px, #eda14e 42px 49px);
+  --seasonal-frame: #dc9ec8;
+}
+
+:root[data-palette='christmas'] {
+  --seasonal-hero: linear-gradient(112deg, #fffdf3 8%, #e4f1df 57%, #f3c8cb);
+  --seasonal-art: radial-gradient(ellipse at 49% 65%, #347a53, #163b32 79%);
+  --seasonal-ribbon: repeating-linear-gradient(110deg, #24553f 0 37px, #b62949 37px 58px, #e3b14c 58px 64px);
+  --seasonal-frame: #bad0ad;
+}
+
+:root[data-palette='thanksgiving'] {
+  --seasonal-hero: linear-gradient(114deg, #fffaf1 7%, #ffe5c5 60%, #f8bd98);
+  --seasonal-art: radial-gradient(ellipse at 27% 21%, #ffd38c, #f39e65 85%);
+  --seasonal-ribbon: linear-gradient(90deg, #a42f3d 0% 32%, #cb6830 32% 63%, #e4a83d 63% 82%, #9a4432 82%);
+  --seasonal-frame: #e8a373;
+}
+
+:root:is([data-palette='spring'], [data-palette='summer'], [data-palette='easter'], [data-palette='halloween'], [data-palette='christmas'], [data-palette='thanksgiving']) :is(.topbar, .sidebar, .mobile-nav) {
+  border-color: var(--seasonal-frame);
+  background-image: var(--seasonal-ribbon);
+  background-position: top left;
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+}
+
+.seasonal-decor {
+  display: block;
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: clamp(136px, 23vw, 276px);
+  overflow: hidden;
+  border: 1px solid var(--seasonal-frame);
+  border-radius: clamp(13px, 1.7vw, 24px);
+  background: var(--seasonal-art);
+  box-shadow: 0 5px 13px color-mix(in srgb, var(--theme-shadow) 12%, transparent);
+  line-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.seasonal-decor__scene {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.home-page .page-heading:has(> .seasonal-decor) {
+  align-items: center;
+  gap: clamp(8px, 2vw, 26px);
+  padding: clamp(12px, 2.3vw, 26px);
+  border: 1px solid var(--seasonal-frame);
+  border-radius: clamp(16px, 2.1vw, 27px);
+  background: var(--seasonal-hero);
+}
+
+.page-heading:has(> .seasonal-decor) > :first-child {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .seasonal-decor {
+    inline-size: clamp(88px, 29vw, 149px);
+  }
+}
+
+@media (forced-colors: active) {
+  .seasonal-decor {
+    display: none;
+  }
+
+  .home-page .page-heading:has(> .seasonal-decor) {
+    background: Canvas;
+    border-color: CanvasText;
+  }
+}

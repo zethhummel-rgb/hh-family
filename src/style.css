@@ -260,6 +260,10 @@ input::placeholder,textarea::placeholder{color:var(--theme-subtle,#a48a96)}
 .palette-copy small{display:block;font-size:10px;line-height:1.4;margin-top:3px;color:var(--muted)}
 .palette-check{position:absolute;right:7px;top:7px;color:var(--teal);display:flex}
 .palette-help{color:var(--muted)}
+.palette-group{min-width:0;margin:15px 0 13px}
+.palette-group+.palette-group{border-top:1px solid var(--line);padding-top:13px}
+.palette-group h4{color:var(--ink);font-size:.875rem;font-weight:650;line-height:1.35;margin:0 0 8px}
+.palette-group .palette-choices{margin:0}
 .palette-status{margin-top:7px;color:var(--teal);min-height:0}
 .palette-status:empty{display:none}
 @media(max-width:360px){.palette-choices{grid-template-columns:1fr}.palette-choice{min-height:65px}.palette-copy b{font-size:12px}}

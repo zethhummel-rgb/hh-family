@@ -1,0 +1,189 @@
+name: Publish a prepared HH release
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Prepare a tested build or release the approved build
+        required: true
+        type: choice
+        options: [prepare, release]
+        default: prepare
+      release_id:
+        description: Approved live HH release ID (for release only)
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ inputs.action == 'release' && 'hh-live-site-publishing' || 'hh-live-release-prepare' }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'zethhummel-rgb/hh-family' && github.ref == 'refs/heads/main' && inputs.action == 'prepare'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VITE_APP_ENV: production
+      VITE_SUPABASE_URL: https://njpdqiwrwgoothkstoql.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Ok3ZhlQo6hYLRWcl68Z_Zw_qKEauTkq
+    outputs:
+      id: ${{ steps.package.outputs.id }}
+      version: ${{ steps.package.outputs.version }}
+      artifact_sha256: ${{ steps.package.outputs.artifact_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Test the pinned live HH commit
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm ci --ignore-scripts
+          npm run test:calendar
+          npm run test:database
+          node scripts/check-hh-admin-releases-database.mjs
+          node scripts/check-hh-release-dispatch.mjs
+          npm run test:invitations
+          node scripts/check-event-guests.mjs
+          npm run test:recovery
+          npm run test:welcome
+          npm run test:feedback
+          npm run test:polish
+          node scripts/check-offline-shopping.mjs
+          node scripts/check-portal-search.mjs
+      - name: Build for live HH
+        run: npm run build
+      - name: Verify the production build
+        run: node scripts/check-production-build.mjs
+      - name: Test the production admin and release interface
+        env:
+          HH_ADMIN_MENU_TARGET: live
+          HH_ADMIN_MENU_SCENARIOS: signed-out,callback,ordinary,admin-mfa,admin-releases,admin-release-disconnected,member-notice-history
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          npx --no-install playwright install --with-deps chromium
+          node scripts/polish-browser/admin-menu.cjs
+      - name: Package the checked build
+        id: package
+        run: node scripts/hh-live-release.mjs prepare
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hh-live-release-${{ steps.package.outputs.id }}
+          path: ${{ runner.temp }}/hh-live-release.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  register:
+    if: github.repository == 'zethhummel-rgb/hh-family' && github.ref == 'refs/heads/main' && inputs.action == 'prepare'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: hh-live-release-prepare
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Register the tested artifact
+        env:
+          HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
+          HH_RELEASE_ID: ${{ needs.prepare.outputs.id }}
+          HH_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          HH_RELEASE_ARTIFACT_SHA256: ${{ needs.prepare.outputs.artifact_sha256 }}
+        run: node scripts/hh-live-release.mjs register
+
+  release:
+    if: github.repository == 'zethhummel-rgb/hh-family' && github.ref == 'refs/heads/main' && inputs.action == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: hh-live-release-deploy
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Check live HH Pages configuration
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.HH_LIVE_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.HH_LIVE_CLOUDFLARE_API_TOKEN }}
+        run: node scripts/hh-live-release.mjs check-pages
+      - name: Install the pinned deploy tool
+        run: |
+          npm install --prefix "$RUNNER_TEMP/hh-wrangler" --ignore-scripts --no-audit --no-fund wrangler@4.119.0
+          node "$RUNNER_TEMP/hh-wrangler/node_modules/wrangler/bin/wrangler.js" --version
+      - name: Claim the approved live HH release
+        id: claim
+        env:
+          HH_RELEASE_ID: ${{ inputs.release_id }}
+          HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
+        run: node scripts/hh-live-release.mjs claim
+      - name: Check the approved build run
+        if: steps.claim.outputs.claimed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/hh-live-release.mjs check-run
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.claim.outputs.claimed == 'true'
+        with:
+          github-token: ${{ github.token }}
+          repository: zethhummel-rgb/hh-family
+          run-id: ${{ steps.claim.outputs.artifact_run_id }}
+          name: ${{ steps.claim.outputs.artifact_name }}
+          path: ${{ runner.temp }}/hh-release-download
+      - name: Verify and unpack only the approved archive
+        if: steps.claim.outputs.claimed == 'true'
+        run: node scripts/hh-live-release.mjs unpack
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        if: steps.claim.outputs.claimed == 'true'
+        with:
+          path: ${{ runner.temp }}/hh-release-content
+      - name: Publish to the live HH Pages project
+        if: steps.claim.outputs.claimed == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.HH_LIVE_CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.HH_LIVE_CLOUDFLARE_API_TOKEN }}
+          HH_RELEASE_COMMIT_SHA: ${{ steps.claim.outputs.commit_sha }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          node "$RUNNER_TEMP/hh-wrangler/node_modules/wrangler/bin/wrangler.js" pages deploy "$RUNNER_TEMP/hh-release-content" \
+            --project-name hh-family-app --branch main --commit-hash "$HH_RELEASE_COMMIT_SHA"
+      - name: Publish the same build to the original HH address
+        if: steps.claim.outputs.claimed == 'true'
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Verify the build and noindex on both live HH addresses
+        if: steps.claim.outputs.claimed == 'true'
+        run: node scripts/hh-live-release.mjs verify-host
+      - name: Record the verified deployment
+        if: steps.claim.outputs.claimed == 'true'
+        id: record_verified
+        env:
+          HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
+        run: node scripts/hh-live-release.mjs verified
+      - name: Publish the approved announcement
+        if: steps.claim.outputs.claimed == 'true'
+        env:
+          HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
+        run: node scripts/hh-live-release.mjs publish
+      - name: Record a failed or unverified deployment
+        if: failure() && steps.claim.outputs.claimed == 'true' && steps.record_verified.outcome != 'success'
+        env:
+          HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
+        run: node scripts/hh-live-release.mjs failed
