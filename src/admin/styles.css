@@ -62,7 +62,7 @@ form { display: grid; gap: .9rem; }
 .admin-sign-out { display: inline-flex; align-items: center; gap: .35rem; flex-shrink: 0; }
 .admin-navigation {
   display: grid;
-  grid-template-columns: repeat(var(--admin-tab-columns, 5), minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8.6rem, 1fr));
   gap: .3rem;
   padding: .35rem;
   border: 1px solid var(--line);
@@ -70,7 +70,6 @@ form { display: grid; gap: .9rem; }
   background: var(--paper);
   box-shadow: 0 3px 9px #20382c0b;
 }
-.admin-navigation.has-release-tab { --admin-tab-columns: 6; }
 .admin-navigation button {
   display: flex;
   align-items: center;
@@ -126,6 +125,16 @@ form { display: grid; gap: .9rem; }
 .invitation-url { overflow-wrap: anywhere; user-select: all; }
 .message { margin-block: .6rem; padding: .6rem .75rem; border-radius: .45rem; }
 .message.error { background: #fff1e9; color: #743f29; }
+.admin-households { max-width: 760px; }
+.admin-households > .text-button { margin-block: .55rem; }
+.admin-household-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.admin-household-row > span { min-width: 0; overflow-wrap: anywhere; }
+.admin-household-row small { display: block; color: var(--muted); }
+.admin-household-row .text-button { flex-shrink: 0; min-height: 2.75rem; font-size: .84rem; }
+.admin-household-confirm { margin-block: .9rem; padding: 1rem; border: 1px solid #bf8d81; border-radius: .75rem; }
+.admin-household-confirm h4 { margin: 0; }
+.admin-household-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.admin-households .danger { color: #742c26; border-color: #bf8d81; }
 .record-nav, .record-view, .filters { display: flex; align-items: center; gap: .45rem; }
 .record-nav { justify-content: space-between; flex-wrap: wrap; }
 .record-view { gap: .22rem; padding: .22rem; border: 1px solid var(--line); border-radius: .66rem; background: #eff3ed; }

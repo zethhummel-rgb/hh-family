@@ -1,5 +1,5 @@
-import {Fragment,useEffect,useRef,useState,type FormEvent} from 'react';
-import {supabase} from './supabase';
+import {Fragment,useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
+import type {AdminClient,GetAdminClient} from './admin/api';
 type Home={id:string;name:string;memberCount:number;protected:boolean};
 type Usage={household_id:string;last_used_at:string|null;last_sign_in_at:string|null};
 const useTime=new Intl.DateTimeFormat('en-CA',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Toronto'});
@@ -9,14 +9,14 @@ function LastHouseholdUse({usage,unavailable}:{usage?:Usage;unavailable:boolean}
  if(!value||!Number.isFinite(Date.parse(value)))return <small>No use recorded yet</small>;
  return <small>{usage?.last_used_at?'Last used':'Last sign-in'}: <time dateTime={value}>{useTime.format(new Date(value))} ET</time></small>;
 }
-async function loadUsage(){
+async function loadUsage(supabase:AdminClient){
  try{
   const {data,error}=await supabase.rpc('admin_household_usage');
   if(error||!Array.isArray(data))return null;
   return new Map((data as Usage[]).map(row=>[row.household_id,row]));
  }catch{return null}
 }
-async function request(action:string,householdId?:string,confirmation?:string){
+async function request(supabase:AdminClient,action:'list'|'delete',householdId?:string,confirmation?:string){
  const {data,error}=await supabase.functions.invoke('admin-households',{body:{action,householdId,confirmation}});
  if(error){let message='Could not complete the request. Refresh the list before retrying.';try{const result=await error.context?.json();if(result?.error)message=result.error}catch{}throw Error(message)}
  if(data?.error)throw Error(data.error);return data;
@@ -24,7 +24,7 @@ async function request(action:string,householdId?:string,confirmation?:string){
 function comparableName(name:string){
  return name.normalize('NFC').trim().replace(/[‘’]/g,"'");
 }
-export default function AdminHouseholds(){
+export default function AdminHouseholds({getClient}:{getClient:GetAdminClient}){
  const [homes,setHomes]=useState<Home[]>([]),[selected,setSelected]=useState<Home|null>(null),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[listError,setListError]=useState(''),[deleteError,setDeleteError]=useState(''),[notice,setNotice]=useState('');
  const [usage,setUsage]=useState<Map<string,Usage>|null>(null);
  const deleteButton=useRef<HTMLButtonElement>(null);
@@ -32,14 +32,15 @@ export default function AdminHouseholds(){
  const confirmForm=useRef<HTMLFormElement>(null);
  const status=useRef<HTMLParagraphElement>(null);
  const matchesName=selected!==null&&comparableName(confirmation)===comparableName(selected.name);
- async function load(){
+ const load=useCallback(async()=>{
   setLoading(true);setListError('');
   try{
-   const [list,timestamps]=await Promise.all([request('list'),loadUsage()]);
+   const client=await getClient();
+   const [list,timestamps]=await Promise.all([request(client,'list'),loadUsage(client)]);
    setHomes(list);setUsage(timestamps);
   }catch(e){setListError((e as Error).message)}finally{setLoading(false)}
- }
- useEffect(()=>{void load()},[]);
+ },[getClient]);
+ useEffect(()=>{void load()},[load]);
  useEffect(()=>{
   if(!selected)return;
   confirmHeading.current?.focus({preventScroll:true});
@@ -61,15 +62,15 @@ export default function AdminHouseholds(){
   setBusy(true);setDeleteError('');
   try{
    // The server checks the exact stored name. Mobile keyboards may change apostrophes in the input.
-   await request('delete',selected.id,selected.name);
+   await request(await getClient(),'delete',selected.id,selected.name);
    setHomes(current=>current.filter(home=>home.id!==selected.id));
    setNotice(`Deleted ${selected.name} and its members’ accounts.`);
    setSelected(null);setConfirmation('');await load();
   }catch(e){setDeleteError((e as Error).message)}finally{setBusy(false)}
  }
- return <section className="admin-households"><h3>Manage pilot households</h3><p className="settings-page-description">Admin only. Deleting a household permanently removes its HH calendar, lists, reminders, profiles and all members’ login accounts. It frees its pilot place. Calendars already created in Google remain in Google.</p>
+ return <section className="panel admin-households"><p className="detail">Deleting a household permanently removes its HH calendar, lists, reminders, profiles and all members’ login accounts. It frees its pilot place. Calendars already created in Google remain in Google.</p>
   <button type="button" className="text-button" disabled={busy||loading||selected!==null} onClick={()=>void load()}>Refresh households</button>
-  {listError&&<p className="error" role="alert">{listError}</p>}
+  {listError&&<p className="message error" role="alert">{listError}</p>}
   {notice&&<p ref={status} role="status" tabIndex={-1}>{notice}</p>}
   {loading?<p>Loading households…</p>:homes.map(home=>{
    const isSelected=selected?.id===home.id;
@@ -85,7 +86,7 @@ export default function AdminHouseholds(){
      <h4 id="admin-household-confirm-title" ref={confirmHeading} tabIndex={-1}>Delete {home.name}?</h4>
      <p>This permanently deletes this entire household and all its members’ accounts. It cannot be undone. No deletion email will be sent.</p>
      <label>Type the household name to confirm<input autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} maxLength={80} value={confirmation} disabled={busy} onChange={e=>setConfirmation(e.target.value)}/></label>
-     {deleteError&&<p className="error" role="alert">{deleteError}</p>}
+     {deleteError&&<p className="message error" role="alert">{deleteError}</p>}
      <div className="admin-household-actions">
       <button className="button danger" disabled={busy||!matchesName}>{busy?'Deleting…':'Permanently delete household'}</button>
       <button type="button" className="text-button" disabled={busy} onClick={cancelDelete}>Cancel</button>
