@@ -2,7 +2,7 @@ import type {createLoginStorage} from './loginStorage';
 
 export const SWITCH_ACCOUNTS=[
  {email:'zethhummel@gmail.com',label:'Family account',id:'family'},
- {email:'hummelhomeapp@gmail.com',label:'HH admin',id:'admin'}
+ {email:'hummelhomeapp@gmail.com',label:'Test Home',id:'admin'}
 ] as const;
 export type SwitchEmail=typeof SWITCH_ACCOUNTS[number]['email'];
 export type AccountReference={email:SwitchEmail;userId:string;key:string;remember:boolean};
