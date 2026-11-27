@@ -12,8 +12,12 @@ export function makePasswordRecovery(){
 export default function PasswordReset({initialEmail='',onClose,makeRecovery=makePasswordRecovery}:{initialEmail?:string;onClose:()=>void;makeRecovery?:typeof makePasswordRecovery}){
  const [recovery]=useState(makeRecovery),[step,setStep]=useState<'request'|'code'|'done'>('request');
  const [email,setEmail]=useState(initialEmail),[code,setCode]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[resendAt,setResendAt]=useState(0),[now,setNow]=useState(Date.now());
- const lock=useRef(false),alive=useRef(true);
+ const [authenticators,setAuthenticators]=useState<{id:string;name?:string}[]>([]);
+ const [factorId,setFactorId]=useState(''),[authenticatorCode,setAuthenticatorCode]=useState('');
+ const lock=useRef(false),alive=useRef(true),authenticatorInput=useRef<HTMLInputElement>(null);
  useEffect(()=>{alive.current=true;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>{alive.current=false;clearInterval(timer);void recovery.clear()}},[recovery]);
+ const needsAuthenticator=authenticators.length>0;
+ useEffect(()=>{if(needsAuthenticator&&!busy)authenticatorInput.current?.focus()},[needsAuthenticator,busy]);
  const wait=Math.max(0,Math.ceil((resendAt-now)/1000));
  async function run(operation:()=>Promise<void>){
   if(lock.current)return;lock.current=true;setBusy(true);setError('');setMessage('');
@@ -21,18 +25,27 @@ export default function PasswordReset({initialEmail='',onClose,makeRecovery=make
  }
  async function send(){
   const normalized=await recovery.request(email);if(!alive.current)return;
+  clearAuthenticator();
   setEmail(normalized);setCode('');setPassword('');setConfirm('');setStep('code');setResendAt(Date.now()+60000);setNow(Date.now());
   setMessage('If that account exists, a reset code is on its way. Check your inbox and junk folder.');
  }
- async function save(){await recovery.complete(email,code,password,confirm);if(alive.current){setCode('');setPassword('');setConfirm('');setStep('done')}}
+ function clearAuthenticator(){setAuthenticators([]);setFactorId('');setAuthenticatorCode('')}
+ async function save(){
+  const factors=await recovery.complete(email,code,password,confirm,needsAuthenticator?{factorId,code:authenticatorCode}:undefined);
+  if(!alive.current)return;
+  if(factors){setAuthenticators(factors);setFactorId(factors[0].id);setAuthenticatorCode('');return}
+  clearAuthenticator();setCode('');setPassword('');setConfirm('');setStep('done');
+ }
  return <section className="password-reset" aria-busy={busy}>
   <span className="round-icon sage">{step==='done'?<Check/>:<KeyRound/>}</span>
-  <h2>{step==='done'?'A fresh start.':step==='code'?'Check your email.':'Forgot your password?'}</h2>
-  <p>{step==='done'?'Your password is updated. Use your new password next time you sign in.':step==='code'?'Enter the code from your email, then choose a new password. Use only the newest code.':'We’ll email you a code to reset it.'}</p>
+  <h2>{step==='done'?'A fresh start.':needsAuthenticator?'Verify with your authenticator':step==='code'?'Check your email.':'Forgot your password?'}</h2>
+  <p>{step==='done'?'Your password is updated. Use your new password next time you sign in.':needsAuthenticator?'Your email code was accepted. Enter the current six-digit code from your authenticator app to finish.':step==='code'?'Enter the code from your email, then choose a new password. Use only the newest code.':'We’ll email you a code to reset it.'}</p>
   {step!=='done'&&<form onSubmit={e=>{e.preventDefault();void run(step==='request'?send:save)}}>
    <label>Email address<input type="email" autoComplete="email" maxLength={254} required disabled={busy||step==='code'} value={email} onChange={e=>setEmail(e.target.value)}/></label>
    {step==='code'&&<>
-    <label>Reset code<input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,10}" minLength={6} maxLength={10} required disabled={busy} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,10))}/></label>
+    {needsAuthenticator?<>{authenticators.length>1&&<label>Authenticator<select value={factorId} disabled={busy} onChange={e=>{setFactorId(e.target.value);setAuthenticatorCode('')}}>{authenticators.map((factor,index)=><option key={factor.id} value={factor.id}>{factor.name||`Authenticator ${index+1}`}</option>)}</select></label>}
+     <label>Authenticator code<input ref={authenticatorInput} type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]{6}" minLength={6} maxLength={6} required disabled={busy} value={authenticatorCode} onChange={e=>setAuthenticatorCode(e.target.value.replace(/\D/g,'').slice(0,6))}/></label>
+    </>:<label>Reset code<input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,10}" minLength={6} maxLength={10} required disabled={busy} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,10))}/></label>}
     <label>New password<input type="password" autoComplete="new-password" required minLength={6} maxLength={128} disabled={busy} value={password} onChange={e=>setPassword(e.target.value)}/><small>Use at least 6 characters.</small></label>
     <label>Confirm new password<input type="password" autoComplete="new-password" required minLength={6} maxLength={128} disabled={busy} value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>
    </>}
@@ -40,7 +53,7 @@ export default function PasswordReset({initialEmail='',onClose,makeRecovery=make
   </form>}
   {step==='code'&&<div className="password-reset-actions">
    <button type="button" className="text-button" disabled={busy||wait>0} onClick={()=>void run(send)}>{wait>0?`Send a new code in ${wait}s`:'Send a new code'}</button>
-   <button type="button" className="text-button" disabled={busy} onClick={()=>{void recovery.clear();setStep('request');setCode('');setPassword('');setConfirm('');setError('');setMessage('')}}>Use a different email</button>
+   <button type="button" className="text-button" disabled={busy} onClick={()=>{void recovery.clear();clearAuthenticator();setStep('request');setCode('');setPassword('');setConfirm('');setError('');setMessage('')}}>Use a different email</button>
   </div>}
   {error&&<div className="error" role="alert">{error}</div>}
   {message&&<div className="success-message" role="status"><Mail size={17}/>{message}</div>}
