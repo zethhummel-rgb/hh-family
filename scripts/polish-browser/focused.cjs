@@ -47,6 +47,7 @@ let managedHomes=[
    if (u.pathname.startsWith('/auth/'))data=user;
    else if(table==='record_household_use'){assert.deepEqual(req.postDataJSON(),{target_household:home});householdUseReports++;data=null;}
    else if(table==='pilot_status')data={is_host:true};
+   else if(table==='hh_admin_dashboard')data={requests:[],invitations:[],capacity:{used:0,total:14}};
    else if(table==='hh_admin_status')data={is_admin:true,requires_mfa:false};
    else if(table==='event-addresses'){
     const {query,placeId}=req.postDataJSON();if(query)addressLookups.push(query);
@@ -109,7 +110,10 @@ let managedHomes=[
  await page.getByRole('button',{name:'Open Settings',exact:true}).click();
  await activityReport;
  assert.equal(householdUseReports,reportsBeforeInteraction+1,'Using the existing session records activity again');
- await page.getByRole('button',{name:/^Manage households/}).click();
+ assert.equal(await page.getByRole('button',{name:/^Manage households/}).count(),0,'Settings has no separate household-management screen');
+ await page.getByRole('link',{name:/^Admin Dashboard/}).click();
+ await page.getByRole('navigation',{name:'Admin Dashboard'}).getByRole('button',{name:'Manage households',exact:true}).click();
+ await page.getByRole('heading',{name:'Manage households',exact:true}).waitFor();
  const recorded=page.locator('.admin-household-row').filter({hasText:'Recorded home'});
  const signedIn=page.locator('.admin-household-row').filter({hasText:'Sign-in only'});
  await recorded.getByText(/Last used:/).waitFor();
@@ -127,8 +131,8 @@ let managedHomes=[
  await openDelete.click();
  await page.waitForFunction(()=>document.activeElement?.id==='admin-household-confirm-title');
  const formBounds=await confirmation.boundingBox();
- const listBounds=await page.locator('.settings-content').boundingBox();
- assert(formBounds&&listBounds&&formBounds.y>=listBounds.y&&formBounds.y+formBounds.height<=listBounds.y+listBounds.height+1,'The confirmation is in the visible area of the mobile household list');
+ const viewport=page.viewportSize();
+ assert(formBounds&&viewport&&formBounds.y>=-1&&formBounds.y+formBounds.height<=viewport.height+1,'The confirmation is in the visible area of the mobile dashboard');
  await confirmName.fill('Other household');
  assert(await confirmDelete.isDisabled());
  assert.equal(deleteAttempts,0);
@@ -147,7 +151,8 @@ let managedHomes=[
  assert.equal(deleteAttempts,2);
  assert.match(await recorded.locator('time').innerText(),/Nov 15, 2026.*2:28.*ET/i);
  pass('Mobile household deletion stays in view, preserves confirmation safeguards, and supports retry after an error');
- await page.getByRole('button',{name:'Done',exact:true}).click();
+ await page.getByRole('link',{name:/^Open HH/}).click();
+ await page.locator('.home-family-name').first().waitFor();
  await nav('Calendar');await page.getByRole('button',{name:'Add event',exact:true}).click();assert(await page.locator('.event-tag-picker').isVisible());assert.equal(await page.locator('.event-options').count(),0);assert(await page.getByLabel('Location (optional)',{exact:true}).isVisible());assert(await page.getByLabel('Repeat',{exact:true}).isVisible());assert(await page.getByRole('switch',{name:'Show countdown'}).isVisible());pass('Compact event fields and settings are exposed without More options');
  const address=page.getByRole('combobox',{name:'Location (optional)'});
  const addressList=page.getByRole('listbox',{name:'Suggested locations'});

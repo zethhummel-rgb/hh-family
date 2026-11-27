@@ -133,8 +133,8 @@ function HouseholdApp(){
  {(invite||pilot)&&<div className="setup-note">Your invitation is saved. Sign in with the email address it was created for.</div>}
  <form onSubmit={auth}>
   {mode!=='recover'&&<label>Email address<input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></label>}
-  {mode!=='forgot'&&<PasswordField key={mode} label="Password" required minLength={mode==='login'?1:12} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} help={mode!=='login'?'Use at least 12 characters.':undefined}/>}
-  {mode==='recover'&&<PasswordField key={mode+'-confirm'} label="Confirm password" required minLength={12} autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)}/>}
+  {mode!=='forgot'&&<PasswordField key={mode} label="Password" required minLength={mode==='login'?1:6} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} help={mode!=='login'?'Use at least 6 characters.':undefined}/>}
+  {mode==='recover'&&<PasswordField key={mode+'-confirm'} label="Confirm password" required minLength={6} autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)}/>}
   {mode==='login'&&<div className="login-persistence"><label><input type="checkbox" checked={remember} disabled={busy} aria-describedby="login-persistence-help" onChange={e=>setRemember(e.target.checked)}/><span>Stay signed in on this device</span></label><p id="login-persistence-help">{remember?'Use this on your own device. HH will remember your login when you reopen it.':'Your login will last for this tab’s browsing session.'}</p></div>}
   {mode==='login'&&<button type="button" className="text-button" onClick={()=>{setMode('reset');setError('');setMessage('');setPassword('');setConfirm('')}}>Forgot password?</button>}
   <button className="button primary wide" disabled={busy}>{busy?'One moment…':mode==='forgot'?'Send reset link':mode==='recover'?'Save new password':'Sign in'}<ArrowRight size={17}/></button>

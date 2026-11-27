@@ -15,7 +15,7 @@ function server(options={}){
 let f=server(),r=await f.request();assert.equal(r.status,200);assert.deepEqual(await r.json(),{email,registered:true});assert.equal(f.calls[0][2].register_attempt,true);assert.equal(f.calls[1][1].email_confirm,true);assert.equal(f.calls[1][1].email,email);assert.equal(f.calls.length,2);
 for(const kind of ['family','pilot']){
  f=server();r=await f.request({action:'preview',kind,token,email:'attacker@example.invalid',userId:'attacker'});assert.equal(r.status,200);assert.equal((await r.json()).email,email);assert.equal(f.calls.length,1);assert.equal(f.calls[0][2].register_attempt,false);
- f=server();r=await f.request({action:'register',kind,token,email:'attacker@example.invalid',name:'Name',password:'Fixture-password-123'});assert.equal(r.status,200);assert.equal(f.calls[1][1].email,email);
+ f=server();r=await f.request({action:'register',kind,token,email:'attacker@example.invalid',name:'Name',password:'Q8!mb2'});assert.equal(r.status,200);assert.equal(f.calls[1][1].email,email);assert.equal(f.calls[1][1].password.length,6);
 }
 f=server({record:{userId,confirmed:true}});r=await f.request();assert.equal(r.status,200);assert.equal(f.calls.length,1,'Existing confirmed accounts never change');
 f=server({record:{userId,confirmed:false}});r=await f.request();assert.equal(r.status,200);assert.deepEqual(JSON.parse(JSON.stringify(f.calls.at(-1))),['update',userId,{email_confirm:true}]);assert.equal(f.calls.some(c=>c[0]==='create'),false);
@@ -27,7 +27,7 @@ f=server({lookupError:{message:'This invitation is invalid, expired or already u
 f=server({lookupError:{message:'Too many attempts. Wait an hour before trying this invitation again.'}});assert.equal((await f.request()).status,429);assert.equal(f.calls.length,1);
 for(const body of [null,'{',{},'x'.repeat(4097),{action:'register',kind:'family',token:'bad',name:'Name',password:'valid-password'},{action:'register',kind:'family',token,name:' ',password:'valid-password'}]){f=server();assert.equal((await f.request(body)).status,400);assert.equal(f.calls.length,0)}
 for(const [origin,method,status] of [['https://attacker.invalid','POST',403],['https://zethhummel-rgb.github.io','GET',405],['https://zethhummel-rgb.github.io','OPTIONS',204]]){f=server();assert.equal((await f.request(undefined,origin,method)).status,status);assert.equal(f.calls.length,0)}
-f=server();assert.equal((await f.request({action:'register',kind:'pilot',token,name:'Name',password:'short'})).status,400);assert.equal(f.calls.length,1);
+f=server();r=await f.request({action:'register',kind:'pilot',token,name:'Name',password:'short'});assert.equal(r.status,400);assert.match((await r.json()).error,/at least 6 characters/);assert.equal(f.calls.length,1);
 
 const {PGlite}=await import(process.env.HH_PGLITE_MODULE||'@electric-sql/pglite');const db=new PGlite();
 await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;

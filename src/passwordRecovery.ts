@@ -27,7 +27,7 @@ export function createPasswordRecovery(auth:RecoveryAuth,redirectTo:string){
   complete:(value:string,token:string,password:string,confirmation:string)=>exclusive(async()=>{
    const email=recoveryEmail(value);
    if(!/^\d{6,10}$/.test(token))throw Error('Enter the code from your reset email.');
-   if(password.length<12||password.length>128)throw Error('Use a password between 12 and 128 characters.');
+   if(password.length<6||password.length>128)throw Error('Use a password between 6 and 128 characters.');
    if(password!==confirmation)throw Error('Passwords do not match.');
    if(verifiedEmail!==email){
     await clear();

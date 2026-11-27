@@ -9,9 +9,9 @@ import {isCurrentAuthClient,supabase} from './supabase';
 import {appReleaseVersion} from './releaseVersion';
 
 type MemberNotice={id:string;kind:'notice'|'update';title:string;body:string;published_at:string;image_path?:string|null;image_alt?:string|null;release_version?:string|null};
-type MemberContent={notices:MemberNotice[];seasons:SeasonalPaletteId[];expiries:Partial<Record<SeasonalPaletteId,number>>;ratingEligible:boolean};
+type MemberContent={notices:MemberNotice[];acknowledgedNoticeIds:string[];seasons:SeasonalPaletteId[];expiries:Partial<Record<SeasonalPaletteId,number>>;ratingEligible:boolean};
 type RatingInput={stars:number;comment:string;allow_quote:boolean};
-const emptyContent:MemberContent={notices:[],seasons:[],expiries:{},ratingEligible:false};
+const emptyContent:MemberContent={notices:[],acknowledgedNoticeIds:[],seasons:[],expiries:{},ratingEligible:false};
 
 function isMemberNotice(value:unknown):value is MemberNotice{
  if(!value||typeof value!=='object')return false;
@@ -27,6 +27,15 @@ function readDismissals(userId:string):string[]{
   const saved=JSON.parse(localStorage.getItem(dismissalKey(userId))||'[]');
   return Array.isArray(saved)?saved.filter(id=>typeof id==='string'):[];
  }catch{return []}
+}
+
+async function saveNoticeDismissals(client:typeof supabase,userId:string,ids:string[]){
+ if(!ids.length||!navigator.onLine||!isCurrentAuthClient(client))return;
+ try{
+  const {data,error}=await client.auth.getSession();
+  if(error||data.session?.user.id!==userId||!isCurrentAuthClient(client))return;
+  await client.rpc('hh_member_acknowledge_notices',{p_notice_ids:ids});
+ }catch{/* Keep the browser's acknowledgements and retry when content refreshes. */}
 }
 
 export function useMemberContent(userId:string,enabled:boolean){
@@ -55,13 +64,18 @@ export function useMemberContent(userId:string,enabled:boolean){
     const {data,error}=await client.rpc('hh_member_content');
     if(error||!active||!isCurrentAuthClient(client))return;
     const notices=Array.isArray(data?.notices)?data.notices.filter(isMemberNotice):[];
+    const acknowledgedNoticeIds:string[]=Array.isArray(data?.acknowledged_notice_ids)
+     ?data.acknowledged_notice_ids.filter((id:unknown)=>typeof id==='string'):[];
     const seasons=Array.isArray(data?.seasonal_palettes)?[...new Set<SeasonalPaletteId>(data.seasonal_palettes.filter(isSeasonalPalette))]:[];
     const expiries:MemberContent['expiries']={};
     for(const id of seasons){
      const end=Date.parse(data?.palette_expiries?.[id]);
      if(Number.isFinite(end))expiries[id]=end;
     }
-    setSnapshot({client,userId,requestedAt,content:{notices,seasons,expiries,ratingEligible:data?.rating_eligible===true}});
+    setSnapshot({client,userId,requestedAt,content:{notices,acknowledgedNoticeIds,seasons,expiries,ratingEligible:data?.rating_eligible===true}});
+    const localDismissals=new Set(readDismissals(userId)),synced=new Set(acknowledgedNoticeIds);
+    const pending=notices.filter((notice:MemberNotice)=>localDismissals.has(notice.id)&&!synced.has(notice.id)).slice(0,50);
+    void saveNoticeDismissals(client,userId,pending.map((notice:MemberNotice)=>notice.id));
     window.clearTimeout(boundary);
     const wait=Date.parse(data?.next_palette_change_at)-Date.now();
     if(Number.isFinite(wait)&&wait>0)boundary=window.setTimeout(refresh,Math.min(wait+100,2_000_000_000));
@@ -97,6 +111,7 @@ export function useMemberContent(userId:string,enabled:boolean){
   const ids=[...new Set([...readDismissals(userId),...dismissed,id])];
   setDismissal({userId,ids});
   try{localStorage.setItem(dismissalKey(userId),JSON.stringify(ids))}catch{/* Keep the dismissal for this visit. */}
+  void saveNoticeDismissals(client,userId,[id]);
  }
 
  async function completeRating(input?:RatingInput){
@@ -109,7 +124,7 @@ export function useMemberContent(userId:string,enabled:boolean){
  }
 
  return {
-  notices:content.notices.filter(notice=>!dismissed.includes(notice.id)),
+  notices:content.notices.filter(notice=>!dismissed.includes(notice.id)&&!content.acknowledgedNoticeIds.includes(notice.id)),
   seasons:content.seasons.filter(id=>themeClock<(content.expiries[id]??Infinity)),
   ratingEligible:content.ratingEligible&&!ratingOnHold,
   dismiss,completeRating,

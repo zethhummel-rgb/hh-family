@@ -32,6 +32,7 @@ export default function InvitationSignup({family,pilot,onInvitation,onSignIn,onA
    const enteredPassword=String(values.get('password')||'');
    const enteredConfirm=String(values.get('confirm-password')||'');
    setPassword(enteredPassword);setConfirm(enteredConfirm);
+   if(!current.existingAccount&&enteredPassword.length<6){setError('Use at least 6 characters.');return}
    if(!current.existingAccount&&enteredPassword!==enteredConfirm){setError('Passwords do not match.');return}
    setStep('name');return;
   }
@@ -55,8 +56,8 @@ export default function InvitationSignup({family,pilot,onInvitation,onSignIn,onA
     <label>Email address<input type="email" name="username" value={current.email} readOnly autoComplete="username"/></label>
     <details className="picked"><summary>Your invitation code</summary><label>Invitation code<input value={token} readOnly autoComplete="off"/></label><p className="field-help">Filled in from your invitation. It stops working after you join or create your household.</p></details>
     {step==='credentials'&&<>{current.existingAccount&&<p className="field-help">You already started an account with this email. Use your existing password; your invitation handles email verification.</p>}
-    <PasswordField name="password" label="Password" required minLength={current.existingAccount?1:12} autoComplete={current.existingAccount?'current-password':'new-password'} value={password} disabled={busy} onChange={e=>setPassword(e.target.value)} help={current.existingAccount?undefined:'Use at least 12 characters.'}/>
-    {!current.existingAccount&&<PasswordField name="confirm-password" label="Confirm password" required minLength={12} autoComplete="new-password" value={confirm} disabled={busy} onChange={e=>setConfirm(e.target.value)}/>}
+    <PasswordField name="password" label="Password" required minLength={current.existingAccount?1:6} autoComplete={current.existingAccount?'current-password':'new-password'} value={password} disabled={busy} onChange={e=>setPassword(e.target.value)} help={current.existingAccount?undefined:'Use at least 6 characters.'}/>
+    {!current.existingAccount&&<PasswordField name="confirm-password" label="Confirm password" required minLength={6} autoComplete="new-password" value={confirm} disabled={busy} onChange={e=>setConfirm(e.target.value)}/>}
     <div className="login-persistence"><label><input type="checkbox" checked={remember} disabled={busy} onChange={e=>onRemember(e.target.checked)}/><span>Stay signed in on this device</span></label><p>{remember?'Use this on your own device. HH will remember your login when you reopen it.':'Your login will last for this tab’s browsing session.'}</p></div></>}
     {step==='name'&&<><p>Tell us your name so your family knows it’s you.</p><label>First name<input name="given-name" required maxLength={60} autoComplete="given-name" value={firstName} disabled={busy} onChange={e=>setFirstName(e.target.value)}/></label><label>Last name<input name="family-name" required maxLength={60} autoComplete="family-name" value={lastName} disabled={busy} onChange={e=>setLastName(e.target.value)}/></label><button type="button" className="text-button" disabled={busy} onClick={()=>{setStep('credentials');setError('')}}>Back</button></>}
    </>}

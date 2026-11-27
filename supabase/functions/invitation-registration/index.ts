@@ -34,7 +34,7 @@ Deno.serve(async(req:Request)=>{
   let record=await lookup(body.action==='register');
   if(body.action==='preview')return reply({email:record.email,householdName:record.householdName,existingAccount:!!record.userId});
   if(!record.userId){
-   if(body.password.length<12)return reply({error:'Use at least 12 characters for your new password.'},400);
+   if(body.password.length<6)return reply({error:'Use at least 6 characters for your new password.'},400);
    const created=await admin.auth.admin.createUser({email:record.email,password:body.password,email_confirm:true,user_metadata:{display_name:body.name.trim()}});
    if(created.error){
     // A concurrent request or a lost response may already have created this email.
