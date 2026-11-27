@@ -62,14 +62,22 @@ export function createPasswordRecovery(auth:RecoveryAuth,redirectTo:string){
    const {error}=await auth.updateUser({password});
    // A rejected password can be corrected without reusing the consumed code.
    if(error){
-    if(error.code==='insufficient_aal'){
+    const requiresAuthenticator=error.code==='insufficient_aal';
+    const permissionDenied=error.status===401||error.status===403;
+    if(requiresAuthenticator||(!error.code&&permissionDenied)){
+     // Some browser responses do not expose the Auth API version header, so
+     // the SDK may omit the error code. Only offer an enrolled factor if the
+     // recovery session can still load the verified account from Auth.
      const factors=await auth.mfa.listFactors();
-     if(factors.error)throw Error('Could not load your authenticator. Try again.');
+     if(factors.error){
+      if(requiresAuthenticator&&factors.error.status!==401&&factors.error.status!==403)throw Error('Could not load your authenticator. Try again.');
+      return expired();
+     }
      authenticators=factors.data.totp.map(factor=>({id:factor.id,name:factor.friendly_name}));
-     if(!authenticators.length)throw Error('This account requires an additional security check. Contact HH support for help resetting your password.');
-     return authenticators;
+     if(authenticators.length)return authenticators;
+     if(requiresAuthenticator)throw Error('This account requires an additional security check. Contact HH support for help resetting your password.');
     }
-    if(error.status===401||error.status===403)return expired();
+    if(permissionDenied)return expired();
     throw Error(error.code==='same_password'?'Choose a password different from your current password.':'Could not save that password. Try a different password, or request a new code.');
    }
    await clear();
