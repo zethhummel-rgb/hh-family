@@ -33,8 +33,8 @@ export default function PasswordReset({initialEmail='',onClose,makeRecovery=make
    <label>Email address<input type="email" autoComplete="email" maxLength={254} required disabled={busy||step==='code'} value={email} onChange={e=>setEmail(e.target.value)}/></label>
    {step==='code'&&<>
     <label>Reset code<input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,10}" minLength={6} maxLength={10} required disabled={busy} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,10))}/></label>
-    <label>New password<input type="password" autoComplete="new-password" required minLength={12} maxLength={128} disabled={busy} value={password} onChange={e=>setPassword(e.target.value)}/><small>Use at least 12 characters.</small></label>
-    <label>Confirm new password<input type="password" autoComplete="new-password" required minLength={12} maxLength={128} disabled={busy} value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>
+    <label>New password<input type="password" autoComplete="new-password" required minLength={6} maxLength={128} disabled={busy} value={password} onChange={e=>setPassword(e.target.value)}/><small>Use at least 6 characters.</small></label>
+    <label>Confirm new password<input type="password" autoComplete="new-password" required minLength={6} maxLength={128} disabled={busy} value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>
    </>}
    <button className="button primary wide" disabled={busy}>{busy?'One moment…':step==='request'?'Send reset code':'Save new password'}<ArrowRight size={17}/></button>
   </form>}
