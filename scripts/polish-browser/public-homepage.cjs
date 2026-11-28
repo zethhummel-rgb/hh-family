@@ -138,10 +138,24 @@ async function run() {
         await page.getByLabel(/Anything else/).fill('I would like to try HH.');
         await sendRequest.click();
         await page.getByRole('alert').getByText('Please try again shortly.').waitFor();
+        assert.equal(await page.getByRole('dialog').count(), 0, 'Failed delivery does not show the confirmation');
         assert.equal(await page.getByLabel('Email address', {exact: true}).inputValue(), 'alex@example.invalid');
         assert.equal(await page.locator('#request-message').inputValue(), 'I would like to try HH.');
         await sendRequest.click();
-        await page.getByRole('status').getByText('Thanks for reaching out. Your request was sent to HH.').waitFor();
+        const confirmation = page.getByRole('dialog', {name: 'Invitation request sent'});
+        await confirmation.waitFor();
+        await confirmation.getByText('Your request should be approved within 24 hours. Please check your junk mail for our reply.', {exact: true}).waitFor();
+        await confirmation.getByText('Thank you for signing up.', {exact: false}).waitFor();
+        const done = confirmation.getByRole('button', {name: 'Done', exact: true});
+        await page.waitForFunction(() => document.activeElement?.textContent === 'Done');
+        assert.equal(await confirmation.evaluate(dialog => {
+          const {left, right, top, bottom} = dialog.getBoundingClientRect();
+          return left >= 0 && top >= 0 && right <= innerWidth && bottom <= innerHeight;
+        }), true, 'The confirmation fits the mobile viewport');
+        await page.screenshot({path: path.join(out, 'invitation-request-sent-390.png')});
+        await done.click();
+        await confirmation.waitFor({state:'hidden'});
+        await page.waitForFunction(() => document.activeElement === document.querySelector('[data-invitation-request] button'));
         assert.equal(submissions.length, 2);
         assert.deepEqual(submissions[0], submissions[1], 'Retrying the same request uses the same ID');
         assert.deepEqual({...submissions[1], requestId: undefined}, {name:'Alex Example',email:'alex@example.invalid',source:'Calendar invite',interest:'yes',message:'I would like to try HH.',website:'',requestId:undefined});

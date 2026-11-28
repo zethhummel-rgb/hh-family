@@ -3,6 +3,10 @@ const fields = form.querySelector('fieldset');
 const send = form.querySelector('button');
 const status = document.querySelector('[data-request-status]');
 const error = document.querySelector('[data-request-error]');
+const confirmation = document.querySelector('.request-confirmation');
+const confirmationTitle = document.querySelector('#request-confirmation-title');
+const confirmationMessage = document.querySelector('#request-confirmation-message');
+confirmation.addEventListener('close', () => send.focus());
 let pending = false;
 let previousRequest;
 
@@ -22,6 +26,7 @@ form.addEventListener('submit', async event => {
   error.textContent = '';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
+  let sent = false;
   try {
     const response = await fetch(form.dataset.endpoint, {
       method: 'POST',
@@ -36,7 +41,7 @@ form.addEventListener('submit', async event => {
     }
     form.reset();
     previousRequest = undefined;
-    status.textContent = 'Thanks for reaching out. Your request was sent to HH.';
+    sent = true;
   } catch {
     error.textContent = 'Could not confirm your request. Your answers are still here. Try again or email the HH team.';
   } finally {
@@ -46,4 +51,7 @@ form.addEventListener('submit', async event => {
     form.setAttribute('aria-busy', 'false');
     send.textContent = 'Send request';
   }
+  if (!sent) return;
+  if (typeof confirmation.showModal === 'function') confirmation.showModal();
+  else status.textContent = `${confirmationTitle.textContent}. ${confirmationMessage.textContent}`;
 });

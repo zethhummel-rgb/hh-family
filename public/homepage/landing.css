@@ -406,6 +406,32 @@ h1, h2, h3 { margin: 0; font-family: var(--serif); color: var(--heading); }
 .request-card .request-result:empty { margin: 0; }
 .request-card .request-result:not(:empty) { padding: 10px 12px; border-radius: 9px; background: var(--tint); }
 .request-card .request-error:not(:empty) { background: #fbede4; color: #703b2a; }
+.request-confirmation {
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  padding: clamp(22px, 6vw, 34px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 16px 60px rgb(27 43 34 / 20%);
+}
+.request-confirmation::backdrop { background: rgb(27 43 34 / 48%); }
+.request-confirmation:not([open]) { display: none; }
+.request-confirmation-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 16px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--tint);
+  color: var(--accent-hover);
+  font-size: 1.2rem;
+}
+.request-confirmation h2 { font-size: clamp(1.65rem, 5vw, 2.1rem); line-height: 1.08; }
+.request-confirmation p { margin: 12px 0 0; color: var(--muted); line-height: 1.6; }
+.request-confirmation .action { width: 100%; margin-top: 22px; cursor: pointer; }
 .joining { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
 .joining p { margin: 8px 0 0; }
 
