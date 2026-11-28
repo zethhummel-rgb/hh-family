@@ -177,7 +177,7 @@ jobs:
         env:
           HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}
         run: node scripts/hh-live-release.mjs verified
-      - name: Publish the approved announcement
+      - name: Finish the release
         if: steps.claim.outputs.claimed == 'true'
         env:
           HH_RELEASE_WORKER_KEY: ${{ secrets.HH_RELEASE_WORKER_KEY }}

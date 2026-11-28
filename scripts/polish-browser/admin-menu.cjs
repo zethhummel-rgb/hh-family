@@ -52,7 +52,7 @@ const noticeHistory=[
 const festivePalettes={spring:'Spring Garden',summer:'Summer Shore',easter:'Easter',halloween:'Halloween',thanksgiving:'Thanksgiving',christmas:'Christmas'};
 const seasonalPaletteIds=['spring','summer','autumn','winter','easter','halloween','thanksgiving','christmas'];
 const releaseCandidate={id:'33333333-3333-4333-8333-333333333359',version:'V2.4',commit_sha:'a'.repeat(40),artifact_run_id:'1201',artifact_sha256:'b'.repeat(64),
- status:'ready',title:'',body:'',image_path:null,image_alt:null,error:null,created_at:'2026-11-28T17:00:00Z',updated_at:'2026-11-28T17:00:00Z'};
+ status:'ready',quiet:false,title:'',body:'',image_path:null,image_alt:null,error:null,created_at:'2026-11-28T17:00:00Z',updated_at:'2026-11-28T17:00:00Z'};
 
 async function checkAdminBlocked(page){
  await page.getByRole('heading',{name:'Open HH to use Admin',exact:true}).waitFor();
@@ -500,6 +500,12 @@ async function checkAdminReleases(page,connected,draftWrites,dispatchWrites,stor
  await open();
  await status('ready');
  if(connected){
+  await button('Quiet release').click();
+  await editor.getByRole('heading',{name:/^Release V2\.4 quietly to/}).waitFor();
+  assert.equal(await button('Confirm quiet release').isEnabled(),true);
+  assert.equal(await button('Review release').count(),0);
+  await button('Back').click();
+  assert.deepEqual(dispatchWrites,[],'Reviewing a quiet release must not deploy it');
   await form.locator('input[type="file"]').setInputFiles({name:'release-fixture.png',mimeType:'image/png',buffer:noticePng});
   await form.getByRole('textbox',{name:'Image description (alt text)',exact:true}).fill(imageAlt);
  }else{
@@ -532,6 +538,7 @@ async function checkAdminReleases(page,connected,draftWrites,dispatchWrites,stor
   assert.equal(await form.getByRole('textbox',{name:'Title',exact:true}).inputValue(),'Calendar refresh');
   await editor.getByText(/Release connection isn’t configured yet/).waitFor();
   assert.equal(await button('Review release').count(),0);
+  assert.equal(await button('Quiet release').count(),0);
   assert.equal(await button(`Release to ${releaseTarget}`).count(),0);
   assert.deepEqual(dispatchWrites,[]);
   return;
@@ -576,6 +583,19 @@ async function checkAdminReleases(page,connected,draftWrites,dispatchWrites,stor
  await button('Retry announcement').click();
  await status('published');
  assert.deepEqual(dispatchWrites.slice(1),Array.from({length:2},()=>({action:'retry_announcement',release_id:releaseCandidate.id})));
+ assert.equal(await button('Review announcement retry').count(),0);
+
+ setStatus('ready',null,savedAt);
+ await refresh();
+ await button('Quiet release').click();
+ await button('Confirm quiet release').click();
+ await status('queued');
+ await button('Review quiet release retry').waitFor();
+ assert.equal(await button('Review queued release').count(),0);
+ assert.deepEqual(dispatchWrites.at(-1),{action:'release_quietly',release_id:releaseCandidate.id,expected_updated_at:savedAt});
+ setStatus('published');
+ await refresh();
+ await editor.getByText('Released quietly',{exact:true}).waitFor();
  assert.equal(await button('Review announcement retry').count(),0);
 }
 
@@ -691,9 +711,9 @@ async function run(){
       assert.equal(state,'admin-releases','A disconnected release cannot dispatch');
       assert.equal(request.release_id,releaseRecord.id);
       dispatchWrites.push(request);
-      if(request.action==='release'){
+      if(request.action==='release'||request.action==='release_quietly'){
        assert.equal(request.expected_updated_at,releaseRecord.updated_at);
-       releaseRecord={...releaseRecord,status:'queued'};
+       releaseRecord={...releaseRecord,status:'queued',quiet:request.action==='release_quietly'};
        data={ok:true,run_url:'https://github.com/example/hh/actions/runs/1202'};
       }else{
        assert.equal(request.action,'retry_announcement');

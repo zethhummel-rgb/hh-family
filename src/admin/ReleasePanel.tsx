@@ -9,10 +9,10 @@ type ReleaseStatus = 'ready' | 'queued' | 'deploying' | 'failed' | 'verified' | 
 type DraftFields = {title: string; body: string; image_path: string | null; image_alt: string | null};
 type Release = DraftFields & {
   id: string; version: string; commit_sha: string; artifact_run_id: string; artifact_sha256: string;
-  status: ReleaseStatus; error: string | null; updated_at: string; created_at: string;
+  status: ReleaseStatus; quiet?: boolean; error: string | null; updated_at: string; created_at: string;
 };
 type Snapshot = {releases: Release[]; can_release: boolean};
-type DispatchAction = 'release' | 'retry_announcement';
+type DispatchAction = 'release' | 'release_quietly' | 'retry_announcement';
 type Confirmation = {action: DispatchAction; updatedAt: string};
 type LocalImage = {file: File; path: string; url: string};
 type Editor = {saved: DraftFields; fields: DraftFields; image?: LocalImage};
@@ -62,8 +62,8 @@ function runLink(value: unknown): string {
   } catch {return '';}
 }
 
-function statusBadge(status: ReleaseStatus) {
-  return <span className="release-status" data-status={status}>{labels[status]}</span>;
+function statusBadge({status, quiet}: Release) {
+  return <span className="release-status" data-status={status}>{quiet && status === 'published' ? 'Released quietly' : labels[status]}</span>;
 }
 
 export default function ReleasePanel({active, getClient}: {active: boolean; getClient: GetAdminClient}) {
@@ -135,7 +135,7 @@ export default function ReleasePanel({active, getClient}: {active: boolean; getC
           {snapshot.releases.map((candidate) => <li key={candidate.id}>
             <button type="button" aria-pressed={release?.id === candidate.id} onClick={() => setSelected(candidate.id)}>
               <span><strong>{candidate.version}</strong><code>{candidate.commit_sha.slice(0, 12)}</code></span>
-              {statusBadge(candidate.status)}
+              {statusBadge(candidate)}
             </button>
           </li>)}
         </ul>}
@@ -222,10 +222,16 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
   const dirty = !!image || !sameDraft(fields, editor.saved);
   const editable = release.status === 'ready' || release.status === 'failed';
   const staleDeployment = release.status === 'deploying' && Date.now() - Date.parse(release.updated_at) > staleDeploymentMs;
+  const retryingDeployment = release.status === 'queued' || staleDeployment;
   const action = release.status === 'verified' ? 'retry_announcement'
-    : editable || release.status === 'queued' || staleDeployment ? 'release' : undefined;
-  const ready = !!action && canRelease && connected === true && !dirty && canPublishDraft(release);
-  const confirmationCurrent = ready && confirmation?.action === action && confirmation?.updatedAt === release.updated_at;
+    : editable || retryingDeployment ? 'release' : undefined;
+  const canDispatch = canRelease && connected === true;
+  const readyToAnnounce = !!action && canDispatch && (!retryingDeployment || !release.quiet) && !dirty && canPublishDraft(release);
+  const readyToReleaseQuietly = canDispatch && typeof release.quiet === 'boolean' && action === 'release' && (!retryingDeployment || release.quiet);
+  const confirmationCurrent = !!confirmation && confirmation.updatedAt === release.updated_at &&
+    (confirmation.action === 'release_quietly' ? readyToReleaseQuietly : readyToAnnounce && confirmation.action === action);
+  const confirmingQuiet = confirmation?.action === 'release_quietly';
+  const confirmingRetry = confirmation?.action === 'retry_announcement';
   const draftImage = useSavedArtwork(getClient, fields.image_path, release.id, fields.image_alt, release.updated_at, preview && !image);
   useEffect(() => {
     if (confirmation && !confirmationCurrent) setConfirmation(undefined);
@@ -234,6 +240,11 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
   function change(fieldsChanged: Partial<DraftFields>) {
     setEditor((previous) => ({...previous, fields: {...previous.fields, ...fieldsChanged}}));
     setMessage('');
+  }
+
+  function review(nextAction: DispatchAction) {
+    setError('');
+    setConfirmation({action: nextAction, updatedAt: release.updated_at});
   }
 
   function removeImage() {
@@ -327,7 +338,7 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
       const client = await getClient();
       const result = await client.functions.invoke('hh-release-dispatch', {body: {
         action: confirmation.action, release_id: release.id,
-        ...(confirmation.action === 'release' ? {expected_updated_at: confirmation.updatedAt} : {}),
+        ...(confirmation.action !== 'retry_announcement' ? {expected_updated_at: confirmation.updatedAt} : {}),
       }});
       const response = result.error?.context as Response | undefined;
       if (response?.status === 404 || response?.status === 503) throw Error('Release connection isn’t configured yet. Your saved draft is still available.');
@@ -335,7 +346,9 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
       if (response?.status === 409) throw Error('The release changed while you were reviewing it. Check the latest details and review it again.');
       if (result.error || result.data?.ok !== true) throw Error('HH could not confirm the request. Check the latest release status before trying again.');
       setWorkflowUrl(runLink(result.data.run_url));
-      setMessage(confirmation.action === 'release' ? 'Release request accepted. Check the status for progress.' : 'Announcement retry accepted. Check the status for progress.');
+      setMessage(confirmingQuiet ? 'Quiet release accepted. Check the status for progress.'
+        : confirmingRetry ? 'Announcement retry accepted. Check the status for progress.'
+        : 'Release request accepted. Check the status for progress.');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'HH could not confirm the request. Check release status before trying again.');
     } finally {
@@ -349,7 +362,7 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
   return <section className="panel release-editor" aria-labelledby={`${id}-release-heading`}>
     <div className="record-nav">
       <h2 id={`${id}-release-heading`}>{release.version} for {target}</h2>
-      {statusBadge(release.status)}
+      {statusBadge(release)}
     </div>
     <dl className="release-proof">
       <div><dt>Commit</dt><dd><code>{release.commit_sha}</code></dd></div>
@@ -401,17 +414,23 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
     <div className="release-controls">
       {canRelease && connected === false && <p className="release-summary">Release connection isn’t configured yet. You can still save and preview the draft.</p>}
       {!canRelease && <p className="release-summary">Only authorized release operators can start a deployment or retry an announcement.</p>}
-      {editable && canRelease && connected && (dirty || !canPublishDraft(release)) && <p className="release-summary">Save an announcement with a title and message, or an image with a description, before releasing.</p>}
+      {editable && canDispatch && (dirty || !canPublishDraft(release)) && <p className="release-summary">Save a draft if you want to announce this release. You can release quietly without one.</p>}
+      {release.quiet && ['queued', 'deploying', 'published'].includes(release.status) && <p className="release-summary">Quiet release · No member announcement</p>}
       {release.status === 'verified' && <p className="release-summary">The deployment was verified. The announcement hasn’t been confirmed yet.</p>}
-      {action && ready && !confirmation && <button type="button" className="primary" disabled={busy || refreshing} onClick={() => {setError('');setConfirmation({action, updatedAt: release.updated_at});}}>
-        {action === 'retry_announcement' ? 'Review announcement retry' : staleDeployment ? 'Review deployment retry' : release.status === 'queued' ? 'Review queued release' : 'Review release'}
-      </button>}
+      {!confirmation && (readyToAnnounce || readyToReleaseQuietly) && <div className="inline-actions">
+        {action && readyToAnnounce && <button type="button" className="primary" disabled={busy || refreshing} onClick={() => review(action)}>
+          {action === 'retry_announcement' ? 'Review announcement retry' : staleDeployment ? 'Review deployment retry' : release.status === 'queued' ? 'Review queued release' : 'Review release'}
+        </button>}
+        {readyToReleaseQuietly && <button type="button" disabled={busy || refreshing} onClick={() => review('release_quietly')}>
+          {retryingDeployment ? 'Review quiet release retry' : 'Quiet release'}
+        </button>}
+      </div>}
       {confirmationCurrent && confirmation && <section className="release-confirmation" aria-labelledby={`${id}-confirm-heading`}>
-        <h3 id={`${id}-confirm-heading`} ref={confirmHeading} tabIndex={-1}>{confirmation.action === 'release' ? `Release ${release.version} to ${target}?` : `Retry the ${release.version} announcement on ${target}?`}</h3>
+        <h3 id={`${id}-confirm-heading`} ref={confirmHeading} tabIndex={-1}>{confirmingQuiet ? `Release ${release.version} quietly to ${target}?` : confirmingRetry ? `Retry the ${release.version} announcement on ${target}?` : `Release ${release.version} to ${target}?`}</h3>
         <p className="release-summary">Target {targetHost} · Commit <code>{release.commit_sha.slice(0, 12)}</code></p>
-        <p>{confirmation.action === 'release' ? 'HH will deploy this checked build and post the saved update after verifying deployment.' : 'HH will retry the update announcement for this verified build.'}</p>
+        <p>{confirmingQuiet ? 'HH will deploy this checked build and record it here. Members will not receive an announcement or notification.' : confirmingRetry ? 'HH will retry the update announcement for this verified build.' : 'HH will deploy this checked build and post the saved update after verifying deployment.'}</p>
         <div className="inline-actions">
-          <button type="button" className="primary" disabled={busy || refreshing} onClick={() => void confirm()}>{confirmation.action === 'release' ? `Release to ${target}` : 'Retry announcement'}</button>
+          <button type="button" className="primary" disabled={busy || refreshing} onClick={() => void confirm()}>{confirmingQuiet ? 'Confirm quiet release' : confirmingRetry ? 'Retry announcement' : `Release to ${target}`}</button>
           <button type="button" disabled={busy} onClick={() => setConfirmation(undefined)}>Back</button>
         </div>
       </section>}

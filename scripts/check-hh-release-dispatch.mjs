@@ -107,6 +107,17 @@ assert.equal(failed.status, 502);
 assert.doesNotMatch(await failed.text(), /Private/);
 assert.equal(dispatches.length, 2);
 
+ rejectDispatch = false;
+ const quietStart = {...start, action: 'release_quietly'};
+ assert.equal((await request(quietStart, {token: 'ordinary-member'})).status, 403);
+ assert.equal((await request(quietStart, {token: 'other-admin'})).status, 403);
+ assert.equal(await status({...quietStart, expected_updated_at: null}), 400);
+ assert.equal(await status(quietStart), 200);
+ assert.deepEqual(queue.at(-1), {action: 'queue_quiet', payload: {
+   release_id: releaseId, actor_id: operator, expected_updated_at: reviewedAt,
+ }});
+ assert.deepEqual(dispatches, [releaseId, releaseId, releaseId]);
+
 assert.equal(await dispatchLiveRelease('token', releaseId, async (url, options) => {
   assert.equal(url, 'https://api.github.com/repos/zethhummel-rgb/hh-family/actions/workflows/hh-release.yml/dispatches');
   assert.equal(options.method, 'POST');
