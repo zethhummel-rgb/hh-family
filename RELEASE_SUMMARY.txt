@@ -1,0 +1,1 @@
+Added short descriptions to the Admin Releases list and kept Quiet release available for updates without member notifications.

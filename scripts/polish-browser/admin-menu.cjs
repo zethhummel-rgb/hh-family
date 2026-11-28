@@ -52,7 +52,7 @@ const noticeHistory=[
 const festivePalettes={spring:'Spring Garden',summer:'Summer Shore',easter:'Easter',halloween:'Halloween',thanksgiving:'Thanksgiving',christmas:'Christmas'};
 const seasonalPaletteIds=['spring','summer','autumn','winter','easter','halloween','thanksgiving','christmas'];
 const releaseCandidate={id:'33333333-3333-4333-8333-333333333359',version:'V2.4',commit_sha:'a'.repeat(40),artifact_run_id:'1201',artifact_sha256:'b'.repeat(64),
- status:'ready',quiet:false,title:'',body:'',image_path:null,image_alt:null,error:null,created_at:'2026-11-28T17:00:00Z',updated_at:'2026-11-28T17:00:00Z'};
+ status:'ready',quiet:false,summary:'Moved Notices & updates to the app footer.',title:'',body:'',image_path:null,image_alt:null,error:null,created_at:'2026-11-28T17:00:00Z',updated_at:'2026-11-28T17:00:00Z'};
 
 async function checkAdminBlocked(page){
  await page.getByRole('heading',{name:'Open HH to use Admin',exact:true}).waitFor();
@@ -499,6 +499,9 @@ async function checkAdminReleases(page,connected,draftWrites,dispatchWrites,stor
  const status=expected=>editor.locator(`.release-status[data-status="${expected}"]`).waitFor();
  await open();
  await status('ready');
+ await records.getByRole('button',{name:/V2\.4 Moved Notices & updates to the app footer/}).waitFor();
+ await editor.getByText('What changed', {exact:true}).waitFor();
+ await editor.getByText(releaseCandidate.summary, {exact:false}).waitFor();
  if(connected){
   await button('Quiet release').click();
   await editor.getByRole('heading',{name:/^Release V2\.4 quietly to/}).waitFor();

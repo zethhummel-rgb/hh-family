@@ -7,7 +7,7 @@ const read=(path)=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const uid=(n)=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const people={host:uid(1),operator:uid(2),otherAdmin:uid(3),member:uid(4)};
 const release=(id,version,hash)=>({id:uid(id),version,commit_sha:hash.repeat(40),artifact_run_id:String(200+id),artifact_sha256:hash.repeat(64)});
-const first=release(10,'V4.0','a'),second=release(11,'V4.1','b');
+const first={...release(10,'V4.0','a'),summary:'Added a short description to each prepared build.'},second=release(11,'V4.1','b');
 const value=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
 const as=async(person,aal='aal1')=>{
  await db.exec('reset role;set role authenticated;');
@@ -44,7 +44,7 @@ try{
  for(const name of ['20261112181000_hh_pilot_request_mail','20261126210000_hh_site_admin_dashboard','20261126213000_hh_admin_content',
   '20261126220000_hh_admin_auth_policy','20261126230000_hh_seasonal_palette_schedule','20261126234000_hh_member_ratings',
   '20261126235000_hh_notice_images','20261126235500_hh_notice_history_version','20261126235900_hh_artwork_only_notices',
-  '20261127000100_hh_rating_prompt_snooze','20261127001000_hh_admin_releases','20261128015038_hh_quiet_releases']){
+  '20261127000100_hh_rating_prompt_snooze','20261127001000_hh_admin_releases','20261128015038_hh_quiet_releases','20261128020350_hh_release_descriptions']){
   await db.exec(read(`supabase/migrations/${name}.sql`));
  }
  for(const [person,id] of Object.entries(people))await db.query('insert into auth.users values($1,$2,now())',[id,person.toLowerCase()+'@fixture.invalid']);
@@ -73,6 +73,9 @@ try{
  }
  const ready=(await worker('register',first)).release;
  assert.equal(ready.status,'ready');
+ assert.equal(ready.summary,first.summary);
+ await assert.rejects(worker('register',{...first,summary:'Changed the description'}),/already has a different description/);
+ await assert.rejects(worker('register',{...first,summary:'More than\none line'}),/one-line release description/);
  assert.equal(ready.title,'');
  assert.equal(ready.image_path,null);
  assert.equal('claim_id' in ready,false);
@@ -87,7 +90,8 @@ try{
  await assert.rejects(worker('retry_publish',{id:first.id}),/Verify this deployment/);
 
  await as('operator','aal2');
- const draft=(await account('save_draft',{release_id:first.id,title:' Outline title ',body:'',version:'V8.8',artifact_sha256:'changed'})).releases.find(r=>r.id===first.id);
+ const draft=(await account('save_draft',{release_id:first.id,title:' Outline title ',body:'',version:'V8.8',artifact_sha256:'changed',summary:'Do not overwrite'})).releases.find(r=>r.id===first.id);
+ assert.equal(draft.summary,first.summary);
  assert.deepEqual({title:draft.title,body:draft.body,version:draft.version,artifact_sha256:draft.artifact_sha256},
   {title:'Outline title',body:'',version:first.version,artifact_sha256:first.artifact_sha256});
  await assert.rejects(content('publish_notice',{id:first.id,title:'Reserved',body:'Ordinary post',kind:'notice'}),/Publish this update through Releases/);
@@ -153,6 +157,7 @@ try{
  assert.deepEqual((await worker('verified',proof)).release,published);
  await as('member');
  const post=(await notices()).notices[0];
+ assert.equal('summary' in post,false,'The Admin description is absent from member notices');
  assert.deepEqual({id:post.id,kind:post.kind,title:post.title,image_path:post.image_path,release_version:post.release_version},
   {id:first.id,kind:'update',title:'',image_path:path,release_version:first.version});
  assert.equal((await memberContent()).notices.length,1);
