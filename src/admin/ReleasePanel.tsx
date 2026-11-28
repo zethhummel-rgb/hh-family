@@ -9,7 +9,7 @@ type ReleaseStatus = 'ready' | 'queued' | 'deploying' | 'failed' | 'verified' | 
 type DraftFields = {title: string; body: string; image_path: string | null; image_alt: string | null};
 type Release = DraftFields & {
   id: string; version: string; commit_sha: string; artifact_run_id: string; artifact_sha256: string;
-  status: ReleaseStatus; quiet?: boolean; error: string | null; updated_at: string; created_at: string;
+  status: ReleaseStatus; quiet?: boolean; summary?: string; error: string | null; updated_at: string; created_at: string;
 };
 type Snapshot = {releases: Release[]; can_release: boolean};
 type DispatchAction = 'release' | 'release_quietly' | 'retry_announcement';
@@ -134,7 +134,10 @@ export default function ReleasePanel({active, getClient}: {active: boolean; getC
         {!!snapshot?.releases.length && <ul>
           {snapshot.releases.map((candidate) => <li key={candidate.id}>
             <button type="button" aria-pressed={release?.id === candidate.id} onClick={() => setSelected(candidate.id)}>
-              <span><strong>{candidate.version}</strong><code>{candidate.commit_sha.slice(0, 12)}</code></span>
+              <span className="release-list-entry">
+                <strong>{candidate.version}</strong>
+                {candidate.summary ? <span className="release-card-summary">{candidate.summary}</span> : <code>{candidate.commit_sha.slice(0, 12)}</code>}
+              </span>
               {statusBadge(candidate)}
             </button>
           </li>)}
@@ -364,6 +367,7 @@ function ReleaseEditor({release, getClient, acceptSnapshot, onRefresh, canReleas
       <h2 id={`${id}-release-heading`}>{release.version} for {target}</h2>
       {statusBadge(release)}
     </div>
+    {release.summary && <p className="release-summary release-description"><strong>What changed</strong> {release.summary}</p>}
     <dl className="release-proof">
       <div><dt>Commit</dt><dd><code>{release.commit_sha}</code></dd></div>
       <div><dt>Build run</dt><dd>{release.artifact_run_id}</dd></div>

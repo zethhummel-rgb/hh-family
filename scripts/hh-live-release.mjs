@@ -134,7 +134,14 @@ export function packLiveArchive(directory, destination, identity) {
     '--numeric-owner','--mode=go=rX,u=rwX','-czf',destination,'-C',directory,'.']);
 }
 
+function readReleaseSummary() {
+  const summary = readFileSync('RELEASE_SUMMARY.txt','utf8').trim();
+  check(summary.length > 0 && summary.length <= 240 && !/[\u0000-\u001f\u007f]/.test(summary),'Enter a one-line description in RELEASE_SUMMARY.txt.');
+  return summary;
+}
+
 async function prepare() {
+  readReleaseSummary();
   const commit_sha = process.env.GITHUB_SHA;
   check(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()===commit_sha, 'The build checkout does not match its workflow commit.');
   const version = readFileSync('src/releaseVersion.ts','utf8').match(/^export const appReleaseVersion = '([^']+)';$/m)?.[1];
@@ -173,6 +180,7 @@ async function worker(action,payload) {
 
 async function register() {
   const artifact = {
+    summary:readReleaseSummary(),
     id:process.env.HH_RELEASE_ID,
     version:process.env.HH_RELEASE_VERSION,
     commit_sha:process.env.GITHUB_SHA,
@@ -181,7 +189,7 @@ async function register() {
   };
   checkRegisteredArtifact(artifact);
   const result = await worker('register',artifact);
-  check(result?.release?.id===artifact.id,'The live HH release candidate was not registered.');
+  check(result?.release?.id===artifact.id && result.release.summary===artifact.summary,'The live HH release candidate or its description was not registered.');
 }
 
 async function claim() {
