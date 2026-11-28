@@ -44,7 +44,7 @@ try{
  for(const name of ['20261112181000_hh_pilot_request_mail','20261126210000_hh_site_admin_dashboard','20261126213000_hh_admin_content',
   '20261126220000_hh_admin_auth_policy','20261126230000_hh_seasonal_palette_schedule','20261126234000_hh_member_ratings',
   '20261126235000_hh_notice_images','20261126235500_hh_notice_history_version','20261126235900_hh_artwork_only_notices',
-  '20261127000100_hh_rating_prompt_snooze','20261127001000_hh_admin_releases']){
+  '20261127000100_hh_rating_prompt_snooze','20261127001000_hh_admin_releases','20261128015038_hh_quiet_releases']){
   await db.exec(read(`supabase/migrations/${name}.sql`));
  }
  for(const [person,id] of Object.entries(people))await db.query('insert into auth.users values($1,$2,now())',[id,person.toLowerCase()+'@fixture.invalid']);
@@ -186,13 +186,43 @@ try{
  assert.equal(recovered.status,'queued');
  assert.equal(recovered.title,'Edited retry draft');
  await assert.rejects(worker('verified',{id:second.id,claim_id:liveAttempt.claim_id,...secondProof}),/no longer active/);
+
+ const quiet=release(12,'V4.2','c');
+ const quietReady=(await worker('register',quiet)).release;
+ assert.equal(quietReady.quiet,false);
+ const quietRequest={id:quiet.id,actor_id:people.operator,expected_updated_at:quietReady.updated_at};
+ await assert.rejects(worker('queue_quiet',{...quietRequest,actor_id:people.member}),/Admin access required/);
+ await assert.rejects(worker('queue_quiet',{...quietRequest,expected_updated_at:undefined}),/draft changed/);
+ const quietQueued=(await worker('queue_quiet',quietRequest)).release;
+ assert.equal(quietQueued.status,'queued');
+ assert.equal(quietQueued.quiet,true);
+ assert.equal(quietQueued.title,'');
+ assert.deepEqual((await worker('queue_quiet',quietRequest)).release,quietQueued);
+ await assert.rejects(worker('queue',quietRequest),/mode that was already approved/);
+ const quietClaim=await worker('claim',{id:quiet.id});
+ assert.equal(quietClaim.release.quiet,true);
+ const quietAttempt={id:quiet.id,claim_id:quietClaim.claim_id};
+ await assert.rejects(worker('publish',quietAttempt),/Verify this deployment/);
+ const quietProof={...quietAttempt,commit_sha:quiet.commit_sha,version:quiet.version,artifact_sha256:quiet.artifact_sha256};
+ await assert.rejects(worker('verified',{...quietProof,commit_sha:'d'.repeat(40)}),/hosted build does not match/);
+ const completedQuiet=(await worker('verified',quietProof)).release;
+ assert.equal(completedQuiet.status,'published');
+ assert.equal(completedQuiet.quiet,true);
+ assert.deepEqual((await worker('publish',quietAttempt)).release,completedQuiet);
+ assert.deepEqual((await worker('verified',quietProof)).release,completedQuiet);
+ await as('operator','aal2');
+ assert.equal((await account('snapshot')).releases.find(item=>item.id===quiet.id).quiet,true);
+ await assert.rejects(content('publish_notice',{id:quiet.id,kind:'update',title:'Unwanted',body:'Announcement',release_version:quiet.version}),/Publish this update through Releases/);
+ await as('member');
+ assert.equal((await notices()).notices.some(item=>item.id===quiet.id),false);
+ assert.equal((await memberContent()).notices.some(item=>item.id===quiet.id),false);
  await db.exec('reset role;update private.hh_admin_auth_policy set require_mfa=false;');
  await as('operator');
  assert.equal((await account('snapshot')).can_release,true);
  await db.exec('reset role;set role anon;');
  await assert.rejects(account('snapshot'),/permission denied/);
  await assert.rejects(worker('claim',{id:second.id}),/permission denied/);
- console.log('HH Releases database checks passed: private state, fixed builds, verified exact claims, protected artwork, authorized queueing, timeout recovery, and once-only publishing.');
+ console.log('HH Releases database checks passed: authorized queueing, verified exact claims, retries, once-only announcements and quiet releases excluded from member notices.');
 }finally{
  await db.close();
 }
